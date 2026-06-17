@@ -237,6 +237,7 @@ export const geoApi = {
 export interface DiscoverPrefs {
   exists: boolean;
   transport?: string | null;
+  transports?: string[];
   companions?: string[];
   locationConsent?: boolean;
   gender?: string | null;

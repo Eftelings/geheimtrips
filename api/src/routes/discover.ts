@@ -27,6 +27,8 @@ db.run(sql`
     updated_at       TEXT DEFAULT (datetime('now'))
   )
 `).catch(console.error);
+// Mehrfach-Verkehrsmittel (Onboarding-Auswahl); `transport` bleibt das primäre
+db.run(sql`ALTER TABLE user_prefs ADD COLUMN transports TEXT DEFAULT '[]'`).catch(() => {});
 
 db.run(sql`
   CREATE TABLE IF NOT EXISTS swipe_events (
@@ -69,8 +71,8 @@ function affinity(scores: TagScores, tags: string[]): number {
 }
 
 async function getPrefs(userId: number) {
-  const r = await db.all<{ transport: string | null; companions: string; location_consent: number; gender: string | null; birth_year: number | null; tag_scores: string }>(
-    sql`SELECT transport, companions, location_consent, gender, birth_year, tag_scores FROM user_prefs WHERE user_id = ${userId}`);
+  const r = await db.all<{ transport: string | null; transports: string | null; companions: string; location_consent: number; gender: string | null; birth_year: number | null; tag_scores: string }>(
+    sql`SELECT transport, transports, companions, location_consent, gender, birth_year, tag_scores FROM user_prefs WHERE user_id = ${userId}`);
   return r[0] ?? null;
 }
 
@@ -82,6 +84,7 @@ router.get('/prefs', requireAuth, async (c) => {
   return c.json({
     exists: true,
     transport: p.transport,
+    transports: JSON.parse(p.transports ?? '[]'),
     companions: JSON.parse(p.companions ?? '[]'),
     locationConsent: !!p.location_consent,
     gender: p.gender,
@@ -93,6 +96,7 @@ router.get('/prefs', requireAuth, async (c) => {
 router.put('/prefs', requireAuth,
   zValidator('json', z.object({
     transport: z.enum(['walk', 'bike', 'transit', 'train', 'auto']).optional(),
+    transports: z.array(z.enum(['walk', 'bike', 'transit', 'train', 'auto'])).max(5).optional(),
     companions: z.array(z.string()).max(6).optional(),
     locationConsent: z.boolean().optional(),
     gender: z.string().max(20).nullable().optional(),
@@ -102,15 +106,18 @@ router.put('/prefs', requireAuth,
     const user = c.get('user');
     const b = c.req.valid('json');
     const cur = await getPrefs(user.id);
+    // Primäres Verkehrsmittel = erstes der Mehrfachauswahl (Fallback: explizit/alt)
+    const primaryTransport = b.transports?.[0] ?? b.transport ?? cur?.transport ?? null;
+    const transportsJson = JSON.stringify(b.transports ?? JSON.parse(cur?.transports ?? '[]'));
     await db.run(sql`
-      INSERT INTO user_prefs (user_id, transport, companions, location_consent, gender, birth_year, tag_scores, updated_at)
-      VALUES (${user.id}, ${b.transport ?? cur?.transport ?? null}, ${JSON.stringify(b.companions ?? JSON.parse(cur?.companions ?? '[]'))},
+      INSERT INTO user_prefs (user_id, transport, transports, companions, location_consent, gender, birth_year, tag_scores, updated_at)
+      VALUES (${user.id}, ${primaryTransport}, ${transportsJson}, ${JSON.stringify(b.companions ?? JSON.parse(cur?.companions ?? '[]'))},
               ${b.locationConsent === undefined ? (cur?.location_consent ?? 0) : (b.locationConsent ? 1 : 0)},
               ${b.gender === undefined ? (cur?.gender ?? null) : b.gender},
               ${b.birthYear === undefined ? (cur?.birth_year ?? null) : b.birthYear},
               ${cur?.tag_scores ?? '{}'}, datetime('now'))
       ON CONFLICT(user_id) DO UPDATE SET
-        transport = excluded.transport, companions = excluded.companions,
+        transport = excluded.transport, transports = excluded.transports, companions = excluded.companions,
         location_consent = excluded.location_consent, gender = excluded.gender,
         birth_year = excluded.birth_year, updated_at = excluded.updated_at
     `);

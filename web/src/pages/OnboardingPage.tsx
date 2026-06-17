@@ -1,68 +1,81 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { discoverApi } from '../services/api.js';
+import { useAuthStore } from '../store/useAuthStore.js';
 import { MOBILITY } from '../types/index.js';
 import type { Transport } from '../types/index.js';
 
 const COMPANIONS = [
-  { id: 'allein',   label: 'Allein',                icon: 'fa-person' },
-  { id: 'partner',  label: 'Zu zweit / Date',       icon: 'fa-heart' },
-  { id: 'freunde',  label: 'Mit Freunden',          icon: 'fa-users' },
-  { id: 'familie',  label: 'Familie & Kinder',      icon: 'fa-children' },
-  { id: 'neue',     label: 'Neue Leute kennenlernen', icon: 'fa-handshake' },
+  { id: 'allein',   label: 'Allein',           icon: 'fa-person' },
+  { id: 'partner',  label: 'Zu zweit / Date',  icon: 'fa-heart' },
+  { id: 'freunde',  label: 'Mit Freunden',     icon: 'fa-users' },
+  { id: 'familie',  label: 'Familie & Kinder', icon: 'fa-children' },
 ];
 
 const GENDERS = ['Weiblich', 'Männlich', 'Divers', 'Keine Angabe'];
+const DEFAULT_YEAR = 2000;
 
 export function OnboardingPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const editMode = params.get('edit') === '1';
+  const { user, updateUser } = useAuthStore();
 
   const [step, setStep] = useState(0);
-  const [transport, setTransport] = useState<Transport | null>(null);
+  const [transports, setTransports] = useState<Transport[]>([]);      // Mehrfachauswahl
   const [companions, setCompanions] = useState<string[]>([]);
-  const [locationConsent, setLocationConsent] = useState<boolean | null>(null);
+  const [meetPeople, setMeetPeople] = useState(false);
+  const [locationConsent, setLocationConsent] = useState(true);       // standardmäßig an
   const [gender, setGender] = useState<string | null>(null);
-  const [birthYear, setBirthYear] = useState<string>('');
+  const [birthYear, setBirthYear] = useState<number>(DEFAULT_YEAR);
   const [saving, setSaving] = useState(false);
 
   // Bestehende Angaben laden (Profil ist jederzeit anpassbar)
   useEffect(() => {
+    if (user) setMeetPeople(!!user.meetPeopleEnabled);
     discoverApi.prefs().then(p => {
       if (!p.exists) return;
-      if (p.transport) setTransport(p.transport as Transport);
+      if (p.transports?.length) setTransports(p.transports as Transport[]);
+      else if (p.transport) setTransports([p.transport as Transport]);
       if (p.companions) setCompanions(p.companions);
       if (p.locationConsent !== undefined) setLocationConsent(p.locationConsent);
       if (p.gender) setGender(p.gender);
-      if (p.birthYear) setBirthYear(String(p.birthYear));
+      if (p.birthYear) setBirthYear(p.birthYear);
     }).catch(() => {});
-  }, []);
+  }, [user]);
+
+  // Standort-Einwilligung umschalten → Browser-Prompt direkt auslösen, wenn aktiviert
+  function toggleLocation(next: boolean) {
+    setLocationConsent(next);
+    if (next) navigator.geolocation?.getCurrentPosition(() => {}, () => {}, { timeout: 8000 });
+  }
 
   const steps = [
-    { title: 'Wie bist du meistens unterwegs?', sub: 'Damit wir wissen, was für dich erreichbar ist.' },
+    { title: 'Wie bist du meistens unterwegs?', sub: 'Mehrfachauswahl möglich — damit wir wissen, was für dich erreichbar ist.' },
     { title: 'Mit wem bist du unterwegs?',      sub: 'Mehrfachauswahl möglich — das hilft uns bei den Vorschlägen.' },
-    { title: 'Dürfen wir deinen Standort nutzen?', sub: 'Nur um Orte in deiner Nähe zu finden — nie für etwas anderes.' },
+    { title: 'Dürfen wir wissen, wo du bist?',  sub: 'Nur um Orte in deiner Nähe zu finden — nie für etwas anderes.' },
     { title: 'Fast geschafft — magst du uns noch etwas verraten?', sub: 'Optional. Hilft uns, Vorschläge für Menschen wie dich zu verbessern.' },
   ];
 
   const canNext =
-    step === 0 ? transport !== null :
-    step === 1 ? companions.length > 0 :
-    step === 2 ? locationConsent !== null : true;
+    step === 0 ? transports.length > 0 :
+    step === 1 ? companions.length > 0 : true;
 
   async function finish() {
     setSaving(true);
     try {
       await discoverApi.savePrefs({
-        transport: transport ?? undefined,
+        transports,
+        transport: transports[0] ?? undefined,
         companions,
-        locationConsent: locationConsent ?? false,
+        locationConsent,
         gender,
-        birthYear: birthYear ? Number(birthYear) : null,
+        birthYear: birthYear || null,
       });
+      if (user && meetPeople !== user.meetPeopleEnabled) {
+        await updateUser({ meetPeopleEnabled: meetPeople }).catch(() => {});
+      }
       if (locationConsent) {
-        // Einwilligung direkt nutzen: Browser-Prompt jetzt statt später
         navigator.geolocation?.getCurrentPosition(() => {}, () => {}, { timeout: 5000 });
       }
       navigate(editMode ? '/profile' : '/swipe?calibrate=1', { replace: true });
@@ -82,7 +95,7 @@ export function OnboardingPage() {
             <p className="font-display font-bold text-[var(--color-aubergine)] leading-none">
               {editMode ? 'Entdecker-Profil anpassen' : 'Wir wollen dich kennenlernen'}
             </p>
-            <p className="text-[11px] text-[var(--color-lavender)] mt-0.5">…um dir passende Geheimtipps vorzuschlagen.</p>
+            <p className="text-[11px] text-[var(--color-lavender)] mt-0.5">…um dir genau den richtigen Ort vorzuschlagen.</p>
           </div>
         </div>
 
@@ -98,21 +111,28 @@ export function OnboardingPage() {
         <p className="text-sm text-[var(--color-lavender)] mb-6">{steps[step].sub}</p>
 
         <div className="flex-1">
+          {/* Schritt 0 — Verkehrsmittel (Mehrfachauswahl) */}
           {step === 0 && (
             <div className="flex flex-col gap-2">
-              {MOBILITY.map(m => (
-                <button key={m.id} onClick={() => setTransport(m.id)}
-                  className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${transport === m.id ? 'border-[var(--color-amber)] bg-[#FFF4EB]' : 'border-[var(--color-bg-soft)] bg-white'}`}>
-                  <i className={`fa-solid ${m.icon} text-lg w-6 text-center`} style={{ color: transport === m.id ? 'var(--color-amber)' : 'var(--color-lavender)' }} />
-                  <div>
-                    <p className="font-semibold text-sm text-[var(--color-aubergine)]">{m.label}</p>
-                    {m.sublabel && <p className="text-xs text-[var(--color-lavender)]">{m.sublabel}</p>}
-                  </div>
-                </button>
-              ))}
+              {MOBILITY.map(m => {
+                const on = transports.includes(m.id);
+                return (
+                  <button key={m.id}
+                    onClick={() => setTransports(prev => on ? prev.filter(x => x !== m.id) : [...prev, m.id])}
+                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${on ? 'border-[var(--color-amber)] bg-[#FFF4EB]' : 'border-[var(--color-bg-soft)] bg-white'}`}>
+                    <i className={`fa-solid ${m.icon} text-lg w-6 text-center`} style={{ color: on ? 'var(--color-amber)' : 'var(--color-lavender)' }} />
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm text-[var(--color-aubergine)]">{m.label}</p>
+                      {m.sublabel && <p className="text-xs text-[var(--color-lavender)]">{m.sublabel}</p>}
+                    </div>
+                    {on && <i className="fa-solid fa-circle-check text-[var(--color-amber)]" />}
+                  </button>
+                );
+              })}
             </div>
           )}
 
+          {/* Schritt 1 — Begleitung + Meet-People-Toggle */}
           {step === 1 && (
             <div className="flex flex-col gap-2">
               {COMPANIONS.map(c => {
@@ -127,30 +147,48 @@ export function OnboardingPage() {
                   </button>
                 );
               })}
+
+              {/* Zusatz: neue Leute kennenlernen (Toggle) */}
+              <button onClick={() => setMeetPeople(v => !v)}
+                className={`flex items-start gap-3 p-4 rounded-2xl border-2 text-left transition-all mt-1 ${meetPeople ? 'border-[var(--color-aubergine)] bg-[#F1ECF4]' : 'border-dashed border-[var(--color-lavender-lt)] bg-white'}`}>
+                <i className="fa-solid fa-handshake text-lg w-6 text-center mt-0.5" style={{ color: meetPeople ? 'var(--color-aubergine)' : 'var(--color-lavender)' }} />
+                <div className="flex-1">
+                  <p className="font-semibold text-sm text-[var(--color-aubergine)]">Ich freue mich, neue Leute kennenzulernen</p>
+                  <p className="text-xs text-[var(--color-lavender)] mt-0.5 leading-relaxed">
+                    Schlag mir andere vor, die bei einem Geheimtrip auch offen für neue Bekanntschaften sind.
+                  </p>
+                </div>
+                <div className="w-11 h-6 rounded-full relative transition-colors flex-shrink-0 mt-0.5"
+                  style={{ background: meetPeople ? 'var(--color-aubergine)' : 'var(--color-bg-soft)' }}>
+                  <div className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all" style={{ left: meetPeople ? 'auto' : '2px', right: meetPeople ? '2px' : 'auto' }} />
+                </div>
+              </button>
             </div>
           )}
 
+          {/* Schritt 2 — Standort (Toggle, standardmäßig an) */}
           {step === 2 && (
-            <div className="flex flex-col gap-2">
-              <button onClick={() => setLocationConsent(true)}
-                className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${locationConsent === true ? 'border-[var(--color-amber)] bg-[#FFF4EB]' : 'border-[var(--color-bg-soft)] bg-white'}`}>
-                <i className="fa-solid fa-location-crosshairs text-lg w-6 text-center" style={{ color: locationConsent === true ? 'var(--color-amber)' : 'var(--color-lavender)' }} />
-                <div>
-                  <p className="font-semibold text-sm text-[var(--color-aubergine)]">Ja, Standort nutzen</p>
-                  <p className="text-xs text-[var(--color-lavender)]">„Was kann ich JETZT um mich herum entdecken?"</p>
+            <div className="flex flex-col gap-3">
+              <div className={`p-4 rounded-2xl border-2 transition-all ${locationConsent ? 'border-[var(--color-amber)] bg-[#FFF4EB]' : 'border-[var(--color-bg-soft)] bg-white'}`}>
+                <div className="flex items-center gap-3">
+                  <i className="fa-solid fa-location-crosshairs text-lg w-6 text-center" style={{ color: locationConsent ? 'var(--color-amber)' : 'var(--color-lavender)' }} />
+                  <p className="font-semibold text-sm text-[var(--color-aubergine)] flex-1">Standort verwenden</p>
+                  <button onClick={() => toggleLocation(!locationConsent)}
+                    className="w-12 h-6 rounded-full relative transition-colors flex-shrink-0"
+                    style={{ background: locationConsent ? 'var(--color-amber)' : 'var(--color-bg-soft)' }}>
+                    <div className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all" style={{ left: locationConsent ? 'auto' : '2px', right: locationConsent ? '2px' : 'auto' }} />
+                  </button>
                 </div>
-              </button>
-              <button onClick={() => setLocationConsent(false)}
-                className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${locationConsent === false ? 'border-[var(--color-amber)] bg-[#FFF4EB]' : 'border-[var(--color-bg-soft)] bg-white'}`}>
-                <i className="fa-solid fa-keyboard text-lg w-6 text-center" style={{ color: locationConsent === false ? 'var(--color-amber)' : 'var(--color-lavender)' }} />
-                <div>
-                  <p className="font-semibold text-sm text-[var(--color-aubergine)]">Lieber selbst eingeben</p>
-                  <p className="text-xs text-[var(--color-lavender)]">Du tippst Start-Ort oder Region jedes Mal ein.</p>
-                </div>
-              </button>
+                <p className="text-xs text-[var(--color-lavender)] mt-2 leading-relaxed">
+                  {locationConsent
+                    ? '„Was kann ich JETZT um mich herum entdecken?" — das kannst du jederzeit wieder ändern.'
+                    : 'Du musst deinen Start-Ort oder die Region dann jedes Mal selbst eingeben.'}
+                </p>
+              </div>
             </div>
           )}
 
+          {/* Schritt 3 — Demografie + Swipe-Hinweis */}
           {step === 3 && (
             <div className="flex flex-col gap-5">
               <div>
@@ -166,15 +204,28 @@ export function OnboardingPage() {
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-2">Geburtsjahr (optional)</p>
-                <input type="number" min={1920} max={2020} placeholder="z.B. 1995" value={birthYear}
-                  onChange={e => setBirthYear(e.target.value)}
-                  className="w-full border-2 border-[var(--color-bg-soft)] rounded-2xl px-4 py-3 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)] bg-white" />
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setBirthYear(y => Math.max(1920, y - 1))}
+                    className="w-11 h-11 rounded-2xl bg-white border-2 border-[var(--color-bg-soft)] text-lg font-bold text-[var(--color-aubergine)] active:scale-95 transition-transform">−</button>
+                  <div className="flex-1 text-center border-2 border-[var(--color-bg-soft)] rounded-2xl py-2.5">
+                    <span className="font-display font-bold text-xl text-[var(--color-aubergine)]">{birthYear}</span>
+                  </div>
+                  <button onClick={() => setBirthYear(y => Math.min(2020, y + 1))}
+                    className="w-11 h-11 rounded-2xl bg-white border-2 border-[var(--color-bg-soft)] text-lg font-bold text-[var(--color-aubergine)] active:scale-95 transition-transform">+</button>
+                </div>
               </div>
+
               {!editMode && (
-                <p className="text-xs text-[var(--color-lavender)] leading-relaxed">
-                  Gleich zeigen wir dir <strong>12 Orte</strong> — wische nach rechts, was dir gefällt,
-                  nach links, was nicht. So lernen wir deinen Geschmack kennen. 🧭
-                </p>
+                <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: 'var(--color-aubergine)' }}>
+                  <i className="fa-solid fa-compass text-2xl text-[var(--color-amber)] mt-0.5" />
+                  <div>
+                    <p className="font-display font-bold text-white text-base leading-tight mb-1">Gleich lernen wir deinen Geschmack kennen</p>
+                    <p className="text-white/75 text-[13px] leading-relaxed">
+                      Wir zeigen dir <strong className="text-white">12 Orte</strong> — wische nach <strong className="text-white">rechts</strong>, was dir gefällt,
+                      nach <strong className="text-white">links</strong>, was nicht. So finden wir deine Geheimtipps. 🧭
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
           )}
