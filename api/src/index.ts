@@ -3,10 +3,13 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { migrate } from 'drizzle-orm/libsql/migrator';
 import { WebSocketServer } from 'ws';
 import type { Server } from 'http';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { db } from './db/index.js';
 import authRouter from './routes/auth.js';
 import placesRouter from './routes/places.js';
 import tripsRouter from './routes/trips.js';
@@ -72,6 +75,16 @@ const PORT = Number(process.env.PORT ?? 3001);
 // Warnung, falls in Produktion noch das Dev-JWT-Secret aktiv ist
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   console.warn('⚠️  WARNUNG: JWT_SECRET ist nicht gesetzt — bitte in Produktion zwingend ein eigenes Secret setzen!');
+}
+
+// Basis-Tabellen (users, places, …) anlegen. Auf einer frischen DB — z.B. dem
+// Railway-Volume — werden so alle Tabellen erstellt; bestehende DBs bleiben unberührt.
+try {
+  const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../drizzle');
+  await migrate(db, { migrationsFolder });
+  console.log('Migrationen angewendet.');
+} catch (e) {
+  console.error('Migration übersprungen (Tabellen evtl. bereits vorhanden):', (e as Error).message);
 }
 
 const httpServer = serve({ fetch: app.fetch, port: PORT }, () => {

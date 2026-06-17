@@ -26,6 +26,7 @@ RUN npm ci --omit=dev
 
 COPY --from=build /app/api/dist  ./api/dist
 COPY --from=build /app/api/public ./api/public
+COPY --from=build /app/api/drizzle ./api/drizzle
 
 WORKDIR /app/api
 # STATIC_DIR liefert das Frontend aus; PORT setzt Railway selbst (Fallback 3001)
