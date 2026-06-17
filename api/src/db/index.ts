@@ -10,8 +10,9 @@ const dbPath = resolve(__dirname, '../../geheimtrips.db');
 
 // Produktion: Turso/libsql über DATABASE_URL (+ Auth-Token).
 // Lokal: SQLite-Datei als Fallback — keine Env nötig.
-const url = process.env.DATABASE_URL ?? `file:${dbPath}`;
-const authToken = process.env.DATABASE_AUTH_TOKEN;
+// .trim() schützt vor versehentlichen Leerzeichen/Tabs in den Env-Werten
+const url = (process.env.DATABASE_URL ?? `file:${dbPath}`).trim();
+const authToken = process.env.DATABASE_AUTH_TOKEN?.trim() || undefined;
 const client = createClient(authToken ? { url, authToken } : { url });
 
 export const db = drizzle(client, { schema });
