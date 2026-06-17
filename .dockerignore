@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+api/public
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+.env
+.env.local
+**/.env
+uploads
+.git
+.claude
+.DS_Store

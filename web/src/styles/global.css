@@ -1,0 +1,102 @@
+@import "./tokens.css";
+
+/* ── Base resets — in @layer base so Tailwind utilities override them ── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-body);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  /* NOTE: background:none here — Tailwind @layer utilities takes priority */
+  button { cursor: pointer; border: none; background: none; font: inherit; }
+  img { display: block; max-width: 100%; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-lavender-lt); border-radius: 999px; }
+}
+
+/* ── Animations ─────────────────────────────────────────────── */
+@keyframes gtSlideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes gtFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes gtSpinIn {
+  from { transform: scale(0.85) rotate(-4deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0deg);     opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Leaflet overrides ───────────────────────────────────────── */
+.leaflet-container { font-family: var(--font-ui); z-index: 0; }
+.leaflet-control-attribution { font-size: 10px !important; }
+
+/* ── Custom range slider: orange dot on soft-purple track ────── */
+input[type="range"].map-radius {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 14px;
+}
+input[type="range"].map-radius::-webkit-slider-runnable-track {
+  height: 3px;
+  background: #c4b5d4;
+  border-radius: 99px;
+}
+input[type="range"].map-radius::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #F99039;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.22);
+  margin-top: -5.5px;
+}
+input[type="range"].map-radius::-moz-range-track {
+  height: 3px;
+  background: #c4b5d4;
+  border-radius: 99px;
+}
+input[type="range"].map-radius::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #F99039;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.22);
+}

@@ -1,0 +1,9 @@
+{
+  "name": "geheimtrips",
+  "private": true,
+  "workspaces": ["web", "api"],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  }
+}

@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Colors ─────────────────────────────────────────────── */
+  --color-aubergine:    #34254C;
+  --color-amber:        #F99039;
+  --color-amber-dark:   #E07820;
+  --color-lavender:     #71587A;
+  --color-lavender-lt:  #b9a8c4;
+  --color-bg:           #FBF9FC;
+  --color-bg-soft:      #F1ECF4;
+  --color-ink:          #1F1530;
+  --color-body:         #3d2d56;
+  --color-success:      #5B8F6E;
+  --color-success-dark: #2a6f4b;
+  --color-danger:       #C96442;
+  --color-white:        #ffffff;
+
+  /* ── Typography ──────────────────────────────────────────── */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-ui:      "DM Sans", system-ui, sans-serif;
+
+  /* ── Radius ──────────────────────────────────────────────── */
+  --radius-card:   16px;
+  --radius-sheet:  28px;
+  --radius-pill:   999px;
+  --radius-icon:   11px;
+  --radius-input:  12px;
+
+  /* ── Shadows ─────────────────────────────────────────────── */
+  --shadow-card:   0 2px 10px rgba(52,37,76,0.05);
+  --shadow-raised: 0 8px 20px rgba(52,37,76,0.18);
+  --shadow-amber:  0 8px 22px rgba(249,144,57,0.4);
+
+  /* ── Spacing ─────────────────────────────────────────────── */
+  --px-screen: 20px;
+}

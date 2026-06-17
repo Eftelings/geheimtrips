@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1780612692833,
+      "tag": "0000_nervous_roughhouse",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1780667574242,
+      "tag": "0001_steep_bedlam",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780850827563,
+      "tag": "0002_aspiring_fallen_one",
+      "breakpoints": true
+    }
+  ]
+}

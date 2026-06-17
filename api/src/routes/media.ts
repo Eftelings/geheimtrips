@@ -1,0 +1,81 @@
+import { Hono } from 'hono';
+import { requireAuth } from '../middleware/auth.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
+
+// Produktion: UPLOAD_DIR auf ein persistentes Volume (z.B. Railway /data/uploads).
+// Lokal: ./uploads im Projektordner als Fallback.
+const UPLOAD_DIR = process.env.UPLOAD_DIR
+  ? path.resolve(process.env.UPLOAD_DIR)
+  : path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const ALLOWED_MIME: Record<string, string> = {
+  'image/jpeg':  'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
+  'image/webp':  'webp', 'image/gif': 'gif',
+  'image/heic':  'heic', 'image/heif': 'heif',        // HEIC/HEIF (iPhone)
+  'video/mp4':   'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+};
+
+const SERVE_MIME: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  webp: 'image/webp', gif: 'image/gif',
+  heic: 'image/heic', heif: 'image/heif',
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+};
+
+// ── Upload router (mounted at /media) ─────────────────────────────────────────
+export const uploadRouter = new Hono();
+
+uploadRouter.post('/upload', requireAuth, async (c) => {
+  try {
+    const form = await c.req.formData();
+    const file = form.get('file') as File | null;
+
+    if (!file)                          return c.json({ error: 'Keine Datei angegeben.' }, 400);
+    const ext = ALLOWED_MIME[file.type];
+    if (!ext)                           return c.json({ error: 'Dateityp nicht erlaubt.' }, 400);
+    // Videos: 80 MB — Images/HEIC: 30 MB
+    const isVideo = file.type.startsWith('video/');
+    const maxSize = isVideo ? 80 * 1024 * 1024 : 30 * 1024 * 1024;
+    if (file.size > maxSize) return c.json({ error: `Maximale Dateigröße: ${isVideo ? '80' : '30'} MB.` }, 400);
+
+    const filename = `${crypto.randomBytes(16).toString('hex')}.${ext}`;
+    const buffer   = Buffer.from(await file.arrayBuffer());
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
+
+    // Unter /api ausgeliefert (Single-Origin) — siehe Mount in index.ts
+    return c.json({ url: `/api/uploads/${filename}` });
+  } catch (e) {
+    console.error('Upload error:', e);
+    return c.json({ error: 'Upload fehlgeschlagen.' }, 500);
+  }
+});
+
+// ── Serve router (mounted at /uploads) ────────────────────────────────────────
+export const serveRouter = new Hono();
+
+serveRouter.get('/:filename', async (c) => {
+  const filename = c.req.param('filename');
+
+  // Sanitize: block path traversal
+  if (/[/\\]/.test(filename) || filename.includes('..')) {
+    return c.json({ error: 'Ungültiger Dateiname.' }, 400);
+  }
+
+  const filepath = path.join(UPLOAD_DIR, filename);
+  if (!fs.existsSync(filepath)) return c.json({ error: 'Nicht gefunden.' }, 404);
+
+  const ext  = path.extname(filename).slice(1).toLowerCase();
+  const mime = SERVE_MIME[ext] ?? 'application/octet-stream';
+  const data = fs.readFileSync(filepath);
+
+  return new Response(data, {
+    headers: {
+      'Content-Type':   mime,
+      'Cache-Control':  'public, max-age=31536000, immutable',
+      'Content-Length': String(data.length),
+    },
+  });
+});
