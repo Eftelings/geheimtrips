@@ -138,17 +138,20 @@ export interface QuizMeStats {
   winRate:     number;
 }
 
-import type { RankBoardId, PerkEntry, Level } from '../types/index.js';
+import type { RankBoardId, PerkEntry } from '../types/index.js';
 
 export interface MyRankStats {
   id: number; name: string; handle: string; avatarUrl: string | null;
-  orte: number; quizWins: number; quizPlayed: number; winRate: number;
-  punkte: number; level: Level;
-  ranks: { orte: number | null; quiz: number | null; punkte: number | null };
+  orte: number; eingereicht: number; quizWins: number; quizPlayed: number; winRate: number; punkte: number;
+  mOrte: number; mEingereicht: number; mQuizWins: number; mScore: number;
+  percentile: number; tierKey: string; isLocalHero: boolean;
+  total: number;
+  ranks: { gesamt: number | null; orte: number | null; eingereicht: number | null; quiz: number | null };
 }
 
 export const rankingsApi = {
-  leaderboard:       (board: RankBoardId) => get<RankingEntry[]>(`/rankings/leaderboard?board=${board}`),
+  leaderboard:       (board: RankBoardId, friends = false) =>
+                       get<RankingEntry[]>(`/rankings/leaderboard?board=${board}${friends ? '&friends=1' : ''}`),
   me:                ()                    => get<MyRankStats>('/rankings/me'),
   perks:             (board?: RankBoardId) => get<PerkEntry[]>(`/rankings/perks${board ? `?board=${board}` : ''}`),
   quizLeaderboard:   ()                    => get<QuizRankEntry[]>('/rankings/geheimquiz'),

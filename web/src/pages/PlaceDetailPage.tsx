@@ -1188,6 +1188,12 @@ async function handleVerifyToggle() {
                     <span className="text-[9px] font-bold px-2 py-0.5 rounded-full text-white"
                       style={{ background: 'var(--color-amber)' }}>{place.match}% Match</span>
                   )}
+                  {place.isUserSubmitted && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-white flex items-center gap-1"
+                      style={{ background: 'rgba(249,144,57,0.92)' }} title="Noch nicht veröffentlicht – wird von uns geprüft">
+                      <i className="fa-solid fa-clock" /> In Prüfung
+                    </span>
+                  )}
                 </div>
                 <h1 className="font-display font-bold text-white leading-tight"
                   style={{ fontSize: 'clamp(1.25rem, 2.8vw, 1.9rem)', letterSpacing: '-0.02em', textShadow: '0 2px 12px rgba(0,0,0,0.45)' }}>
@@ -1471,7 +1477,15 @@ async function handleVerifyToggle() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: '#b9a8c4' }}>Eingereicht von</p>
-                        <p className="text-sm font-bold leading-tight truncate" style={{ color: '#34254c' }}>{place.submitter.name}</p>
+                        <p className="text-sm font-bold leading-tight truncate flex items-center gap-1.5" style={{ color: '#34254c' }}>
+                          {place.submitter.name}
+                          {place.submitter.isLocalHero && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                              style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }} title="Local Hero – Top 25 % der Geheimtripper">
+                              <i className="fa-solid fa-shield-halved" /> Local Hero
+                            </span>
+                          )}
+                        </p>
                         <p className="text-[10px] mt-0.5" style={{ color: '#b9a8c4' }}>
                           @{place.submitter.handle}
                         </p>

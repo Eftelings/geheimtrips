@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
-import { authApi } from '../services/api.js';
+import { authApi, rankingsApi } from '../services/api.js';
+import type { MyRankStats } from '../services/api.js';
 
 export function ProfilePage() {
   const { user, updateUser, logout } = useAuthStore();
@@ -16,6 +17,9 @@ export function ProfilePage() {
   const [pwData, setPwData]             = useState({ current: '', next: '' });
   const [pwError, setPwError]           = useState('');
   const [saving, setSaving]             = useState(false);
+  const [rankInfo, setRankInfo]         = useState<MyRankStats | null>(null);
+
+  useEffect(() => { rankingsApi.me().then(setRankInfo).catch(() => {}); }, []);
 
   if (!user) return null;
 
@@ -50,6 +54,13 @@ export function ProfilePage() {
           <div className="flex-1 min-w-0">
             <h1 className="font-display font-bold text-xl text-[var(--color-aubergine)]">{user.name}</h1>
             <p className="text-sm text-[var(--color-lavender)]">@{user.handle}</p>
+            {rankInfo?.isLocalHero && (
+              <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }}
+                title="Top 25 % der Geheimtripper diesen Monat">
+                <i className="fa-solid fa-shield-halved" /> Local Hero
+              </span>
+            )}
             {user.bio && <p className="text-sm text-[var(--color-body)] mt-1">{user.bio}</p>}
             {/* Socials */}
             <div className="flex gap-3 mt-2">

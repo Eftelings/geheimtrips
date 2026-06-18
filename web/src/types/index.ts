@@ -45,7 +45,7 @@ export interface Place {
   authorId: number | null;
   author?: Author | null;
   submittedBy?: number | null;
-  submitter?: { id: number; name: string; handle: string; avatarUrl: string | null } | null;
+  submitter?: { id: number; name: string; handle: string; avatarUrl: string | null; isLocalHero?: boolean } | null;
   lat: number | null;
   lng: number | null;
   hasVideo: boolean;
@@ -230,21 +230,34 @@ export interface RankingEntry {
   name: string;
   handle: string;
   avatarUrl: string | null;
+  // All-time
   orte: number;
+  eingereicht: number;
   quizWins: number;
   quizPlayed: number;
   winRate: number;
   punkte: number;
-  level: Level;
+  // Dieser Monat
+  mOrte: number;
+  mEingereicht: number;
+  mQuizWins: number;
+  mScore: number;
+  // Monats-Status (abgeleitet)
+  percentile: number;
+  tierKey: string;
+  isLocalHero: boolean;
 }
 
-// Ranking-Boards: besuchte Orte · Geheimquiz · Geheimtripspunkte
-export type RankBoardId = 'orte' | 'quiz' | 'punkte';
+// Ranking-Boards: Gesamt (monatlich) · besuchte / eingereichte Orte · Geheimquiz
+export type RankBoardId = 'gesamt' | 'orte' | 'eingereicht' | 'quiz';
+
+// Legacy-Board für Partner-Vorteile (Perks-Verwaltung im Admin)
+export type PerkBoardId = 'orte' | 'quiz' | 'punkte';
 
 // Partner-Vorteil (vom Backend verwaltet)
 export interface PerkEntry {
   id: number;
-  board: RankBoardId;
+  board: PerkBoardId;
   minRank: number;
   maxRank: number;
   partner: string;

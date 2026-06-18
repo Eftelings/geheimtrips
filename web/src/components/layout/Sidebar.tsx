@@ -8,7 +8,7 @@ const TABS = [
   { to: '/game',    icon: 'fa-earth-europe',       label: 'Geheimquiz'  },
   { to: '/saved',   icon: 'fa-bookmark',           label: 'Gemerkt'     },
   { to: '/visited', icon: 'fa-flag-checkered',     label: 'Besuchte Orte' },
-  { to: '/ranking', icon: 'fa-trophy',             label: 'Ranking'     },
+  { to: '/ranking', icon: 'fa-medal',              label: 'Prämien'     },
   { to: '/submit',  icon: 'fa-feather-pointed',    label: 'Einreichen'  },
 ];
 

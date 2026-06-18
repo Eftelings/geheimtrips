@@ -576,25 +576,30 @@ type RankBoard = 'orte' | 'published' | 'quiz';
 function RankingCard({ onNavigate }: { places: Place[]; onNavigate: (path: string) => void }) {
   const [board, setBoard] = useState<RankBoard>('orte');
   const [entriesOrte, setEntriesOrte] = useState<RankingEntry[]>([]);
+  const [entriesEingereicht, setEntriesEingereicht] = useState<RankingEntry[]>([]);
   const [quizEntries, setQuizEntries] = useState<{ userId: number; name: string; avatarUrl: string | null; gamesPlayed: number; gamesWon: number; winRate: number }[]>([]);
-  // TODO backend: eigenen Leaderboard-Typ 'submissions' für veröffentlichte Orte hinzufügen
-  // → GET /rankings/leaderboard?board=submissions
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     import('../services/api.js').then(({ rankingsApi }) =>
       Promise.all([
         rankingsApi.leaderboard('orte').then(setEntriesOrte),
+        rankingsApi.leaderboard('eingereicht').then(setEntriesEingereicht).catch(() => {}),
         rankingsApi.quizLeaderboard().then(setQuizEntries).catch(() => {}),
       ]).finally(() => setLoading(false))
     );
   }, []);
 
   const RANK_COLORS = ['#F99039', '#8A6FB3', '#C4A882'];
-  // "published" braucht eigenes Backend-Endpoint; bis dahin selbe Daten
-  const entries: RankingEntry[] = board === 'quiz'
-    ? quizEntries.map(q => ({ id: q.userId, name: q.name, handle: '', avatarUrl: q.avatarUrl, orte: 0, quizWins: q.gamesWon, quizPlayed: q.gamesPlayed, winRate: q.winRate, punkte: 0, level: GT_LEVELS[0] }))
-    : entriesOrte;
+  const entries: RankingEntry[] =
+    board === 'quiz'
+      ? quizEntries.map(q => ({
+          id: q.userId, name: q.name, handle: '', avatarUrl: q.avatarUrl,
+          orte: 0, eingereicht: 0, quizWins: q.gamesWon, quizPlayed: q.gamesPlayed, winRate: q.winRate, punkte: 0,
+          mOrte: 0, mEingereicht: 0, mQuizWins: 0, mScore: 0, percentile: 1, tierKey: 'rookie', isLocalHero: false,
+        }))
+      : board === 'published' ? entriesEingereicht
+      : entriesOrte;
 
   return (
     <div className="bg-white rounded-3xl shadow-[var(--shadow-card)] overflow-hidden flex flex-col">
@@ -644,7 +649,9 @@ function RankingCard({ onNavigate }: { places: Place[]; onNavigate: (path: strin
               </div>
               <span className="flex-1 text-xs font-semibold text-[var(--color-aubergine)] truncate">{e.name}</span>
               <span className="text-[10px] font-bold text-[var(--color-amber)] flex-shrink-0">
-                {board === 'quiz' ? `${e.quizWins} Siege · ${e.winRate} %` : `${e.orte} Orte`}
+                {board === 'quiz' ? `${e.quizWins} Siege · ${e.winRate} %`
+                  : board === 'published' ? `${e.eingereicht} Orte`
+                  : `${e.orte} Orte`}
               </span>
             </div>
           ))

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
 import { places, savedPlaces, visitedPlaces, ratings, placeMedia, authors, businessClaims, placeContributions, users, photoLikes, favoritePlaces } from '../db/schema.js';
+import { isUserLocalHero } from '../lib/ranking.js';
 import { eq, and, inArray, sql, count, asc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
@@ -153,6 +154,11 @@ router.post('/submit', requireAuth,
       ),
     });
 
+    // Ersteller:in war ja vor Ort → automatisch als „war hier" markieren
+    try {
+      await db.insert(visitedPlaces).values({ userId: user.id, placeId: id, gpsVerified: false });
+    } catch { /* bereits markiert — ignorieren */ }
+
     return c.json({ ok: true, id }, 201);
   }
 );
@@ -166,12 +172,12 @@ router.get('/:id', async (c) => {
     author = await db.select().from(authors).where(eq(authors.id, place.authorId)).get();
   }
   // Fetch submitter info for user-submitted places that have no curated author
-  let submitter: { id: number; name: string; handle: string; avatarUrl: string | null } | null = null;
+  let submitter: { id: number; name: string; handle: string; avatarUrl: string | null; isLocalHero: boolean } | null = null;
   if (place.submittedBy && !place.authorId) {
     const u = await db.select({
       id: users.id, name: users.name, handle: users.handle, avatarUrl: users.avatarUrl,
     }).from(users).where(eq(users.id, place.submittedBy)).get();
-    if (u) submitter = u;
+    if (u) submitter = { ...u, isLocalHero: await isUserLocalHero(u.id) };
   }
   const media = await db.select().from(placeMedia).where(eq(placeMedia.placeId, place.id)).all();
 
