@@ -46,6 +46,10 @@ export const authApi = {
   updateMe:       (data: Partial<User>)                => patch<{ user: User }>('/auth/me', data),
   changePassword: (currentPassword: string, newPassword: string) =>
                     post<{ ok: boolean }>('/auth/change-password', { currentPassword, newPassword }),
+  forgotPassword: (email: string) =>
+                    post<{ ok: boolean }>('/auth/forgot', { email }),
+  resetPassword:  (token: string, newPassword: string) =>
+                    post<{ ok: boolean }>('/auth/reset', { token, newPassword }),
 };
 
 // ─── Places ────────────────────────────────────────────────────────────────────

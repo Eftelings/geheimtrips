@@ -254,6 +254,29 @@ router.delete('/users/:id', async (c) => {
   const id   = Number(c.req.param('id'));
   const self = c.get('user');
   if (id === self.id) return c.json({ error: 'Du kannst dein eigenes Konto nicht löschen.' }, 400);
+
+  // Verknüpfte Daten aufräumen — sonst blockieren Fremdschlüssel die Löschung.
+  // Beigetragene Inhalte bleiben erhalten, nur der persönliche Bezug wird entfernt:
+  await db.run(sql`UPDATE places       SET submitted_by = NULL WHERE submitted_by = ${id}`).catch(() => {});
+  await db.run(sql`UPDATE place_media  SET user_id      = NULL WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`UPDATE quiz_games   SET user_id      = NULL WHERE user_id = ${id}`).catch(() => {});
+
+  // Persönliche & relationale Daten entfernen:
+  await db.run(sql`DELETE FROM trip_overnights     WHERE trip_id IN (SELECT id FROM trips WHERE user_id = ${id})`).catch(() => {});
+  await db.run(sql`DELETE FROM trip_places         WHERE trip_id IN (SELECT id FROM trips WHERE user_id = ${id})`).catch(() => {});
+  await db.run(sql`DELETE FROM trips               WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM saved_places        WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM visited_places      WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM favorite_places     WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM ratings             WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM photo_likes         WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM place_contributions WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM friendships         WHERE requester_id = ${id} OR addressee_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM business_claims     WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM business_profiles   WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM user_prefs          WHERE user_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM swipe_events        WHERE user_id = ${id}`).catch(() => {});
+
   await db.delete(users).where(eq(users.id, id));
   return c.json({ ok: true });
 });

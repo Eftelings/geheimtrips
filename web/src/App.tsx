@@ -32,6 +32,7 @@ import { MapPage }         from './pages/MapPage.js';
 import { RankingPage }     from './pages/RankingPage.js';
 import { ProfilePage }     from './pages/ProfilePage.js';
 import { LegalPage }       from './pages/LegalPage.js';
+import { ResetPasswordPage } from './pages/ResetPasswordPage.js';
 import { SubmitPage }      from './pages/SubmitPage.js';
 import { GeoGamePage }    from './pages/game/GeoGamePage.js';
 
@@ -68,6 +69,7 @@ export function App() {
     <Routes>
       <Route path="/gate"    element={<GatePage />} />
       <Route path="/legal"   element={<LegalPage />} />
+      <Route path="/reset"   element={<ResetPasswordPage />} />
 
       <Route path="/" element={<RequireAuth><DiscoverPage /></RequireAuth>} />
       <Route path="/funnel/*" element={<RequireAuth><FunnelPage /></RequireAuth>} />

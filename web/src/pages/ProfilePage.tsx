@@ -13,7 +13,7 @@ export function ProfilePage() {
   const { visitedIds, places, playVideos, setPlayVideos } = useAppStore();
   const [editOpen, setEditOpen]         = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [editData, setEditData]         = useState({ bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '' });
+  const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '' });
   const [pwData, setPwData]             = useState({ current: '', next: '' });
   const [pwError, setPwError]           = useState('');
   const [saving, setSaving]             = useState(false);
@@ -117,6 +117,7 @@ export function ProfilePage() {
       <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} title="Profil bearbeiten">
         <div className="flex flex-col gap-4">
           {[
+            { key: 'name' as const, label: 'Name', placeholder: 'Dein Name' },
             { key: 'bio' as const, label: 'Bio', placeholder: 'Kurze Beschreibung…', multiline: true },
             { key: 'instagram' as const, label: 'Instagram', placeholder: 'handle' },
             { key: 'tiktok' as const,    label: 'TikTok',    placeholder: 'handle' },

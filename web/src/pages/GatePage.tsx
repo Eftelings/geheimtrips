@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { BrandLogo } from '../components/ui/BrandLogo.js';
 import { useAuthStore } from '../store/useAuthStore.js';
+import { authApi } from '../services/api.js';
 
 export function GatePage() {
   const [tab, setTab]           = useState<'login' | 'register'>('register');
@@ -10,8 +11,20 @@ export function GatePage() {
   const [name, setName]         = useState('');
   const [handle, setHandle]     = useState('');
   const [termsAccepted, setTerms] = useState(false);
+  const [forgot, setForgot]     = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotBusy, setForgotBusy] = useState(false);
   const { login, register, loading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
+
+  async function handleForgot(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotBusy(true);
+    // Immer Erfolg anzeigen — nie verraten, ob die E-Mail existiert
+    try { await authApi.forgotPassword(email); } catch { /* still ok */ }
+    setForgotSent(true);
+    setForgotBusy(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -105,6 +118,38 @@ export function GatePage() {
           className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15"
           style={{ animation: 'gtFade 0.3s ease' }}
         >
+          {forgot ? (
+            forgotSent ? (
+              <div className="text-center py-2">
+                <i className="fa-solid fa-paper-plane text-[var(--color-amber)] text-2xl mb-3" />
+                <p className="text-white/85 text-sm mb-4">
+                  Falls ein Konto mit dieser E-Mail existiert, haben wir dir einen Link zum Zurücksetzen geschickt. Schau auch im Spam-Ordner nach.
+                </p>
+                <button onClick={() => { setForgot(false); setForgotSent(false); }}
+                  className="text-[var(--color-amber)] text-sm font-semibold underline">
+                  Zurück zum Login
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgot} className="flex flex-col gap-3">
+                <p className="text-white/70 text-sm">Gib deine E-Mail ein — wir schicken dir einen Link zum Zurücksetzen.</p>
+                <input
+                  type="email" placeholder="E-Mail" value={email}
+                  onChange={e => setEmail(e.target.value)} required autoFocus
+                  className="w-full bg-white/15 border border-white/20 rounded-[var(--radius-input)] px-4 py-2.5 text-white placeholder-white/50 text-sm outline-none focus:border-[var(--color-amber)] transition-colors"
+                />
+                <button type="submit" disabled={forgotBusy}
+                  className="w-full bg-[var(--color-amber)] text-white font-bold py-3 rounded-[var(--radius-input)] shadow-[var(--shadow-amber)] transition-opacity disabled:opacity-60 text-sm">
+                  {forgotBusy ? 'Senden…' : 'Link senden'}
+                </button>
+                <button type="button" onClick={() => setForgot(false)}
+                  className="text-white/60 text-xs font-semibold hover:text-white/80">
+                  Zurück zum Login
+                </button>
+              </form>
+            )
+          ) : (
+          <>
           <div className="flex rounded-xl overflow-hidden mb-4 bg-white/10">
             {(['register', 'login'] as const).map(t => (
               <button
@@ -174,7 +219,16 @@ export function GatePage() {
             >
               {loading ? 'Einen Moment…' : tab === 'register' ? 'Los geht’s — Konto erstellen' : 'Einloggen'}
             </button>
+
+            {tab === 'login' && (
+              <button type="button" onClick={() => { setForgot(true); setForgotSent(false); clearError(); }}
+                className="text-white/60 text-xs font-semibold hover:text-white/80 self-center">
+                Passwort vergessen?
+              </button>
+            )}
           </form>
+          </>
+          )}
         </div>
 
         {/* Legal link */}
