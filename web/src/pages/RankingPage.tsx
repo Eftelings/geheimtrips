@@ -153,7 +153,7 @@ export function RankingPage() {
         )}
 
         {/* ── Status-Slider (alle Stufen + Boni) ── */}
-        <div className="relative mb-6 -mx-5">
+        <div className="relative mb-6">
           {/* Pfeile (Desktop) */}
           <button aria-label="Zurück" onClick={() => nudge(-1)}
             className="hidden md:flex absolute left-1 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white shadow-md items-center justify-center text-[var(--color-aubergine)] hover:bg-[var(--color-bg-soft)] transition-colors">
@@ -167,7 +167,9 @@ export function RankingPage() {
           <div ref={sliderRef}
             onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerLeave={onDragEnd}
             className="flex gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing select-none touch-pan-x"
-            style={{ scrollbarWidth: 'none', scrollSnapType: 'x proximity' }}>
+            style={{ scrollbarWidth: 'none', scrollSnapType: 'x proximity',
+              maskImage: 'linear-gradient(to right, transparent 0, #000 2.5rem, #000 calc(100% - 2.5rem), transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to right, transparent 0, #000 2.5rem, #000 calc(100% - 2.5rem), transparent 100%)' }}>
 
             {/* Spacer links — erlaubt das mittige Zentrieren auch der ersten Karte */}
             <div aria-hidden className="flex-shrink-0" style={{ width: 'calc(50% - 7rem)' }} />
