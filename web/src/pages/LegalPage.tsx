@@ -60,11 +60,11 @@ function Impressum() {
 
       <section>
         <h3 className="font-semibold text-[var(--color-aubergine)] mb-1">Kontakt</h3>
-        <p>Telefon: +49 167 80853745<br />E-Mail: <a href="mailto:david@lennart-sturz.com" className="text-[var(--color-amber)] underline">david@lennart-sturz.com</a></p>
+        <p>Telefon: +49 167 80853745<br />E-Mail: <a href="mailto:info@geheimtrips.de" className="text-[var(--color-amber)] underline">info@geheimtrips.de</a></p>
       </section>
 
       <section>
-        <h3 className="font-semibold text-[var(--color-aubergine)] mb-1">Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV</h3>
+        <h3 className="font-semibold text-[var(--color-aubergine)] mb-1">Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h3>
         <p>David-Lennart Sturz, Danneckerstraße 24, 10245 Berlin</p>
       </section>
 
@@ -80,7 +80,7 @@ function Impressum() {
 
       <p className="text-xs text-[var(--color-lavender-lt)] mt-4">
         Meldungen zu rechtswidrigen Inhalten bitte direkt per E-Mail an{' '}
-        <a href="mailto:david@lennart-sturz.com" className="underline">david@lennart-sturz.com</a> oder über unsere{' '}
+        <a href="mailto:info@geheimtrips.de" className="underline">info@geheimtrips.de</a> oder über unsere{' '}
         <button onClick={() => {}} className="text-[var(--color-amber)] underline">Notice-&-Takedown-Seite</button>.
       </p>
     </>
@@ -175,7 +175,7 @@ function Datenschutz() {
       <section>
         <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Verantwortlicher</h3>
         <p>David-Lennart Sturz, Danneckerstraße 24, 10245 Berlin<br />
-        E-Mail: <a href="mailto:david@lennart-sturz.com" className="text-[var(--color-amber)] underline">david@lennart-sturz.com</a></p>
+        E-Mail: <a href="mailto:datenschutz@geheimtrips.de" className="text-[var(--color-amber)] underline">datenschutz@geheimtrips.de</a></p>
       </section>
 
       <section>
@@ -183,7 +183,10 @@ function Datenschutz() {
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>Pflichtangaben bei Registrierung:</strong> E-Mail-Adresse, Passwort (verschlüsselt gespeichert, nie im Klartext), gewählter Benutzername</li>
           <li><strong>Freiwillige Profilangaben:</strong> Name, Biografie, Instagram/TikTok-Handle, Website</li>
-          <li><strong>Aktivitätsdaten:</strong> Gespeicherte Orte, besuchte Orte (mit GPS-Verifikation), Bewertungen, erstellte Trips</li>
+          <li><strong>Onboarding-Angaben:</strong> Geburtsjahr und (freiwillig) Geschlecht sowie deine Präferenzen — bevorzugte Verkehrsmittel, mit wem du unterwegs bist und ob du offen für neue Bekanntschaften bist. Diese Angaben dienen ausschließlich passenderen Vorschlägen.</li>
+          <li><strong>Standortdaten:</strong> Nur mit deiner ausdrücklichen Einwilligung verarbeiten wir deinen aktuellen Standort (für Entfernungen und Vorschläge in deiner Nähe). Die Einwilligung kannst du jederzeit im Profil oder im Browser widerrufen.</li>
+          <li><strong>Aktivitätsdaten:</strong> Gespeicherte Orte, besuchte Orte (mit GPS-Verifikation), eingereichte Orte, Bewertungen, erstellte Trips, Geheimquiz-Ergebnisse</li>
+          <li><strong>Soziale Verknüpfungen:</strong> Freundschaften bzw. Verbindungen zu anderen Nutzer:innen (u. a. für den „Nur Freunde"-Filter im Prämien-Ranking)</li>
           <li><strong>Hochgeladene Medien:</strong> Fotos und Videos, die du bewusst hochlädst</li>
           <li><strong>Technische Daten:</strong> Cookie für die Login-Session (JWT-Token, 30 Tage Laufzeit)</li>
         </ul>
@@ -191,12 +194,13 @@ function Datenschutz() {
 
       <section>
         <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Zweck der Verarbeitung</h3>
-        <p>Deine Daten werden ausschließlich zur Bereitstellung der Plattformfunktionen genutzt. Eine Weitergabe an Dritte findet nicht statt.</p>
+        <p>Deine Daten werden ausschließlich zur Bereitstellung der Plattformfunktionen genutzt. Eine Weitergabe an Dritte zu Werbezwecken findet nicht statt. Technisch notwendige Dienstleister (z. B. unser Hosting-Anbieter) verarbeiten Daten ausschließlich in unserem Auftrag.</p>
       </section>
 
       <section>
         <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Externe Dienste</h3>
         <ul className="list-disc pl-5 space-y-1">
+          <li><strong>Railway (Hosting):</strong> Plattform, Datenbank und hochgeladene Medien werden bei Railway betrieben; dabei können Daten auf Servern außerhalb der EU (u. a. USA) verarbeitet werden.</li>
           <li><strong>OpenStreetMap / Nominatim:</strong> GPS-Reverse-Geocoding (keine personenbezogenen Daten übertragen)</li>
           <li><strong>Open-Meteo:</strong> Wetterdaten anhand von Ortskoordinaten (keine personenbezogenen Daten übertragen)</li>
           <li><strong>Unsplash:</strong> Platzhalterbilder werden von unsplash.com geladen</li>
@@ -208,7 +212,7 @@ function Datenschutz() {
       <section>
         <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Deine Rechte</h3>
         <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung und Datenübertragbarkeit. Schreib uns dafür an{' '}
-          <a href="mailto:david@lennart-sturz.com" className="text-[var(--color-amber)] underline">david@lennart-sturz.com</a>.
+          <a href="mailto:datenschutz@geheimtrips.de" className="text-[var(--color-amber)] underline">datenschutz@geheimtrips.de</a>.
         </p>
       </section>
 
@@ -228,7 +232,7 @@ function About() {
       <h2 className="font-display font-bold text-xl text-[var(--color-aubergine)]">Wer sind wir?</h2>
       <p>Geheimtrips.de wurde von <strong>David-Lennart Sturz</strong> gegründet — mit der Überzeugung, dass die besten Orte tatsächlich in keinem Reiseführer stehen.</p>
       <p>Die Idee: Eine Community von echten Entdecker:innen, die ihre Geheimtipps teilen — und eine App, die dir hilft, deinen nächsten Kurztrip in 10 Fragen zu planen.</p>
-      <p>Geheimtrips.de ist ein <strong>privates Hobby-Projekt in der Betaphase</strong>. Feedback und Vorschläge sind herzlich willkommen: <a href="mailto:david@lennart-sturz.com" className="text-[var(--color-amber)] underline">david@lennart-sturz.com</a></p>
+      <p>Geheimtrips.de ist ein <strong>privates Hobby-Projekt in der Betaphase</strong>. Feedback und Vorschläge sind herzlich willkommen: <a href="mailto:info@geheimtrips.de" className="text-[var(--color-amber)] underline">info@geheimtrips.de</a></p>
     </>
   );
 }
@@ -244,7 +248,7 @@ function NoticeAndTakedown() {
       <div className="bg-[var(--color-bg-soft)] rounded-2xl p-4 border-l-4 border-[var(--color-amber)]">
         <p className="font-semibold text-[var(--color-aubergine)] mb-1">Schnellmeldung</p>
         <p className="text-xs text-[var(--color-lavender)] mb-2">Für dringende Fälle (z.B. eindeutige Urheberrechtsverletzungen): direkt per E-Mail mit dem Betreff „TAKEDOWN" an:</p>
-        <a href="mailto:david@lennart-sturz.com?subject=TAKEDOWN%20-%20Rechtsverletzung%20auf%20Geheimtrips.de"
+        <a href="mailto:info@geheimtrips.de?subject=TAKEDOWN%20-%20Rechtsverletzung%20auf%20Geheimtrips.de"
           className="inline-flex items-center gap-2 bg-[var(--color-amber)] text-white font-bold px-4 py-2 rounded-full text-sm shadow-[var(--shadow-amber)]">
           <i className="fa-solid fa-envelope" />
           TAKEDOWN melden
@@ -255,7 +259,7 @@ function NoticeAndTakedown() {
         <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Unser Verfahren</h3>
         <p>Geheimtrips.de nimmt Hinweise auf rechtsverletzende Inhalte ernst. Wir handeln nach dem Notice-&-Takedown-Verfahren gemäß § 10 TMG:</p>
         <ol className="list-decimal pl-5 mt-2 space-y-2">
-          <li><strong>Meldung einreichen</strong> — Sende deine Meldung per E-Mail an <a href="mailto:david@lennart-sturz.com" className="text-[var(--color-amber)] underline">david@lennart-sturz.com</a> mit dem Betreff „TAKEDOWN".</li>
+          <li><strong>Meldung einreichen</strong> — Sende deine Meldung per E-Mail an <a href="mailto:info@geheimtrips.de" className="text-[var(--color-amber)] underline">info@geheimtrips.de</a> mit dem Betreff „TAKEDOWN".</li>
           <li><strong>Prüfung</strong> — Wir prüfen deine Meldung in der Regel innerhalb von <strong>2–5 Werktagen</strong>.</li>
           <li><strong>Maßnahme</strong> — Bei bestätigten Rechtsverletzungen wird der Inhalt unverzüglich entfernt. Du erhältst eine Bestätigung per E-Mail.</li>
         </ol>
@@ -295,7 +299,7 @@ function NoticeAndTakedown() {
       <section className="border-t border-[var(--color-bg-soft)] pt-4">
         <p className="text-xs text-[var(--color-lavender-lt)]">
           Missbrauch des Meldeverfahrens (z.B. ungerechtfertigte Meldungen in Wettbewerbsabsicht) kann rechtliche Konsequenzen haben.
-          Bei Fragen: <a href="mailto:david@lennart-sturz.com" className="underline">david@lennart-sturz.com</a>
+          Bei Fragen: <a href="mailto:info@geheimtrips.de" className="underline">info@geheimtrips.de</a>
         </p>
       </section>
     </>

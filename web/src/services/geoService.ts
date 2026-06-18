@@ -40,7 +40,7 @@ export function requestGpsPosition(): Promise<Coords> {
 export async function reverseGeocode(coords: Coords): Promise<GeoLocation> {
   const url = `https://nominatim.openstreetmap.org/reverse?lat=${coords.lat}&lon=${coords.lng}&format=json&accept-language=de`;
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'Geheimtrips.de/1.0 (david@lennart-sturz.com)' },
+    headers: { 'User-Agent': 'Geheimtrips.de/1.0 (info@geheimtrips.de)' },
   });
   if (!res.ok) throw new Error('Geocoding fehlgeschlagen.');
   const data = await res.json();
@@ -58,7 +58,7 @@ export async function reverseGeocode(coords: Coords): Promise<GeoLocation> {
 export async function geocodeAddress(query: string): Promise<GeoLocation | null> {
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=de,at,ch&accept-language=de`;
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'Geheimtrips.de/1.0 (david@lennart-sturz.com)' },
+    headers: { 'User-Agent': 'Geheimtrips.de/1.0 (info@geheimtrips.de)' },
   });
   if (!res.ok) return null;
   const results = await res.json();
@@ -76,7 +76,7 @@ export async function geocodeSuggestions(query: string): Promise<GeoLocation[]> 
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=de,at,ch&accept-language=de`;
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Geheimtrips.de/1.0 (david@lennart-sturz.com)' },
+      headers: { 'User-Agent': 'Geheimtrips.de/1.0 (info@geheimtrips.de)' },
       signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) return [];
