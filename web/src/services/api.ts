@@ -162,6 +162,12 @@ export const rankingsApi = {
   quizMe:            ()                    => get<QuizMeStats>('/rankings/geheimquiz/me'),
 };
 
+// ─── Benachrichtigungen (Punkt im Header) ───────────────────────────────────────
+export const notificationsApi = {
+  count: () => get<{ count: number; ratings: number; likes: number }>('/notifications/count'),
+  seen:  () => post<{ ok: boolean }>('/notifications/seen'),
+};
+
 // ─── Business ──────────────────────────────────────────────────────────────────
 
 export type ClaimStatus = 'pending' | 'approved' | 'rejected';

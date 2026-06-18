@@ -1,8 +1,9 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BottomNav } from './BottomNav.js';
 import { Sidebar } from './Sidebar.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
+import { notificationsApi } from '../../services/api.js';
 import { Avatar } from '../ui/Avatar.js';
 import { BrandLogo } from '../ui/BrandLogo.js';
 
@@ -21,6 +22,17 @@ interface Props {
 export function AppShell({ children, showBack, title, headerRight, noHeader }: Props) {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const [notif, setNotif] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    notificationsApi.count().then(r => setNotif(r.count)).catch(() => {});
+  }, [user]);
+
+  const openProfile = () => {
+    if (notif > 0) { notificationsApi.seen().catch(() => {}); setNotif(0); }
+    navigate('/profile');
+  };
 
   return (
     <div className="min-h-dvh bg-white">
@@ -30,28 +42,36 @@ export function AppShell({ children, showBack, title, headerRight, noHeader }: P
 
       <div className="flex flex-col flex-1 min-w-0">
 
-        {/* ── Mobile header ────────────────────────────────────── */}
+        {/* ── Mobile header (Instagram-Stil) ───────────────────── */}
         {!noHeader && (
           <header className="md:hidden sticky top-0 z-20 bg-[var(--color-bg)] border-b border-[var(--color-bg-soft)] flex items-center px-4 h-14 gap-3">
+            {/* Links: Zurück (Unterseiten) oder Feder zum Einreichen */}
             {showBack ? (
-              <button onClick={() => navigate(-1)} className="w-8 h-8 flex items-center justify-center text-[var(--color-aubergine)]">
-                <i className="fa-solid fa-arrow-left" />
+              <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Zurück">
+                <i className="fa-solid fa-arrow-left text-lg" />
               </button>
             ) : (
-              <BrandLogo size="sm" />
+              <button onClick={() => navigate('/submit')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Ort einreichen">
+                <i className="fa-solid fa-feather-pointed text-lg" />
+              </button>
             )}
 
-            {title && (
-              <span className="font-display font-semibold text-[var(--color-aubergine)] text-base flex-1 text-center">
-                {title}
-              </span>
-            )}
+            {/* Mitte: Titel oder Logo */}
+            <div className="flex-1 flex justify-center min-w-0">
+              {title
+                ? <span className="font-display font-semibold text-[var(--color-aubergine)] text-base truncate">{title}</span>
+                : <BrandLogo size="sm" />}
+            </div>
 
-            <div className="ml-auto">
+            {/* Rechts: Profil mit Benachrichtigungs-Punkt */}
+            <div className="w-9 flex justify-end">
               {headerRight ?? (
                 user && (
-                  <button onClick={() => navigate('/profile')} className="flex items-center gap-2">
+                  <button onClick={openProfile} className="relative" aria-label="Profil">
                     <Avatar name={user.name} src={user.avatarUrl} size={32} />
+                    {notif > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--color-amber)] border-2 border-[var(--color-bg)]" />
+                    )}
                   </button>
                 )
               )}

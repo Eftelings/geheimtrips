@@ -24,6 +24,7 @@ import { uploadRouter, serveRouter } from './routes/media.js';
 import geoRouter from './routes/geo.js';
 import discoverRouter from './routes/discover.js';
 import categoriesRouter from './routes/categories.js';
+import notificationsRouter from './routes/notifications.js';
 
 const app = new Hono();
 
@@ -51,6 +52,7 @@ api.route('/uploads', serveRouter);
 api.route('/geo', geoRouter);
 api.route('/discover', discoverRouter);
 api.route('/categories', categoriesRouter);
+api.route('/notifications', notificationsRouter);
 app.route('/api', api);
 
 api.notFound((c) => c.json({ error: 'Route nicht gefunden.' }, 404));

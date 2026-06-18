@@ -82,7 +82,7 @@ export function App() {
       <Route path="/author/:id" element={<RequireAuth><AuthorPage /></RequireAuth>} />
       <Route path="/saved"     element={<RequireAuth><SavedPage /></RequireAuth>} />
       <Route path="/visited"   element={<RequireAuth><VisitedPage /></RequireAuth>} />
-      <Route path="/trips"     element={<RequireAuth><Navigate to="/saved" replace /></RequireAuth>} />
+      <Route path="/trips"     element={<RequireAuth><SavedPage initialTab="trips" /></RequireAuth>} />
       <Route path="/trips/:id" element={<RequireAuth><TripDetailPage /></RequireAuth>} />
       <Route path="/map"       element={<RequireAuth><MapPage /></RequireAuth>} />
       <Route path="/ranking"  element={<RequireAuth><RankingPage /></RequireAuth>} />

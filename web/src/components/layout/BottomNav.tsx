@@ -1,13 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 
 const LEFT_TABS = [
-  { to: '/saved',   icon: 'fa-bookmark',        label: 'Gemerkt'     },
-  { to: '/visited', icon: 'fa-flag-checkered',  label: 'Besuchte Orte' },
-  { to: '/game',    icon: 'fa-earth-europe',    label: 'Geheimquiz'  },
+  { to: '/saved',   icon: 'fa-bookmark',        label: 'Meine Orte'  },
+  { to: '/trips',   icon: 'fa-route',           label: 'Meine Trips' },
 ];
 const RIGHT_TABS = [
-  { to: '/submit',  icon: 'fa-feather-pointed', label: 'Einreichen'  },
-  { to: '/profile', icon: 'fa-user',            label: 'Profil'      },
+  { to: '/game',    icon: 'fa-earth-europe',    label: 'Geheimquiz'  },
+  { to: '/visited', icon: 'fa-flag-checkered',  label: 'Besuchte Orte' },
 ];
 
 export function BottomNav() {

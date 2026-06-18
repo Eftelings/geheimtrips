@@ -105,9 +105,9 @@ function placeMatchesText(p: Place, s: string): boolean {
 }
 
 // ─── Seite ────────────────────────────────────────────────────────────────────
-export function SavedPage() {
+export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   const navigate = useNavigate();
-  const [tab, setTab]             = useState<Tab>('orte');
+  const [tab, setTab]             = useState<Tab>(initialTab);
   const [q, setQ]                 = useState('');
   const [catSel, setCatSel] = useState<CategorySelection>(EMPTY_CATEGORY);
   const catActive = catSel.cat !== null || catSel.l1 !== null;

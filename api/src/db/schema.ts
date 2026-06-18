@@ -22,6 +22,8 @@ export const users = sqliteTable('users', {
   notificationsEnabled: integer('notifications_enabled', { mode: 'boolean' }).default(true),
   playVideos: integer('play_videos', { mode: 'boolean' }).default(true),
   meetPeopleEnabled: integer('meet_people_enabled', { mode: 'boolean' }).default(false),
+  // Zeitpunkt, zu dem zuletzt Benachrichtigungen gesehen wurden (für den Punkt im Header)
+  notificationsSeenAt: text('notifications_seen_at'),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
 
