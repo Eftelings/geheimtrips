@@ -445,7 +445,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
             )}
 
             {/* Create */}
-            <button onClick={() => navigate('/trip-wizard')}
+            <button onClick={() => navigate('/trips/create')}
               className="flex items-center gap-3 p-4 rounded-2xl border-2 border-dashed border-[var(--color-amber)] text-[var(--color-amber)] font-semibold text-sm active:scale-[0.98] transition-transform">
               <i className="fa-solid fa-plus text-lg" />
               Neuen Trip erstellen

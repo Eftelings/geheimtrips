@@ -22,6 +22,7 @@ import { OnboardingPage }  from './pages/OnboardingPage.js';
 import { SwipePage }       from './pages/SwipePage.js';
 import { FinderPage }      from './pages/FinderPage.js';
 import { TripWizardPage }  from './pages/TripWizardPage.js';
+import { TripCreatePage }  from './pages/TripCreatePage.js';
 import { ResultsPage }     from './pages/ResultsPage.js';
 import { PlaceDetailPage } from './pages/PlaceDetailPage.js';
 import { AuthorPage }      from './pages/AuthorPage.js';
@@ -85,6 +86,7 @@ export function App() {
       <Route path="/saved"     element={<RequireAuth><SavedPage /></RequireAuth>} />
       <Route path="/visited"   element={<RequireAuth><VisitedPage /></RequireAuth>} />
       <Route path="/trips"     element={<RequireAuth><SavedPage initialTab="trips" /></RequireAuth>} />
+      <Route path="/trips/create" element={<RequireAuth><TripCreatePage /></RequireAuth>} />
       <Route path="/trips/:id" element={<RequireAuth><TripDetailPage /></RequireAuth>} />
       <Route path="/map"       element={<RequireAuth><MapPage /></RequireAuth>} />
       <Route path="/ranking"  element={<RequireAuth><RankingPage /></RequireAuth>} />

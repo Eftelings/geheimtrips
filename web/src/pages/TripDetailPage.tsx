@@ -646,6 +646,15 @@ export function TripDetailPage() {
           </button>
         )}
 
+        {/* Startpunkt (falls gesetzt) */}
+        {trip.startLabel && (
+          <div className="flex items-center gap-2 text-sm mb-4">
+            <i className="fa-solid fa-location-crosshairs text-[var(--color-amber)]" />
+            <span className="text-[var(--color-lavender)]">Start:</span>
+            <strong className="text-[var(--color-aubergine)]">{trip.startLabel}</strong>
+          </div>
+        )}
+
         {/* Mitreisende — gemeinsamer Ausflug (nicht bei kuratierten Vorlagen) */}
         {!trip.isCurated && <TripParticipants trip={trip} reload={reload} />}
 
