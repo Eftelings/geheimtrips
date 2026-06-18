@@ -1467,8 +1467,8 @@ async function handleVerifyToggle() {
                       </div>
                     </button>
                   ) : place.submitter ? (
-                    /* User-submitted place — show the submitter's name */
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                    /* User-submitted place — auf Profil tippen */
+                    <button onClick={() => navigate(`/u/${place.submitter!.id}`)} className="flex items-center gap-3 flex-1 min-w-0 text-left active:scale-[0.99] transition-transform">
                       <div className="w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden flex items-center justify-center text-base font-bold text-white"
                         style={{ background: '#71587A' }}>
                         {place.submitter.avatarUrl
@@ -1490,7 +1490,7 @@ async function handleVerifyToggle() {
                           @{place.submitter.handle}
                         </p>
                       </div>
-                    </div>
+                    </button>
                   ) : (
                     <div className="flex-1" />
                   )}

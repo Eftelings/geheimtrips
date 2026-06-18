@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { useAuthStore } from '../store/useAuthStore.js';
@@ -49,6 +50,7 @@ const BOARDS: {
 
 export function RankingPage() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [board, setBoard]           = useState<RankBoardId>('gesamt');
   const [friendsOnly, setFriendsOnly] = useState(false);
   const [entries, setEntries]       = useState<RankingEntry[]>([]);
@@ -262,7 +264,8 @@ export function RankingPage() {
               const isMe = user && e.id === myStats?.id;
               return (
                 <div key={e.id} ref={isMe ? meRowRef : undefined}
-                  className={`flex items-center gap-3 p-3 rounded-xl flex-shrink-0 ${
+                  onClick={() => navigate(`/u/${e.id}`)}
+                  className={`flex items-center gap-3 p-3 rounded-xl flex-shrink-0 cursor-pointer active:scale-[0.99] transition-transform ${
                     isMe ? 'bg-[var(--color-amber)]/10 border-2 border-[var(--color-amber)]' : 'bg-white shadow-[var(--shadow-card)]'}`}>
                   <span className={`font-bold text-sm w-7 text-center flex-shrink-0 ${rank <= 3 ? 'text-[var(--color-amber)]' : 'text-[var(--color-lavender)]'}`}>
                     {rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : rank}

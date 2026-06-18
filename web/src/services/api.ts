@@ -298,3 +298,16 @@ export const friendsApi = {
   accept:   (id: number)    => post<{ ok: boolean }>(`/friends/accept/${id}`),
   decline:  (id: number)    => del<{ ok: boolean }>(`/friends/decline/${id}`),
 };
+
+// ─── Öffentliche Profile (reale Nutzer:innen) ──────────────────────────────────
+export type FriendStatus = 'self' | 'none' | 'pending_out' | 'pending_in' | 'friends';
+export interface PublicUser {
+  id: number; name: string; handle: string; avatarUrl: string | null; bio: string | null;
+  instagram: string | null; tiktok: string | null; website: string | null;
+  isLocalHero: boolean; placeCount: number;
+  friendStatus: FriendStatus; pendingRequestId: number | null;
+  places: Place[];
+}
+export const usersApi = {
+  get: (id: number) => get<PublicUser>(`/users/${id}`),
+};

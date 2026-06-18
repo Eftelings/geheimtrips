@@ -636,7 +636,7 @@ function RankingCard({ onNavigate }: { places: Place[]; onNavigate: (path: strin
           <div className="text-center py-6 text-[var(--color-lavender)] text-sm">Noch keine Daten vorhanden.</div>
         ) : (
           entries.slice(0, 5).map((e, i) => (
-            <div key={e.id} onClick={() => onNavigate(`/author/${e.id}`)}
+            <div key={e.id} onClick={() => onNavigate(`/u/${e.id}`)}
               className="flex items-center gap-2.5 py-2 border-b border-[var(--color-bg-soft)] last:border-0 cursor-pointer hover:bg-[var(--color-bg-soft)] -mx-2 px-2 rounded-xl transition-colors">
               <span className="text-sm font-black w-5 text-center flex-shrink-0"
                 style={{ color: RANK_COLORS[i] ?? 'var(--color-lavender)' }}>
