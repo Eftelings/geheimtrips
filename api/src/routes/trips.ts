@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { trips, tripPlaces, tripOvernights, places } from '../db/schema.js';
+import { trips, tripPlaces, tripOvernights, tripParticipants, places, users } from '../db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
@@ -13,14 +13,36 @@ db.run(sql`ALTER TABLE trips ADD COLUMN intro TEXT DEFAULT ''`).catch(() => {});
 db.run(sql`ALTER TABLE trips ADD COLUMN costs_json TEXT DEFAULT '{}'`).catch(() => {});
 db.run(sql`ALTER TABLE trip_overnights ADD COLUMN hotel_lat REAL`).catch(() => {});
 db.run(sql`ALTER TABLE trip_overnights ADD COLUMN hotel_lng REAL`).catch(() => {});
+db.run(sql`ALTER TABLE trips ADD COLUMN start_label TEXT`).catch(() => {});
+db.run(sql`ALTER TABLE trips ADD COLUMN start_lat REAL`).catch(() => {});
+db.run(sql`ALTER TABLE trips ADD COLUMN start_lng REAL`).catch(() => {});
+db.run(sql`ALTER TABLE trips ADD COLUMN end_label TEXT`).catch(() => {});
+db.run(sql`ALTER TABLE trips ADD COLUMN end_lat REAL`).catch(() => {});
+db.run(sql`ALTER TABLE trips ADD COLUMN end_lng REAL`).catch(() => {});
+db.run(sql`CREATE TABLE IF NOT EXISTS trip_participants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trip_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'invited',
+  created_at TEXT DEFAULT (datetime('now'))
+)`).catch(() => {});
 
 const router = new Hono();
 
-// GET /trips — current user's trips
+// GET /trips — eigene Trips + Trips, zu denen ich eingeladen bin
 router.get('/', requireAuth, async (c) => {
   const user = c.get('user');
-  const userTrips = await db.select().from(trips).where(eq(trips.userId, user.id)).all();
-  return c.json(await expandTrips(userTrips));
+  const owned = await db.select().from(trips).where(eq(trips.userId, user.id)).all();
+  const myParts = await db.select().from(tripParticipants).where(eq(tripParticipants.userId, user.id)).all();
+  const statusMap = Object.fromEntries(myParts.map(p => [p.tripId, p.status]));
+  const extraIds = myParts.map(p => p.tripId).filter(id => !owned.some(t => t.id === id));
+  const joined = extraIds.length ? await db.select().from(trips).where(inArray(trips.id, extraIds)).all() : [];
+  const expanded = await expandTrips([...owned, ...joined]);
+  return c.json(expanded.map(t => ({
+    ...t,
+    isOwner: t.userId === user.id,
+    myStatus: t.userId === user.id ? 'owner' : (statusMap[t.id] ?? null),
+  })));
 });
 
 // GET /trips/curated
@@ -29,16 +51,24 @@ router.get('/curated', async (c) => {
   return c.json(await expandTrips(curated));
 });
 
-// GET /trips/:id — eigener Trip ODER kuratierter Trip (für alle einsehbar)
+// GET /trips/:id — eigener/kuratierter Trip ODER Trip, zu dem ich eingeladen bin
 router.get('/:id', requireAuth, async (c) => {
   const user = c.get('user');
-  const trip = await db.select().from(trips)
-    .where(eq(trips.id, Number(c.req.param('id')))).get();
-  if (!trip || (trip.userId !== user.id && !trip.isCurated)) {
+  const id = Number(c.req.param('id'));
+  const trip = await db.select().from(trips).where(eq(trips.id, id)).get();
+  if (!trip) return c.json({ error: 'Trip nicht gefunden.' }, 404);
+  const myPart = await db.select().from(tripParticipants)
+    .where(and(eq(tripParticipants.tripId, id), eq(tripParticipants.userId, user.id))).get();
+  if (trip.userId !== user.id && !trip.isCurated && !myPart) {
     return c.json({ error: 'Trip nicht gefunden.' }, 404);
   }
   const [expanded] = await expandTrips([trip]);
-  return c.json({ ...expanded, isOwner: trip.userId === user.id });
+  return c.json({
+    ...expanded,
+    isOwner: trip.userId === user.id,
+    myStatus: trip.userId === user.id ? 'owner' : (myPart?.status ?? null),
+    participants: await getParticipants(id),
+  });
 });
 
 // POST /trips — create (optional mit vollständiger Stopp-Liste, z.B. „Trip übernehmen")
@@ -90,6 +120,12 @@ router.patch('/:id', requireAuth,
     endDate: z.string().nullable().optional(),
     persons: z.number().int().min(1).optional(),
     costsJson: z.string().max(2000).optional(),
+    startLabel: z.string().nullable().optional(),
+    startLat: z.number().nullable().optional(),
+    startLng: z.number().nullable().optional(),
+    endLabel: z.string().nullable().optional(),
+    endLat: z.number().nullable().optional(),
+    endLng: z.number().nullable().optional(),
   })),
   async (c) => {
     const user = c.get('user');
@@ -111,6 +147,7 @@ router.delete('/:id', requireAuth, async (c) => {
   if (!trip) return c.json({ error: 'Trip nicht gefunden.' }, 404);
   await db.delete(tripPlaces).where(eq(tripPlaces.tripId, id));
   await db.delete(tripOvernights).where(eq(tripOvernights.tripId, id));
+  await db.delete(tripParticipants).where(eq(tripParticipants.tripId, id));
   await db.delete(trips).where(eq(trips.id, id));
   return c.json({ ok: true });
 });
@@ -191,7 +228,67 @@ router.put('/:id/overnights', requireAuth,
   }
 );
 
+// ─── Mitreisende (gemeinsame Trips) ───────────────────────────────────────────
+
+// POST /trips/:id/invite — Besitzer:in lädt eine Person per Handle ein
+router.post('/:id/invite', requireAuth,
+  zValidator('json', z.object({ handle: z.string().min(1) })),
+  async (c) => {
+    const user = c.get('user');
+    const id = Number(c.req.param('id'));
+    const trip = await db.select().from(trips).where(and(eq(trips.id, id), eq(trips.userId, user.id))).get();
+    if (!trip) return c.json({ error: 'Trip nicht gefunden.' }, 404);
+    const handle = c.req.valid('json').handle.replace(/^@/, '').toLowerCase();
+    const invitee = await db.select().from(users).where(eq(users.handle, handle)).get();
+    if (!invitee) return c.json({ error: 'Nutzer:in nicht gefunden.' }, 404);
+    if (invitee.id === user.id) return c.json({ error: 'Du bist bereits dabei.' }, 400);
+    const existing = await db.select().from(tripParticipants)
+      .where(and(eq(tripParticipants.tripId, id), eq(tripParticipants.userId, invitee.id))).get();
+    if (existing) return c.json({ error: 'Bereits eingeladen.' }, 409);
+    await db.insert(tripParticipants).values({ tripId: id, userId: invitee.id, status: 'invited' });
+    return c.json({ ok: true });
+  }
+);
+
+// POST /trips/:id/respond — Eingeladene:r nimmt an oder lehnt ab
+router.post('/:id/respond', requireAuth,
+  zValidator('json', z.object({ status: z.enum(['accepted', 'declined']) })),
+  async (c) => {
+    const user = c.get('user');
+    const id = Number(c.req.param('id'));
+    const part = await db.select().from(tripParticipants)
+      .where(and(eq(tripParticipants.tripId, id), eq(tripParticipants.userId, user.id))).get();
+    if (!part) return c.json({ error: 'Keine Einladung gefunden.' }, 404);
+    await db.update(tripParticipants).set({ status: c.req.valid('json').status })
+      .where(eq(tripParticipants.id, part.id));
+    return c.json({ ok: true });
+  }
+);
+
+// DELETE /trips/:id/participants/:userId — Besitzer:in entfernt jemanden, oder man tritt selbst aus
+router.delete('/:id/participants/:userId', requireAuth, async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('id'));
+  const targetId = Number(c.req.param('userId'));
+  const trip = await db.select().from(trips).where(eq(trips.id, id)).get();
+  if (!trip) return c.json({ error: 'Trip nicht gefunden.' }, 404);
+  if (trip.userId !== user.id && targetId !== user.id) return c.json({ error: 'Nicht erlaubt.' }, 403);
+  await db.delete(tripParticipants)
+    .where(and(eq(tripParticipants.tripId, id), eq(tripParticipants.userId, targetId)));
+  return c.json({ ok: true });
+});
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+// Mitreisende eines Trips inkl. Namen/Avatar
+async function getParticipants(tripId: number) {
+  return db.select({
+    userId: tripParticipants.userId, status: tripParticipants.status,
+    name: users.name, handle: users.handle, avatarUrl: users.avatarUrl,
+  }).from(tripParticipants)
+    .innerJoin(users, eq(users.id, tripParticipants.userId))
+    .where(eq(tripParticipants.tripId, tripId)).all();
+}
 
 async function expandTrips(tripRows: (typeof trips.$inferSelect)[]) {
   if (!tripRows.length) return [];

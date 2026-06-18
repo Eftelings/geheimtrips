@@ -134,6 +134,13 @@ export const trips = sqliteTable('trips', {
   endDate: text('end_date'),
   persons: integer('persons').notNull().default(1),
   costsJson: text('costs_json').default('{}'), // manuelle Kosten (Ticket, Verpflegung/Tag, Startort)
+  // Start- und Endpunkt (freie Orte, z.B. Zuhause) — Ziele sind die trip_places dazwischen
+  startLabel: text('start_label'),
+  startLat: real('start_lat'),
+  startLng: real('start_lng'),
+  endLabel: text('end_label'),
+  endLat: real('end_lat'),
+  endLng: real('end_lng'),
   isCurated: integer('is_curated', { mode: 'boolean' }).default(false),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
@@ -156,6 +163,15 @@ export const tripOvernights = sqliteTable('trip_overnights', {
   hotelPrice: real('hotel_price'),
   hotelLat: real('hotel_lat'),   // via Hotel-Suche (Geocoding) gefunden
   hotelLng: real('hotel_lng'),
+});
+
+// Mitreisende eines Trips — eingeladene Freund:innen (gemeinsame Ausflüge)
+export const tripParticipants = sqliteTable('trip_participants', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  tripId: integer('trip_id').notNull().references(() => trips.id),
+  userId: integer('user_id').notNull().references(() => users.id),
+  status: text('status').notNull().default('invited'), // invited|accepted|declined
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
 
 // ─── Friends ─────────────────────────────────────────────────────────────────

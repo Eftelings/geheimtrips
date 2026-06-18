@@ -10,15 +10,130 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from '@dnd-kit/utilities';
 import { AppShell } from '../components/layout/AppShell.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
+import { Avatar } from '../components/ui/Avatar.js';
 import { useAppStore } from '../store/useAppStore.js';
-import type { Place, Trip, TripPlace, Transport } from '../types/index.js';
+import type { Place, Trip, TripPlace, Transport, Friend } from '../types/index.js';
 import { MOBILITY, DEMO_HOTELS } from '../types/index.js';
-import { tripsApi, geoApi } from '../services/api.js';
+import { tripsApi, geoApi, friendsApi } from '../services/api.js';
 import { geocodeSuggestions, distanceKm } from '../services/geoService.js';
 import type { GeoLocation } from '../services/geoService.js';
 import type { RouteResponse } from '../utils/geo.js';
 import { format, addDays } from 'date-fns';
 import { de } from 'date-fns/locale';
+
+// ─── Mitreisende: Teilnehmer anzeigen, einladen, an-/absagen ──────────────────
+function TripParticipants({ trip, reload }: { trip: Trip; reload: () => unknown }) {
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [busy, setBusy] = useState(false);
+  const parts = trip.participants ?? [];
+  const isOwner = !!trip.isOwner;
+  const invitedIds = new Set(parts.map(p => p.userId));
+
+  const openInvite = async () => {
+    setInviteOpen(true);
+    try { setFriends(await friendsApi.list()); } catch { /* */ }
+  };
+  const invite = async (handle: string) => {
+    setBusy(true);
+    try { await tripsApi.invite(trip.id, handle); await reload(); }
+    catch (e) { alert((e as Error).message ?? 'Fehler'); }
+    setBusy(false);
+  };
+  const respond = async (status: 'accepted' | 'declined') => {
+    setBusy(true);
+    try { await tripsApi.respond(trip.id, status); await reload(); } catch { /* */ }
+    setBusy(false);
+  };
+  const remove = async (userId: number) => {
+    if (!confirm('Aus dem Ausflug entfernen?')) return;
+    try { await tripsApi.removeParticipant(trip.id, userId); await reload(); } catch { /* */ }
+  };
+
+  return (
+    <section className="mb-6 rounded-2xl border-2 border-[var(--color-bg-soft)] p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-display font-bold text-base text-[var(--color-aubergine)]">
+          <i className="fa-solid fa-user-group text-[var(--color-amber)] mr-2" />Mitreisende
+        </h2>
+        {isOwner && (
+          <button onClick={openInvite} className="text-xs font-bold text-[var(--color-amber)] flex items-center gap-1">
+            <i className="fa-solid fa-plus" /> Einladen
+          </button>
+        )}
+      </div>
+
+      {/* Einladung an mich */}
+      {trip.myStatus === 'invited' && (
+        <div className="bg-[var(--color-amber)]/10 border border-[var(--color-amber)] rounded-xl p-3 mb-3">
+          <p className="text-sm text-[var(--color-aubergine)] font-semibold mb-2">Du wurdest zu diesem Ausflug eingeladen 🎒</p>
+          <div className="flex gap-2">
+            <button onClick={() => respond('accepted')} disabled={busy}
+              className="flex-1 bg-[var(--color-amber)] text-white font-bold py-2 rounded-xl text-sm disabled:opacity-60">Bin dabei!</button>
+            <button onClick={() => respond('declined')} disabled={busy}
+              className="flex-1 border-2 border-[var(--color-bg-soft)] text-[var(--color-lavender)] font-bold py-2 rounded-xl text-sm disabled:opacity-60">Absagen</button>
+          </div>
+        </div>
+      )}
+
+      {parts.length === 0 ? (
+        <p className="text-xs text-[var(--color-lavender)]">
+          {isOwner ? 'Lade Freund:innen ein und plant den Ausflug gemeinsam.' : 'Noch niemand eingeladen.'}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {parts.map(p => (
+            <div key={p.userId} className="flex items-center gap-3">
+              <Avatar name={p.name} src={p.avatarUrl} size={32} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{p.name}</div>
+                <div className="text-[10px] text-[var(--color-lavender-lt)]">@{p.handle}</div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                p.status === 'accepted' ? 'bg-green-100 text-green-700'
+                : p.status === 'declined' ? 'bg-[var(--color-bg-soft)] text-[var(--color-lavender)]'
+                : 'bg-[var(--color-amber)]/15 text-[var(--color-amber)]'}`}>
+                {p.status === 'accepted' ? 'kommt mit' : p.status === 'declined' ? 'abgesagt' : 'eingeladen'}
+              </span>
+              {isOwner && (
+                <button onClick={() => remove(p.userId)} className="text-[var(--color-lavender-lt)] hover:text-[#e05858] text-xs px-1" aria-label="Entfernen">
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <BottomSheet open={inviteOpen} onClose={() => setInviteOpen(false)} title="Freund:in einladen">
+        {friends.length === 0 ? (
+          <p className="text-sm text-[var(--color-lavender)] py-6 text-center px-4">
+            Du hast noch keine Freund:innen, die du einladen kannst. Füge zuerst Freund:innen über ihr Profil hinzu.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1 pb-4 px-1">
+            {friends.map(f => {
+              const already = invitedIds.has(f.id);
+              return (
+                <button key={f.id} disabled={already || busy} onClick={() => invite(f.handle)}
+                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--color-bg-soft)] disabled:opacity-50 text-left transition-colors">
+                  <Avatar name={f.name} src={f.avatarUrl} size={36} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{f.name}</div>
+                    <div className="text-[10px] text-[var(--color-lavender-lt)]">@{f.handle}</div>
+                  </div>
+                  {already
+                    ? <span className="text-[10px] text-[var(--color-lavender)]">eingeladen</span>
+                    : <i className="fa-solid fa-plus text-[var(--color-amber)]" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </BottomSheet>
+    </section>
+  );
+}
 
 // Verkehrsmittel für Trips: Rad, Auto, ÖPNV (Deutschlandticket), Fernverkehr
 const TRIP_MODES = MOBILITY.filter(m => ['bike', 'auto', 'transit', 'train'].includes(m.id));
@@ -530,6 +645,9 @@ export function TripDetailPage() {
             Trip übernehmen & anpassen
           </button>
         )}
+
+        {/* Mitreisende — gemeinsamer Ausflug (nicht bei kuratierten Vorlagen) */}
+        {!trip.isCurated && <TripParticipants trip={trip} reload={reload} />}
 
         {/* ── Verkehrsmittel + Reisezeitraum ── */}
         <div className="flex flex-wrap items-center gap-2 mb-4">

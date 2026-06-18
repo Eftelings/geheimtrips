@@ -475,6 +475,8 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
                     <div className="text-xs text-[var(--color-lavender-lt)] mt-1 flex items-center gap-2">
                       <span><i className="fa-solid fa-map-pin text-[10px]" /> {t.places.length} Orte</span>
                       {t.isCurated && <span className="bg-[var(--color-bg-soft)] px-2 py-0.5 rounded-full text-[10px] text-[var(--color-lavender)]">Kuratiert</span>}
+                      {t.myStatus === 'invited' && <span className="bg-[var(--color-amber)] text-white px-2 py-0.5 rounded-full text-[10px] font-bold">Eingeladen</span>}
+                      {t.myStatus === 'accepted' && <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-[10px] font-bold">Du bist dabei</span>}
                     </div>
                   </div>
                   <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)] ml-auto mt-1 flex-shrink-0" />

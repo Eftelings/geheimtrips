@@ -183,11 +183,29 @@ export interface Trip {
   endDate: string | null;
   persons: number;
   costsJson?: string;          // manuelle Kosten { transportCost, foodPerDay, startLocation }
+  // Start-/Endpunkt (gemeinsame Trips) — Ziele sind die places dazwischen
+  startLabel?: string | null;
+  startLat?: number | null;
+  startLng?: number | null;
+  endLabel?: string | null;
+  endLat?: number | null;
+  endLng?: number | null;
   isCurated: boolean;
   isOwner?: boolean;           // von GET /trips/:id gesetzt
+  myStatus?: 'owner' | 'invited' | 'accepted' | 'declined' | null;
+  participants?: TripParticipant[];
   createdAt: string;
   places: TripPlace[];
   overnights: TripOvernight[];
+}
+
+// Mitreisende:r eines Trips
+export interface TripParticipant {
+  userId: number;
+  name: string;
+  handle: string;
+  avatarUrl: string | null;
+  status: 'invited' | 'accepted' | 'declined';
 }
 
 // ─── Hotels (demo data) ───────────────────────────────────────────────────────

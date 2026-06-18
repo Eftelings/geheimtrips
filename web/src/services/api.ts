@@ -119,6 +119,9 @@ export const tripsApi = {
   addPlace:       (id: number, placeId: string) => post<{ ok: boolean }>(`/trips/${id}/places/${placeId}`),
   removePlace:    (id: number, placeId: string) => del<{ ok: boolean }>(`/trips/${id}/places/${placeId}`),
   saveOvernights: (id: number, overnights: object[]) => put<{ ok: boolean }>(`/trips/${id}/overnights`, { overnights }),
+  invite:         (id: number, handle: string) => post<{ ok: boolean }>(`/trips/${id}/invite`, { handle }),
+  respond:        (id: number, status: 'accepted' | 'declined') => post<{ ok: boolean }>(`/trips/${id}/respond`, { status }),
+  removeParticipant: (id: number, userId: number) => del<{ ok: boolean }>(`/trips/${id}/participants/${userId}`),
 };
 
 // ─── Rankings ──────────────────────────────────────────────────────────────────
