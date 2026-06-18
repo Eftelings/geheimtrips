@@ -1310,7 +1310,7 @@ export function DiscoverPage() {
                     }}
                     onFocus={() => mainMode === 'places' && geoSuggestions.length > 0 && setShowSuggestions(true)}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                    className="flex-1 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]"
+                    className="flex-1 min-w-0 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]"
                   />
                   {(searchQuery || catActive || searchCenter) && (
                     <button onClick={() => { setSearchQuery(''); setCatSel(EMPTY_CATEGORY); setSearchCenter(null); setSearchCenterLabel(null); setGeoSuggestions([]); setShowSuggestions(false); }}

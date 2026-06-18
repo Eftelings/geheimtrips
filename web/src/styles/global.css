@@ -7,6 +7,9 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    /* Verhindert horizontales Scrollen durch versehentlich zu breite Elemente.
+       'clip' (statt 'hidden') bricht weder sticky-Header noch vertikales Scrollen. */
+    overflow-x: clip;
   }
 
   body {
