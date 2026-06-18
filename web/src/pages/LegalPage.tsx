@@ -18,7 +18,7 @@ export function LegalPage() {
 
   return (
     <AppShell showBack title="Rechtliches">
-      <div className="px-5 pt-4 max-w-2xl mx-auto">
+      <div className="px-6 pt-4 max-w-2xl mx-auto">
         {/* Tabs */}
         <div className="flex overflow-x-auto gap-2 pb-2 mb-6 scrollbar-none">
           {TABS.map(t => (

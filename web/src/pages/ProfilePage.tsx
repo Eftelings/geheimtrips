@@ -47,7 +47,7 @@ export function ProfilePage() {
 
   return (
     <AppShell title="Profil">
-      <div className="px-5 pt-5 max-w-lg mx-auto">
+      <div className="px-6 pt-5 max-w-lg mx-auto">
         {/* Header */}
         <div className="flex items-start gap-4 mb-6">
           <Avatar name={user.name} src={user.avatarUrl} size={64} />

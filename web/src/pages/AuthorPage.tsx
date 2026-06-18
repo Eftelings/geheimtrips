@@ -35,7 +35,7 @@ export function AuthorPage() {
 
   return (
     <AppShell showBack>
-      <div className="px-5 pt-5 max-w-lg mx-auto pb-12">
+      <div className="px-6 pt-5 max-w-lg mx-auto pb-12">
         {/* Header */}
         <div className="flex items-start gap-4 mb-5">
           <div

@@ -115,7 +115,7 @@ export function RankingPage() {
 
   return (
     <AppShell>
-      <div className="px-5 pt-5 max-w-2xl mx-auto md:max-w-3xl md:px-8 pb-10">
+      <div className="px-6 pt-5 max-w-2xl mx-auto md:max-w-3xl md:px-8 pb-10">
         <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-1">Prämien</p>
         <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] mb-5" style={{ letterSpacing: '-0.02em' }}>
           Dein <em className="italic text-[var(--color-lavender-lt)]">Status</em>

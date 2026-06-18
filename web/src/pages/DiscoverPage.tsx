@@ -1128,7 +1128,7 @@ export function DiscoverPage() {
 
   return (
     <AppShell>
-      <div className="px-5 pt-4 max-w-2xl mx-auto md:max-w-none md:px-8 md:pt-8">
+      <div className="px-6 pt-4 max-w-2xl mx-auto md:max-w-none md:px-8 md:pt-8">
 
         {/* ── Desktop Text-Header ───────────────────────────────── */}
         <div className="hidden md:block mb-6">

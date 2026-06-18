@@ -206,7 +206,7 @@ export function VisitedPage() {
 
   return (
     <AppShell>
-      <div className="px-5 pt-5 max-w-2xl mx-auto md:max-w-none md:px-8">
+      <div className="px-6 pt-5 max-w-2xl mx-auto md:max-w-none md:px-8">
         <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-1">Besuchte Orte</p>
         <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] mb-1" style={{ letterSpacing: '-0.02em' }}>
           Wo ich schon <em className="italic text-[var(--color-amber)]">war</em>

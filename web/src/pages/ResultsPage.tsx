@@ -26,7 +26,7 @@ export function ResultsPage() {
 
   return (
     <AppShell showBack>
-      <div className="px-5 pt-5 max-w-2xl mx-auto">
+      <div className="px-6 pt-5 max-w-2xl mx-auto">
         {/* Header */}
         <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-1">Dein Match</p>
         <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] mb-4" style={{ letterSpacing: '-0.02em' }}>

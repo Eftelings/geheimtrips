@@ -251,7 +251,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
 
   return (
     <AppShell>
-      <div className="px-5 pt-5 max-w-2xl mx-auto md:max-w-none md:px-8">
+      <div className="px-6 pt-5 max-w-2xl mx-auto md:max-w-none md:px-8">
         <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] mb-5" style={{ letterSpacing: '-0.02em' }}>
           Deine <em className="italic text-[var(--color-amber)]">Sammlung</em>
         </h1>
