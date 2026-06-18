@@ -114,7 +114,7 @@ function Nutzungsbedingungen() {
         <ul className="list-disc pl-5 mt-2 space-y-1">
           <li><strong>Eigene Inhalte.</strong> Du darfst ausschließlich Inhalte hochladen, an denen du alle erforderlichen Rechte besitzt — insbesondere Fotos und Videos, die du selbst aufgenommen hast.</li>
           <li><strong>Keine Rechtsverletzungen.</strong> Das Hochladen von Bildern, die aus dem Internet entnommen, mit entfernten Wasserzeichen versehen oder anderweitig urheberrechtlich geschützt sind, ist ausdrücklich untersagt.</li>
-          <li><strong>Creative-Commons-Lizenz.</strong> Mit dem Hochladen räumst du dem Betreiber eine nicht-exklusive, kostenlose, weltweite Lizenz ein, deine Inhalte auf Geheimtrips.de zu speichern, anzuzeigen und im Rahmen der Plattform zu nutzen. Dein Urheberrecht bleibt vollständig erhalten.</li>
+          <li><strong>Inhaltslizenz.</strong> Mit dem Hochladen räumst du dem Betreiber eine nicht-exklusive, kostenlose, weltweite Lizenz ein, deine Inhalte auf Geheimtrips.de zu speichern, anzuzeigen und im Rahmen der Plattform zu nutzen. Dein Urheberrecht bleibt vollständig erhalten.</li>
           <li><strong>Bestätigung beim Upload.</strong> Beim Hochladen wirst du explizit bestätigen müssen, dass du die erforderlichen Rechte besitzt.</li>
         </ul>
         <div className="bg-[var(--color-bg-soft)] rounded-xl p-3 mt-3 text-xs">
@@ -198,6 +198,21 @@ function Datenschutz() {
       </section>
 
       <section>
+        <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Rechtsgrundlagen der Verarbeitung</h3>
+        <p>Wir verarbeiten deine Daten auf folgenden Grundlagen der DSGVO:</p>
+        <ul className="list-disc pl-5 mt-2 space-y-1">
+          <li><strong>Vertragserfüllung (Art. 6 Abs. 1 lit. b):</strong> Bereitstellung deines Kontos und der Plattformfunktionen — Registrierung, gespeicherte/besuchte/eingereichte Orte, Bewertungen, Trips, Geheimquiz und Freundschaften.</li>
+          <li><strong>Einwilligung (Art. 6 Abs. 1 lit. a):</strong> Zugriff auf deinen Standort, freiwillige Angaben (z. B. Geschlecht) sowie optionale Cookies. Eine erteilte Einwilligung kannst du jederzeit mit Wirkung für die Zukunft widerrufen.</li>
+          <li><strong>Berechtigtes Interesse (Art. 6 Abs. 1 lit. f):</strong> Sicherheit und Funktionsfähigkeit der Plattform — etwa die Login-Session und der Schutz vor Missbrauch.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Speicherdauer</h3>
+        <p>Wir speichern deine personenbezogenen Daten, solange dein Konto besteht. Löschst du dein Konto, werden deine Daten unverzüglich, spätestens innerhalb von 30 Tagen, gelöscht — soweit keine gesetzliche Aufbewahrungspflicht entgegensteht. Die Login-Session (JWT-Cookie) läuft spätestens nach 30 Tagen ab. Aufgrund des Beta-Status kann der Betreiber Daten zudem jederzeit zurücksetzen (siehe <Link to="/legal?tab=nutzung" className="text-[var(--color-amber)] underline">Nutzungsbedingungen § 1</Link>).</p>
+      </section>
+
+      <section>
         <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Externe Dienste</h3>
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>Railway (Hosting):</strong> Plattform, Datenbank und hochgeladene Medien werden bei Railway betrieben; dabei können Daten auf Servern außerhalb der EU (u. a. USA) verarbeitet werden.</li>
@@ -211,9 +226,14 @@ function Datenschutz() {
 
       <section>
         <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Deine Rechte</h3>
-        <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung und Datenübertragbarkeit. Schreib uns dafür an{' '}
+        <p>Du hast jederzeit das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit sowie Widerspruch gegen die Verarbeitung. Erteilte Einwilligungen (z. B. zum Standort) kannst du mit Wirkung für die Zukunft widerrufen. Schreib uns dafür an{' '}
           <a href="mailto:datenschutz@geheimtrips.de" className="text-[var(--color-amber)] underline">datenschutz@geheimtrips.de</a>.
         </p>
+      </section>
+
+      <section>
+        <h3 className="font-semibold text-[var(--color-aubergine)] mb-2">Beschwerderecht bei einer Aufsichtsbehörde</h3>
+        <p>Unabhängig davon hast du das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu beschweren. Für uns zuständig ist die <strong>Berliner Beauftragte für Datenschutz und Informationsfreiheit (BlnBDI)</strong>, Alt-Moabit 59–61, 10555 Berlin.</p>
       </section>
 
       <section>
