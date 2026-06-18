@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { useAuthStore } from '../store/useAuthStore.js';
@@ -14,13 +14,13 @@ const TIERS: {
   key: TierKey; name: string; pctLabel: string; icon: string; color: string; benefits: string[];
 }[] = [
   { key: 'legende',   name: 'Legende',      pctLabel: 'Top 1 %',     icon: 'fa-crown',         color: '#E8A317',
-    benefits: ['Exklusive Partner-Deals', 'Goldenes Legenden-Badge', 'Persönliches Dankeschön von David & Lea'] },
+    benefits: ['Maximale Rabatte bei allen Partnern', 'Exklusive Deals & goldenes Badge', 'Persönliches Dankeschön von David & Lea'] },
   { key: 'insider',   name: 'Insider:in',   pctLabel: 'Top 10 %',    icon: 'fa-gem',           color: '#7E57C2',
-    benefits: ['Früher Zugang zu neuen Features', 'Local-Hero-Badge', 'Deine Tipps werden hervorgehoben'] },
+    benefits: ['Höhere Rabatte bei Museen & Freizeitparks', 'Früher Zugang zu neuen Features', 'Deine Tipps werden hervorgehoben'] },
   { key: 'localhero', name: 'Local Hero',   pctLabel: 'Top 25 %',    icon: 'fa-shield-halved', color: '#F99039',
-    benefits: ['Local-Hero-Badge auf Profil & deinen Orten', 'Deine Geheimtipps erscheinen bevorzugt'] },
+    benefits: ['Rabatte bei Museen, Freizeitparks & Partnern', 'Local-Hero-Badge auf Profil & deinen Orten', 'Deine Geheimtipps erscheinen bevorzugt'] },
   { key: 'entdecker', name: 'Entdecker:in', pctLabel: 'Top 50 %',    icon: 'fa-compass',       color: '#8A6FB3',
-    benefits: ['Du wirst anderen häufiger vorgeschlagen'] },
+    benefits: ['Du wirst anderen häufiger vorgeschlagen', 'Nur noch eine Stufe bis zu echten Rabatten!'] },
   { key: 'reisende',  name: 'Reisende:r',   pctLabel: 'Top 75 %',    icon: 'fa-person-hiking', color: '#A98FC4',
     benefits: ['Dein Entdecker-Profil ist freigeschaltet'] },
   { key: 'rookie',    name: 'Rookie',       pctLabel: 'Frisch dabei', icon: 'fa-seedling',     color: '#9AA0A6',
@@ -58,6 +58,7 @@ export function RankingPage() {
   const listRef   = useRef<HTMLDivElement>(null);
   const meRowRef  = useRef<HTMLDivElement>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
+  const drag      = useRef({ active: false, startX: 0, startScroll: 0 });
 
   useEffect(() => { rankingsApi.me().then(setMyStats).catch(() => setMyStats(null)); }, []);
 
@@ -70,12 +71,29 @@ export function RankingPage() {
   // Slider von links (Rookie) nach rechts (Legende) — Aufstieg nach rechts
   const sliderTiers = useMemo(() => [...TIERS].reverse(), []);
 
-  // Aktuelle Stufe im Slider zentrieren
-  useEffect(() => {
+  // Eine Stufenkarte mittig zentrieren (Randkarten dank seitlicher Spacer ebenfalls)
+  const centerTier = (key: string, behavior: ScrollBehavior = 'auto') => {
     const cont = sliderRef.current;
-    const el = cont?.querySelector<HTMLElement>(`[data-tier="${myTier.key}"]`);
-    if (cont && el) cont.scrollLeft = el.offsetLeft - cont.clientWidth / 2 + el.clientWidth / 2;
-  }, [myTier.key]);
+    const el = cont?.querySelector<HTMLElement>(`[data-tier="${key}"]`);
+    if (cont && el) cont.scrollTo({ left: el.offsetLeft - cont.clientWidth / 2 + el.clientWidth / 2, behavior });
+  };
+  // Aktuelle Stufe zentrieren, sobald sie feststeht
+  useEffect(() => { centerTier(myTier.key); }, [myTier.key]);
+
+  // Pfeile (Desktop): eine Karte weiterblättern
+  const nudge = (dir: number) => sliderRef.current?.scrollBy({ left: dir * 236, behavior: 'smooth' });
+
+  // Maus-Ziehen (Desktop) zusätzlich zum nativen Touch-Wischen
+  const onDragStart = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse') return;          // Touch nutzt natives Wischen
+    const cont = sliderRef.current; if (!cont) return;
+    drag.current = { active: true, startX: e.clientX, startScroll: cont.scrollLeft };
+  };
+  const onDragMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const cont = sliderRef.current; if (!cont || !drag.current.active) return;
+    cont.scrollLeft = drag.current.startScroll - (e.clientX - drag.current.startX);
+  };
+  const onDragEnd = () => { drag.current.active = false; };
 
   // Eigene Zeile im Ranglisten-Fenster zentrieren
   useEffect(() => {
@@ -100,15 +118,13 @@ export function RankingPage() {
       <div className="px-5 pt-5 max-w-2xl mx-auto md:max-w-3xl md:px-8 pb-10">
         <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-1">Prämien</p>
         <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] mb-5" style={{ letterSpacing: '-0.02em' }}>
-          Dein <em className="italic">Status</em>
+          Dein <em className="italic text-[var(--color-lavender-lt)]">Status</em>
         </h1>
 
         {/* ── Status-Kachel ── */}
         {myStats && user && (
           <div className="rounded-3xl p-5 mb-4 text-white relative overflow-hidden"
-            style={{ background: `linear-gradient(135deg, ${myTier.color}, #34254c 75%)` }}>
-            <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-20"
-              style={{ background: 'radial-gradient(circle, #fff, transparent 70%)' }} />
+            style={{ background: 'var(--color-lavender)' }}>
             <div className="relative flex items-center gap-4">
               <div className="w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center flex-shrink-0">
                 <i className={`fa-solid ${myTier.icon} text-3xl`} />
@@ -137,15 +153,32 @@ export function RankingPage() {
         )}
 
         {/* ── Status-Slider (alle Stufen + Boni) ── */}
-        <div ref={sliderRef} className="flex gap-3 overflow-x-auto pb-2 mb-6 -mx-5 px-5 snap-x"
-          style={{ scrollbarWidth: 'none' }}>
-          {sliderTiers.map(t => {
+        <div className="relative mb-6 -mx-5">
+          {/* Pfeile (Desktop) */}
+          <button aria-label="Zurück" onClick={() => nudge(-1)}
+            className="hidden md:flex absolute left-1 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white shadow-md items-center justify-center text-[var(--color-aubergine)] hover:bg-[var(--color-bg-soft)] transition-colors">
+            <i className="fa-solid fa-chevron-left text-sm" />
+          </button>
+          <button aria-label="Weiter" onClick={() => nudge(1)}
+            className="hidden md:flex absolute right-1 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white shadow-md items-center justify-center text-[var(--color-aubergine)] hover:bg-[var(--color-bg-soft)] transition-colors">
+            <i className="fa-solid fa-chevron-right text-sm" />
+          </button>
+
+          <div ref={sliderRef}
+            onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerLeave={onDragEnd}
+            className="flex gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing select-none touch-pan-x"
+            style={{ scrollbarWidth: 'none', scrollSnapType: 'x proximity' }}>
+
+            {/* Spacer links — erlaubt das mittige Zentrieren auch der ersten Karte */}
+            <div aria-hidden className="flex-shrink-0" style={{ width: 'calc(50% - 7rem)' }} />
+
+            {sliderTiers.map(t => {
             const active = t.key === myTier.key;
             return (
               <div key={t.key} data-tier={t.key}
-                className={`flex-shrink-0 w-56 rounded-2xl p-4 snap-center border-2 transition-all ${
-                  active ? 'border-transparent text-white shadow-lg' : 'border-[var(--color-bg-soft)] bg-white'}`}
-                style={active ? { background: 'linear-gradient(135deg, #4a3268, #34254c)' } : undefined}>
+                className={`flex-shrink-0 w-56 rounded-2xl p-4 border-2 transition-all ${
+                  active ? 'border-transparent text-white shadow-xl scale-[1.03]' : 'border-[var(--color-bg-soft)] bg-white'}`}
+                style={{ scrollSnapAlign: 'center', ...(active ? { background: 'linear-gradient(135deg, #4a3268, #34254c)' } : {}) }}>
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{ background: active ? 'rgba(255,255,255,0.15)' : `${t.color}1a` }}>
@@ -168,6 +201,10 @@ export function RankingPage() {
               </div>
             );
           })}
+
+            {/* Spacer rechts */}
+            <div aria-hidden className="flex-shrink-0" style={{ width: 'calc(50% - 7rem)' }} />
+          </div>
         </div>
 
         {/* ── Board-Auswahl ── */}
