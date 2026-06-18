@@ -10,6 +10,8 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from './db/index.js';
+import { users } from './db/schema.js';
+import { sql } from 'drizzle-orm';
 import authRouter from './routes/auth.js';
 import placesRouter from './routes/places.js';
 import tripsRouter from './routes/trips.js';
@@ -85,6 +87,22 @@ try {
   console.log('Migrationen angewendet.');
 } catch (e) {
   console.error('Migration übersprungen (Tabellen evtl. bereits vorhanden):', (e as Error).message);
+}
+
+// Admin-Bootstrap: in ADMIN_EMAILS (kommagetrennt) gelistete Konten werden beim
+// Start zu Admins gemacht. So braucht es keinen Shell-Zugriff auf die DB; der
+// Eintrag ist idempotent und kann dauerhaft gesetzt bleiben.
+const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+  .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+if (adminEmails.length) {
+  try {
+    for (const email of adminEmails) {
+      await db.update(users).set({ isAdmin: true }).where(sql`lower(${users.email}) = ${email}`);
+    }
+    console.log(`Admin-Bootstrap angewendet für: ${adminEmails.join(', ')}`);
+  } catch (e) {
+    console.error('Admin-Bootstrap fehlgeschlagen:', (e as Error).message);
+  }
 }
 
 const httpServer = serve({ fetch: app.fetch, port: PORT }, () => {
