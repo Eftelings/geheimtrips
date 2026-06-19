@@ -41,8 +41,24 @@ uploadRouter.post('/upload', requireAuth, async (c) => {
     const maxSize = isVideo ? 80 * 1024 * 1024 : 30 * 1024 * 1024;
     if (file.size > maxSize) return c.json({ error: `Maximale Dateigröße: ${isVideo ? '80' : '30'} MB.` }, 400);
 
-    const filename = `${crypto.randomBytes(16).toString('hex')}.${ext}`;
-    const buffer   = Buffer.from(await file.arrayBuffer());
+    let buffer = Buffer.from(await file.arrayBuffer());
+    let outExt = ext;
+
+    // HEIC/HEIF (iPhone-Standardformat) → JPEG konvertieren, sonst können
+    // Chrome/Firefox/Inkognito die Bilder nicht anzeigen (nur Safari kann HEIC).
+    if (ext === 'heic' || ext === 'heif') {
+      try {
+        const convert = (await import('heic-convert')).default;
+        const jpeg = await convert({ buffer, format: 'JPEG', quality: 0.85 });
+        buffer = Buffer.from(jpeg);
+        outExt = 'jpg';
+      } catch (e) {
+        console.error('HEIC-Konvertierung fehlgeschlagen:', e);
+        return c.json({ error: 'Dieses HEIC-Foto konnte nicht verarbeitet werden. Bitte als JPG hochladen.' }, 400);
+      }
+    }
+
+    const filename = `${crypto.randomBytes(16).toString('hex')}.${outExt}`;
     fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
 
     // Unter /api ausgeliefert (Single-Origin) — siehe Mount in index.ts
