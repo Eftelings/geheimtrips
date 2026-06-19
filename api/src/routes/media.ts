@@ -14,6 +14,18 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 // Sollte in Produktion '/data/uploads' (persistentes Volume) sein — NICHT '/app/...'.
 console.log(`📁 UPLOAD_DIR = ${UPLOAD_DIR}${process.env.UPLOAD_DIR ? '' : '  ⚠️ (Env nicht gesetzt → temporär, geht bei Redeploy verloren!)'}`);
 
+// Persistenz-Selbsttest: Marker schreiben und beim nächsten Start prüfen, ob er den
+// Redeploy überlebt hat. Überlebt er → /data/uploads ist wirklich persistent.
+try {
+  const marker = path.join(UPLOAD_DIR, '.persist-check');
+  const existing = fs.existsSync(marker);
+  const fileCount = fs.readdirSync(UPLOAD_DIR).filter(f => !f.startsWith('.')).length;
+  console.log(existing
+    ? `✅ Uploads PERSISTENT — Marker vom ${fs.readFileSync(marker, 'utf8')} hat den Redeploy überlebt. Aktuell ${fileCount} Datei(en) im Ordner.`
+    : `🆕 Kein Persistenz-Marker gefunden — entweder erster Start mit dieser Pruefung ODER der Ordner wurde geleert (nicht persistent). Aktuell ${fileCount} Datei(en).`);
+  fs.writeFileSync(marker, new Date().toISOString());
+} catch (e) { console.error('Persistenz-Check fehlgeschlagen:', e); }
+
 const ALLOWED_MIME: Record<string, string> = {
   'image/jpeg':  'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
   'image/webp':  'webp', 'image/gif': 'gif',
