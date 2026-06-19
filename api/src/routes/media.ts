@@ -10,6 +10,9 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR
   ? path.resolve(process.env.UPLOAD_DIR)
   : path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// Diagnose: zeigt in den Railway-Logs, wohin Uploads geschrieben werden.
+// Sollte in Produktion '/data/uploads' (persistentes Volume) sein — NICHT '/app/...'.
+console.log(`📁 UPLOAD_DIR = ${UPLOAD_DIR}${process.env.UPLOAD_DIR ? '' : '  ⚠️ (Env nicht gesetzt → temporär, geht bei Redeploy verloren!)'}`);
 
 const ALLOWED_MIME: Record<string, string> = {
   'image/jpeg':  'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
