@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { PlaceCard } from '../components/ui/PlaceCard.js';
+import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { CategoryFilter, placeMatchesCategory, EMPTY_CATEGORY } from '../components/ui/CategoryFilter.js';
 import type { CategorySelection } from '../components/ui/CategoryFilter.js';
@@ -121,9 +122,11 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   const [radiusKm, setRadiusKm]         = useState(80);
   const [userCoords, setUserCoords]     = useState<Coords | null>(null);
   const geoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { places, savedIds, loadPlaces, trips, loadTrips, createTrip } = useAppStore();
+  const { places, savedIds, loadPlaces, trips, loadTrips, createTrip, savedTags, loadSavedTags, setPlaceTags } = useAppStore();
+  const [tagFilter, setTagFilter]       = useState<string | null>(null);
+  const [editTagsPlace, setEditTagsPlace] = useState<Place | null>(null);
 
-  useEffect(() => { loadPlaces(); loadTrips(); }, []); // eslint-disable-line
+  useEffect(() => { loadPlaces(); loadTrips(); loadSavedTags(); }, []); // eslint-disable-line
   useEffect(() => { setMapReady(true); }, []);
 
   // Eigener Standort (still): GPS → IP-Fallback — Zentrum für Verkehrsmittel-Reichweiten
@@ -158,10 +161,17 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
 
   const savedPlaces = useMemo(() => places.filter(p => savedIds.has(p.id)), [places, savedIds]);
 
-  // ── Gefilterte Orte: Reichweite + Freitext + Kategorie-Tag ───────────────
+  // Alle eigenen Tags der Sammlung (für die Filterleiste)
+  const allTags = useMemo(
+    () => [...new Set(savedPlaces.flatMap(p => savedTags[p.id] ?? []))].sort((a, b) => a.localeCompare(b, 'de')),
+    [savedPlaces, savedTags],
+  );
+
+  // ── Gefilterte Orte: Reichweite + Freitext + Kategorie + eigene Tags ──────
   const filteredPlaces = useMemo(() => {
     let list: (Place & { _dist?: number })[] = savedPlaces;
     if (catActive) list = list.filter(p => placeMatchesCategory(p, catSel));
+    if (tagFilter) list = list.filter(p => (savedTags[p.id] ?? []).includes(tagFilter));
     const s = q.trim().toLowerCase();
     if (s) list = list.filter(p => placeMatchesText(p, s));
     if (reachActive && activeCenter) {
@@ -172,7 +182,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
     }
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedPlaces, q, catSel, catActive, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
+  }, [savedPlaces, q, catSel, catActive, tagFilter, savedTags, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
 
   // ── Gefilterte Trips: Kategorie-Tag + Freitext + Reichweite ──────────────
   const filteredTrips = useMemo(() => {
@@ -216,7 +226,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
     return out;
   }, [filteredTrips]);
 
-  const hasFilter = Boolean(q.trim() || catActive || reachActive);
+  const hasFilter = Boolean(q.trim() || catActive || reachActive || tagFilter);
   const modeLabel = travelMode !== 'radius' ? MOBILITY.find(m => m.id === travelMode)?.label : null;
 
   function handleSearchInput(val: string) {
@@ -243,7 +253,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   }
 
   function clearAll() {
-    setQ(''); setCatSel(EMPTY_CATEGORY);
+    setQ(''); setCatSel(EMPTY_CATEGORY); setTagFilter(null);
     setSearchCenter(null); setCenterLabel(null);
     setGeoSugs([]); setShowSugs(false);
     setTravelMode('radius');
@@ -359,6 +369,19 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
               <CategoryFilter value={catSel} onChange={setCatSel} />
             </div>
 
+            {/* Eigene Tags — Filterleiste */}
+            {allTags.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-none">
+                {allTags.map(t => (
+                  <button key={t} onClick={() => setTagFilter(tagFilter === t ? null : t)}
+                    className={`flex-shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border-2 transition-colors ${
+                      tagFilter === t ? 'border-[var(--color-amber)] bg-[var(--color-amber)] text-white' : 'border-[var(--color-bg-soft)] text-[var(--color-lavender)]'}`}>
+                    <i className="fa-solid fa-tag text-[10px] mr-1" />{t}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Trefferzahl bei aktivem Filter */}
             {hasFilter && (
               <p className="text-xs text-[var(--color-lavender)] mb-3">
@@ -412,7 +435,23 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
                   </div>
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {filteredPlaces.map(p => <PlaceCard key={p.id} place={p} />)}
+                  {filteredPlaces.map(p => {
+                    const tags = savedTags[p.id] ?? [];
+                    return (
+                      <div key={p.id} className="flex flex-col gap-1.5">
+                        <PlaceCard place={p} />
+                        <button onClick={() => setEditTagsPlace(p)}
+                          className="flex flex-wrap items-center gap-1 text-left px-0.5">
+                          {tags.map(t => (
+                            <span key={t} className="bg-[var(--color-amber)]/15 text-[var(--color-amber)] text-[10px] font-bold px-2 py-0.5 rounded-full">{t}</span>
+                          ))}
+                          <span className="text-[10px] font-semibold text-[var(--color-lavender)] inline-flex items-center gap-1 px-1.5 py-0.5">
+                            <i className="fa-solid fa-tag text-[9px]" /> {tags.length ? 'bearbeiten' : 'Tag'}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -486,7 +525,71 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
           </div>
         )}
       </div>
+
+      {editTagsPlace && (
+        <TagEditorSheet
+          place={editTagsPlace}
+          tags={savedTags[editTagsPlace.id] ?? []}
+          allTags={allTags}
+          onClose={() => setEditTagsPlace(null)}
+          onSave={tags => setPlaceTags(editTagsPlace.id, tags)}
+        />
+      )}
+
       <LegalFooter />
     </AppShell>
+  );
+}
+
+// ─── Tag-Editor (Bottom-Sheet) ────────────────────────────────────────────────
+function TagEditorSheet({ place, tags, allTags, onClose, onSave }: {
+  place: Place; tags: string[]; allTags: string[];
+  onClose: () => void; onSave: (tags: string[]) => void;
+}) {
+  const [input, setInput] = useState('');
+  const add = (t: string) => {
+    const v = t.trim().slice(0, 24);
+    if (!v || tags.includes(v)) { setInput(''); return; }
+    onSave([...tags, v]); setInput('');
+  };
+  const remove = (t: string) => onSave(tags.filter(x => x !== t));
+  const suggestions = allTags.filter(t => !tags.includes(t)).slice(0, 12);
+
+  return (
+    <BottomSheet open onClose={onClose} title={`Tags · ${place.name}`}>
+      <div className="px-1 pb-4">
+        {tags.length > 0 ? (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {tags.map(t => (
+              <span key={t} className="inline-flex items-center gap-1.5 bg-[var(--color-amber)]/15 text-[var(--color-amber)] text-xs font-bold px-2.5 py-1 rounded-full">
+                {t}
+                <button onClick={() => remove(t)} aria-label="Entfernen"><i className="fa-solid fa-xmark" /></button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-[var(--color-lavender)] mb-3">Noch keine Tags. Gib z. B. „Sommer", „mit Hund" oder „Date" ein.</p>
+        )}
+
+        <form onSubmit={e => { e.preventDefault(); add(input); }} className="flex gap-2 mb-3">
+          <input value={input} onChange={e => setInput(e.target.value)} placeholder="Neuer Tag…" maxLength={24} autoFocus
+            className="flex-1 min-w-0 border-2 border-[var(--color-bg-soft)] rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--color-amber)]" />
+          <button type="submit" disabled={!input.trim()}
+            className="bg-[var(--color-amber)] text-white font-bold px-4 rounded-xl text-sm disabled:opacity-50">Hinzufügen</button>
+        </form>
+
+        {suggestions.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[var(--color-lavender)] mb-1.5">Deine bisherigen Tags</p>
+            <div className="flex flex-wrap gap-2">
+              {suggestions.map(t => (
+                <button key={t} onClick={() => add(t)}
+                  className="bg-[var(--color-bg-soft)] text-[var(--color-aubergine)] text-xs font-semibold px-2.5 py-1 rounded-full hover:bg-[var(--color-amber)]/15 transition-colors">+ {t}</button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </BottomSheet>
   );
 }

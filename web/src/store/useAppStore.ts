@@ -8,10 +8,13 @@ interface AppState {
   savedIds:   Set<string>;
   visitedIds: Set<string>;
   ratings:    Record<string, Rating>;
+  savedTags:  Record<string, string[]>;   // placeId → eigene Tags
 
   toggleSave:  (placeId: string) => Promise<void>;
   markVisited: (placeId: string) => Promise<void>;
   addRating:   (placeId: string, rating: Rating) => Promise<void>;
+  loadSavedTags: () => Promise<void>;
+  setPlaceTags:  (placeId: string, tags: string[]) => Promise<void>;
 
   // ── Places cache ─────────────────────────────────────────────
   places:        Place[];
@@ -51,6 +54,7 @@ export const useAppStore = create<AppState>()(
       savedIds:   new Set<string>(),
       visitedIds: new Set<string>(),
       ratings:    {},
+      savedTags:  {},
       places:        [],
       placesLoaded:  false,
       placesLoadedAt: 0,
@@ -78,6 +82,19 @@ export const useAppStore = create<AppState>()(
       addRating: async (placeId, rating) => {
         await placesApi.rate(placeId, rating).catch(() => {});
         set({ ratings: { ...get().ratings, [placeId]: rating } });
+      },
+
+      loadSavedTags: async () => {
+        try { set({ savedTags: await placesApi.savedTags() }); } catch { /* */ }
+      },
+
+      setPlaceTags: async (placeId, tags) => {
+        set({ savedTags: { ...get().savedTags, [placeId]: tags } });           // optimistisch
+        try {
+          const res = await placesApi.setTags(placeId, tags);
+          set({ savedTags: { ...get().savedTags, [placeId]: res.tags } });
+          if (!get().savedIds.has(placeId)) set({ savedIds: new Set(get().savedIds).add(placeId) });
+        } catch { /* */ }
       },
 
       loadPlaces: async () => {
@@ -125,6 +142,7 @@ export const useAppStore = create<AppState>()(
         savedIds:    [...s.savedIds],
         visitedIds:  [...s.visitedIds],
         ratings:     s.ratings,
+        savedTags:   s.savedTags,
         funnelAnswers: s.funnelAnswers,
         playVideos:  s.playVideos,
       }),

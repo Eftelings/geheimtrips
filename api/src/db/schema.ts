@@ -88,6 +88,7 @@ export const savedPlaces = sqliteTable('saved_places', {
   userId: integer('user_id').notNull().references(() => users.id),
   placeId: text('place_id').notNull().references(() => places.id),
   savedAt: text('saved_at').default(sql`(datetime('now'))`),
+  tags: text('tags').default('[]'),   // JSON string[] — eigene Tags der Nutzer:in
 });
 
 export const visitedPlaces = sqliteTable('visited_places', {

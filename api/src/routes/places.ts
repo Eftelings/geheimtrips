@@ -11,6 +11,8 @@ import { cleanRichText, cleanPlainText } from '../lib/sanitize.js';
 // ── Runtime schema migrations (idempotent) ────────────────────────────────────
 // Add parking column to places if it doesn't exist yet
 db.run(sql`ALTER TABLE places ADD COLUMN parking TEXT`).catch(() => { /* column already exists */ });
+// Eigene Tags je gemerktem Ort (pro Nutzer:in)
+db.run(sql`ALTER TABLE saved_places ADD COLUMN tags TEXT DEFAULT '[]'`).catch(() => {});
 
 // Ensure place_contributions table exists (no formal migration needed)
 db.run(sql`
@@ -359,6 +361,37 @@ router.get('/me/saved', requireAuth, async (c) => {
   const all = await db.select().from(places).where(inArray(places.id, ids)).all();
   return c.json(all.map(hydrate));
 });
+
+// GET /places/me/saved-tags — eigene Tags je gemerktem Ort: { placeId: string[] }
+router.get('/me/saved-tags', requireAuth, async (c) => {
+  const user = c.get('user');
+  const rows = await db.select({ placeId: savedPlaces.placeId, tags: savedPlaces.tags })
+    .from(savedPlaces).where(eq(savedPlaces.userId, user.id)).all();
+  const map: Record<string, string[]> = {};
+  for (const r of rows) { try { map[r.placeId] = JSON.parse(r.tags ?? '[]'); } catch { map[r.placeId] = []; } }
+  return c.json(map);
+});
+
+// PUT /places/:id/tags — eigene Tags eines gemerkten Orts setzen (taggen merkt ihn automatisch)
+router.put('/:id/tags', requireAuth,
+  zValidator('json', z.object({ tags: z.array(z.string()).max(20) })),
+  async (c) => {
+    const user = c.get('user');
+    const placeId = c.req.param('id');
+    const clean = [...new Set(
+      c.req.valid('json').tags.map(t => t.trim().slice(0, 24)).filter(Boolean)
+    )].slice(0, 12);
+    const tagsJson = JSON.stringify(clean);
+    const existing = await db.select().from(savedPlaces)
+      .where(and(eq(savedPlaces.userId, user.id), eq(savedPlaces.placeId, placeId))).get();
+    if (existing) {
+      await db.update(savedPlaces).set({ tags: tagsJson }).where(eq(savedPlaces.id, existing.id));
+    } else {
+      await db.insert(savedPlaces).values({ userId: user.id, placeId, tags: tagsJson });
+    }
+    return c.json({ ok: true, tags: clean });
+  }
+);
 
 // GET /places/me/visited — besuchte Orte inkl. Besuchsdatum + eigener Rangposition
 router.get('/me/visited', requireAuth, async (c) => {
