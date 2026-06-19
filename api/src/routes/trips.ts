@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { trips, tripPlaces, tripOvernights, tripParticipants, places, users } from '../db/schema.js';
+import { trips, tripPlaces, tripOvernights, tripParticipants, tripVotes, places, users } from '../db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
@@ -24,6 +24,14 @@ db.run(sql`CREATE TABLE IF NOT EXISTS trip_participants (
   trip_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'invited',
+  created_at TEXT DEFAULT (datetime('now'))
+)`).catch(() => {});
+db.run(sql`CREATE TABLE IF NOT EXISTS trip_votes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trip_id INTEGER NOT NULL,
+  place_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  vote TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now'))
 )`).catch(() => {});
 
@@ -68,6 +76,7 @@ router.get('/:id', requireAuth, async (c) => {
     isOwner: trip.userId === user.id,
     myStatus: trip.userId === user.id ? 'owner' : (myPart?.status ?? null),
     participants: await getParticipants(id),
+    votes: await getVotes(id, user.id),
   });
 });
 
@@ -148,6 +157,7 @@ router.delete('/:id', requireAuth, async (c) => {
   await db.delete(tripPlaces).where(eq(tripPlaces.tripId, id));
   await db.delete(tripOvernights).where(eq(tripOvernights.tripId, id));
   await db.delete(tripParticipants).where(eq(tripParticipants.tripId, id));
+  await db.delete(tripVotes).where(eq(tripVotes.tripId, id));
   await db.delete(trips).where(eq(trips.id, id));
   return c.json({ ok: true });
 });
@@ -278,7 +288,40 @@ router.delete('/:id/participants/:userId', requireAuth, async (c) => {
   return c.json({ ok: true });
 });
 
+// POST /trips/:id/vote — Stimme für einen Ort abgeben (Owner oder Teilnehmer:in)
+router.post('/:id/vote', requireAuth,
+  zValidator('json', z.object({ placeId: z.string(), vote: z.enum(['yes', 'maybe', 'no']) })),
+  async (c) => {
+    const user = c.get('user');
+    const id = Number(c.req.param('id'));
+    const trip = await db.select().from(trips).where(eq(trips.id, id)).get();
+    if (!trip) return c.json({ error: 'Trip nicht gefunden.' }, 404);
+    const member = trip.userId === user.id || !!(await db.select().from(tripParticipants)
+      .where(and(eq(tripParticipants.tripId, id), eq(tripParticipants.userId, user.id))).get());
+    if (!member) return c.json({ error: 'Du gehörst nicht zu diesem Trip.' }, 403);
+    const { placeId, vote } = c.req.valid('json');
+    // Eine Stimme je Person & Ort → alte ersetzen
+    await db.delete(tripVotes).where(and(
+      eq(tripVotes.tripId, id), eq(tripVotes.placeId, placeId), eq(tripVotes.userId, user.id)));
+    await db.insert(tripVotes).values({ tripId: id, placeId, userId: user.id, vote });
+    return c.json({ ok: true });
+  }
+);
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+// Abstimmungs-Stand je Ort: Zähler + meine eigene Stimme
+async function getVotes(tripId: number, myUserId: number) {
+  const rows = await db.select().from(tripVotes).where(eq(tripVotes.tripId, tripId)).all();
+  const map: Record<string, { yes: number; maybe: number; no: number; myVote: string | null }> = {};
+  for (const r of rows) {
+    if (!map[r.placeId]) map[r.placeId] = { yes: 0, maybe: 0, no: 0, myVote: null };
+    const m = map[r.placeId];
+    if (r.vote === 'yes') m.yes++; else if (r.vote === 'maybe') m.maybe++; else if (r.vote === 'no') m.no++;
+    if (r.userId === myUserId) m.myVote = r.vote;
+  }
+  return map;
+}
 
 // Mitreisende eines Trips inkl. Namen/Avatar
 async function getParticipants(tripId: number) {

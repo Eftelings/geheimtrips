@@ -174,6 +174,16 @@ export const tripParticipants = sqliteTable('trip_participants', {
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
 
+// Abstimmung über die Orte eines Trips (eine Stimme je Person & Ort)
+export const tripVotes = sqliteTable('trip_votes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  tripId: integer('trip_id').notNull().references(() => trips.id),
+  placeId: text('place_id').notNull().references(() => places.id),
+  userId: integer('user_id').notNull().references(() => users.id),
+  vote: text('vote').notNull(), // yes|maybe|no
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+});
+
 // ─── Friends ─────────────────────────────────────────────────────────────────
 
 export const friendships = sqliteTable('friendships', {

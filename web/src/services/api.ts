@@ -122,6 +122,7 @@ export const tripsApi = {
   invite:         (id: number, handle: string) => post<{ ok: boolean }>(`/trips/${id}/invite`, { handle }),
   respond:        (id: number, status: 'accepted' | 'declined') => post<{ ok: boolean }>(`/trips/${id}/respond`, { status }),
   removeParticipant: (id: number, userId: number) => del<{ ok: boolean }>(`/trips/${id}/participants/${userId}`),
+  vote:           (id: number, placeId: string, vote: 'yes' | 'maybe' | 'no') => post<{ ok: boolean }>(`/trips/${id}/vote`, { placeId, vote }),
 };
 
 // ─── Rankings ──────────────────────────────────────────────────────────────────

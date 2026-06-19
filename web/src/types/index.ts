@@ -194,6 +194,7 @@ export interface Trip {
   isOwner?: boolean;           // von GET /trips/:id gesetzt
   myStatus?: 'owner' | 'invited' | 'accepted' | 'declined' | null;
   participants?: TripParticipant[];
+  votes?: Record<string, TripVoteTally>;   // placeId → Abstimmungs-Stand
   createdAt: string;
   places: TripPlace[];
   overnights: TripOvernight[];
@@ -206,6 +207,14 @@ export interface TripParticipant {
   handle: string;
   avatarUrl: string | null;
   status: 'invited' | 'accepted' | 'declined';
+}
+
+// Abstimmungs-Stand eines Ortes im Trip
+export interface TripVoteTally {
+  yes: number;
+  maybe: number;
+  no: number;
+  myVote: 'yes' | 'maybe' | 'no' | null;
 }
 
 // ─── Hotels (demo data) ───────────────────────────────────────────────────────

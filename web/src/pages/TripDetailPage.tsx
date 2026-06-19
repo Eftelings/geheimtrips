@@ -21,6 +21,76 @@ import type { RouteResponse } from '../utils/geo.js';
 import { format, addDays } from 'date-fns';
 import { de } from 'date-fns/locale';
 
+// ─── Abstimmung: Mitreisende voten Ja/Vielleicht/Nein je Ort ──────────────────
+function TripVoting({ trip, reload }: { trip: Trip; reload: () => unknown }) {
+  const [busy, setBusy] = useState(false);
+  const votes = trip.votes ?? {};
+  const places = trip.places ?? [];
+
+  const score = (pid: string) => { const v = votes[pid]; return v ? v.yes * 2 + v.maybe : 0; };
+  const maxScore = places.length ? Math.max(0, ...places.map(tp => score(tp.placeId))) : 0;
+  const hasVotes = maxScore > 0;
+
+  async function vote(placeId: string, v: 'yes' | 'maybe' | 'no') {
+    setBusy(true);
+    try { await tripsApi.vote(trip.id, placeId, v); await reload(); } catch { /* */ }
+    setBusy(false);
+  }
+
+  const OPTIONS: { v: 'yes' | 'maybe' | 'no'; icon: string; label: string; color: string }[] = [
+    { v: 'yes',   icon: 'fa-thumbs-up',   label: 'Ja',         color: '#2e7d32' },
+    { v: 'maybe', icon: 'fa-face-meh',    label: 'Vielleicht', color: '#F99039' },
+    { v: 'no',    icon: 'fa-thumbs-down', label: 'Nein',       color: '#b9a8c4' },
+  ];
+
+  if (places.length === 0) return null;
+
+  return (
+    <section className="mb-6 rounded-2xl border-2 border-[var(--color-bg-soft)] p-4">
+      <h2 className="font-display font-bold text-base text-[var(--color-aubergine)] mb-1">
+        <i className="fa-solid fa-square-poll-vertical text-[var(--color-amber)] mr-2" />Abstimmung
+      </h2>
+      <p className="text-xs text-[var(--color-lavender)] mb-4">Stimmt gemeinsam ab, welche Orte ihr wirklich besuchen wollt.</p>
+      <div className="flex flex-col gap-3">
+        {places.map(tp => {
+          const place = tp.place;
+          const v = votes[tp.placeId] ?? { yes: 0, maybe: 0, no: 0, myVote: null };
+          const isFav = hasVotes && score(tp.placeId) === maxScore;
+          return (
+            <div key={tp.placeId} className={`rounded-2xl border-2 p-3 ${isFav ? 'border-[var(--color-amber)] bg-[var(--color-amber)]/5' : 'border-[var(--color-bg-soft)]'}`}>
+              <div className="flex items-center gap-3 mb-2.5">
+                {place?.hero
+                  ? <img src={place.hero} alt="" className="w-11 h-11 rounded-xl object-cover flex-shrink-0" />
+                  : <div className="w-11 h-11 rounded-xl bg-[var(--color-bg-soft)] flex-shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-[var(--color-aubergine)] truncate flex items-center gap-1.5">
+                    {place?.name ?? 'Ort'}
+                    {isFav && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--color-amber)] text-white flex-shrink-0">★ Favorit</span>}
+                  </div>
+                  <div className="text-[11px] text-[var(--color-lavender)]">{v.yes} ×👍 · {v.maybe} ×🤔 · {v.no} ×👎</div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {OPTIONS.map(o => {
+                  const active = v.myVote === o.v;
+                  return (
+                    <button key={o.v} disabled={busy} onClick={() => vote(tp.placeId, o.v)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold border-2 transition-colors disabled:opacity-60 ${
+                        active ? 'text-white border-transparent' : 'border-[var(--color-bg-soft)] text-[var(--color-lavender)]'}`}
+                      style={active ? { background: o.color } : undefined}>
+                      <i className={`fa-solid ${o.icon}`} /> {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 // ─── Mitreisende: Teilnehmer anzeigen, einladen, an-/absagen ──────────────────
 function TripParticipants({ trip, reload }: { trip: Trip; reload: () => unknown }) {
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -657,6 +727,9 @@ export function TripDetailPage() {
 
         {/* Mitreisende — gemeinsamer Ausflug (nicht bei kuratierten Vorlagen) */}
         {!trip.isCurated && <TripParticipants trip={trip} reload={reload} />}
+
+        {/* Abstimmung — sobald jemand eingeladen ist */}
+        {!trip.isCurated && (trip.participants?.length ?? 0) > 0 && <TripVoting trip={trip} reload={reload} />}
 
         {/* ── Verkehrsmittel + Reisezeitraum ── */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
