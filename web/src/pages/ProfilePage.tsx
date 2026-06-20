@@ -5,8 +5,9 @@ import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
-import { authApi, rankingsApi } from '../services/api.js';
+import { authApi, rankingsApi, friendsApi } from '../services/api.js';
 import type { MyRankStats } from '../services/api.js';
+import type { FriendRequest } from '../types/index.js';
 
 export function ProfilePage() {
   const { user, updateUser, logout } = useAuthStore();
@@ -18,8 +19,19 @@ export function ProfilePage() {
   const [pwError, setPwError]           = useState('');
   const [saving, setSaving]             = useState(false);
   const [rankInfo, setRankInfo]         = useState<MyRankStats | null>(null);
+  const [requests, setRequests]         = useState<FriendRequest[]>([]);
 
-  useEffect(() => { rankingsApi.me().then(setRankInfo).catch(() => {}); }, []);
+  useEffect(() => {
+    rankingsApi.me().then(setRankInfo).catch(() => {});
+    friendsApi.requests().then(setRequests).catch(() => {});
+  }, []);
+
+  async function respondRequest(friendshipId: number, accept: boolean) {
+    try {
+      if (accept) await friendsApi.accept(friendshipId); else await friendsApi.decline(friendshipId);
+      setRequests(rs => rs.filter(r => r.friendshipId !== friendshipId));
+    } catch { /* */ }
+  }
 
   if (!user) return null;
 
@@ -73,6 +85,34 @@ export function ProfilePage() {
             <i className="fa-solid fa-gear text-lg" />
           </button>
         </div>
+
+        {/* Freundschaftsanfragen */}
+        {requests.length > 0 && (
+          <div className="mb-6 rounded-2xl border-2 border-[var(--color-amber)]/40 bg-[var(--color-amber)]/5 p-4">
+            <h2 className="font-display font-bold text-sm text-[var(--color-aubergine)] mb-3 flex items-center gap-2">
+              <i className="fa-solid fa-user-plus text-[var(--color-amber)]" />
+              Freundschaftsanfragen
+              <span className="text-[10px] font-bold bg-[var(--color-amber)] text-white rounded-full px-1.5 py-0.5">{requests.length}</span>
+            </h2>
+            <div className="flex flex-col gap-2.5">
+              {requests.map(r => (
+                <div key={r.friendshipId} className="flex items-center gap-3">
+                  <Avatar name={r.name} src={r.avatarUrl} size={36} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{r.name}</div>
+                    <div className="text-[10px] text-[var(--color-lavender-lt)]">@{r.handle}</div>
+                  </div>
+                  <button onClick={() => respondRequest(r.friendshipId, true)}
+                    className="bg-[var(--color-amber)] text-white font-bold text-xs px-3 py-1.5 rounded-full shadow-[var(--shadow-amber)]">Annehmen</button>
+                  <button onClick={() => respondRequest(r.friendshipId, false)}
+                    className="text-[var(--color-lavender)] hover:text-[#e05858] px-1.5" aria-label="Ablehnen">
+                    <i className="fa-solid fa-xmark" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-6">

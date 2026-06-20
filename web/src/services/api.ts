@@ -172,7 +172,7 @@ export const rankingsApi = {
 
 // ─── Benachrichtigungen (Punkt im Header) ───────────────────────────────────────
 export const notificationsApi = {
-  count: () => get<{ count: number; ratings: number; likes: number }>('/notifications/count'),
+  count: () => get<{ count: number; ratings: number; likes: number; requests: number }>('/notifications/count'),
   seen:  () => post<{ ok: boolean }>('/notifications/seen'),
 };
 

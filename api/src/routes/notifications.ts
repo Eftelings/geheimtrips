@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { places, ratings, placeMedia, photoLikes, users } from '../db/schema.js';
+import { places, ratings, placeMedia, photoLikes, users, friendships } from '../db/schema.js';
 import { and, eq, gt, ne, inArray, sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -41,7 +41,17 @@ router.get('/count', requireAuth, async (c) => {
     likeCount = Number(l?.n ?? 0);
   }
 
-  return c.json({ count: ratingCount + likeCount, ratings: ratingCount, likes: likeCount });
+  // Offene Freundschaftsanfragen an mich — nicht zeitlich begrenzt, bleiben aktionierbar,
+  // bis sie an-/abgelehnt sind (deshalb nicht über notifications_seen_at gefiltert).
+  const fr = await db.select({ n: sql<number>`count(*)`.as('n') }).from(friendships)
+    .where(and(eq(friendships.addresseeId, me.id), eq(friendships.status, 'pending')))
+    .get();
+  const requestCount = Number(fr?.n ?? 0);
+
+  return c.json({
+    count: ratingCount + likeCount + requestCount,
+    ratings: ratingCount, likes: likeCount, requests: requestCount,
+  });
 });
 
 // POST /notifications/seen — alles als gesehen markieren (löscht den Punkt)
