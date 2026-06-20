@@ -102,6 +102,8 @@ export const placesApi = {
                     post<{ ok: boolean }>(`/places/${id}/contribute`, { type, value }),
   likePhoto:      (id: string, url: string) =>
                     post<{ liked: boolean; count: number }>(`/places/${id}/photos/like`, { url }),
+  addMedia:       (id: string, data: { url: string; type?: 'photo' | 'video'; cropX?: number; cropY?: number; caption?: string }) =>
+                    post<{ ok: boolean; place: Place }>(`/places/${id}/media`, data),
   submit:         (payload: SubmitPlacePayload) =>
                     post<{ ok: boolean; id: string }>('/places/submit', payload),
 };

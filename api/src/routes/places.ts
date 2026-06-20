@@ -351,6 +351,38 @@ router.post('/:id/photos/like', requireAuth,
   }
 );
 
+// POST /places/:id/media — Foto/Video zu einem bestehenden Ort hinzufügen (an Galerie anhängen)
+router.post('/:id/media', requireAuth,
+  zValidator('json', z.object({
+    url:     z.string().min(1),
+    type:    z.enum(['photo', 'video']).optional(),
+    cropX:   z.number().min(0).max(1).optional(),
+    cropY:   z.number().min(0).max(1).optional(),
+    caption: z.string().max(280).optional(),
+  })),
+  async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    const place = await db.select().from(places).where(eq(places.id, id)).get();
+    if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+    const { url, type = 'photo', cropX = 0.5, cropY = 0.5, caption = '' } = c.req.valid('json');
+
+    // An galleryJson anhängen (gleiches Objekt-Format wie beim Einreichen)
+    let gallery: unknown[] = [];
+    try { gallery = JSON.parse(place.galleryJson ?? '[]'); } catch { gallery = []; }
+    gallery.push({ url, cropX, cropY, caption, type });
+    const update: Record<string, unknown> = { galleryJson: JSON.stringify(gallery) };
+    if (type === 'video') update.hasVideo = true;
+    await db.update(places).set(update).where(eq(places.id, id));
+
+    // Uploader vermerken (für Eigentum + Like-Benachrichtigungen)
+    await db.insert(placeMedia).values({ placeId: id, userId: user.id, url, type, ccConfirmed: true }).catch(() => {});
+
+    const updated = await db.select().from(places).where(eq(places.id, id)).get();
+    return c.json({ ok: true, place: updated ? hydrate(updated) : null });
+  }
+);
+
 // GET /places/me/saved — current user's saved places
 router.get('/me/saved', requireAuth, async (c) => {
   const user = c.get('user');

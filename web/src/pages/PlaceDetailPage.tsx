@@ -10,7 +10,7 @@ import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { PlaceImage } from '../components/ui/PlaceImage.js';
 import { WeatherForecast } from '../components/ui/WeatherForecast.js';
 import { useAppStore } from '../store/useAppStore.js';
-import { placesApi, businessApi } from '../services/api.js';
+import { placesApi, businessApi, mediaApi } from '../services/api.js';
 import type { ParkingContributions } from '../services/api.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import type { Place, Transport } from '../types/index.js';
@@ -753,6 +753,7 @@ export function PlaceDetailPage() {
   const [claimLoading, setClaimLoading]   = useState(false);
   const [ratingFilterStar, setRatingFilterStar] = useState<number | null>(null);
   const [uploadedPhotos, setUploadedPhotos] = useState<{ url: string; cat: PhotoCat }[]>([]);
+  const [uploadBusy, setUploadBusy] = useState(false);
   const [photoCategory, setPhotoCategory] = useState<PhotoCat>('alle');
   const [galleryOffset, setGalleryOffset] = useState(0);       // rolling-window offset
   // Parking contributions
@@ -1086,14 +1087,28 @@ async function handleVerifyToggle() {
     e.target.value = '';
   }
 
-  function handleConfirmUpload() {
-    if (!pendingUpload || !pendingCcAccepted) return;
-    setUploadedPhotos(prev => [
-      ...prev,
-      ...pendingUpload.urls.map(url => ({ url, cat: pendingCat })),
-    ]);
-    showToast(`${pendingUpload.files.length} Foto${pendingUpload.files.length > 1 ? 's' : ''} hinzugefügt!`);
-    setPendingUpload(null);
+  async function handleConfirmUpload() {
+    if (!pendingUpload || !pendingCcAccepted || !place || uploadBusy) return;
+    setUploadBusy(true);
+    let ok = 0;
+    try {
+      // 1) Datei zum Server hochladen (HEIC wird dort zu JPEG), 2) am Ort persistieren
+      for (const file of pendingUpload.files) {
+        try {
+          const { url } = await mediaApi.upload(file);
+          const type = file.type.startsWith('video/') ? 'video' : 'photo';
+          await placesApi.addMedia(place.id, { url, type });
+          ok++;
+        } catch { /* einzelne Datei übersprungen */ }
+      }
+      // 3) Ort frisch laden → die persistierten Medien erscheinen dauerhaft in der Galerie
+      const fresh = await placesApi.get(place.id).catch(() => null);
+      if (fresh) setPlace(fresh);
+      showToast(ok > 0 ? `${ok} Datei${ok > 1 ? 'en' : ''} hinzugefügt!` : 'Upload fehlgeschlagen.');
+    } finally {
+      setUploadBusy(false);
+      setPendingUpload(null);
+    }
   }
 
   const ratingComplete = RATING_CRITERIA.every(c => (ratings[c.key] ?? 0) > 0);
@@ -2228,11 +2243,11 @@ async function handleVerifyToggle() {
                 style={{ background: '#F1ECF4', color: '#71587a' }}>
                 Abbrechen
               </button>
-              <button onClick={handleConfirmUpload} disabled={!pendingCcAccepted}
+              <button onClick={handleConfirmUpload} disabled={!pendingCcAccepted || uploadBusy}
                 className="flex-1 py-3 rounded-2xl text-sm font-bold text-white transition-all hover:brightness-110 disabled:opacity-40"
                 style={{ background: 'var(--color-amber)', boxShadow: pendingCcAccepted ? '0 8px 22px rgba(249,144,57,0.4)' : 'none' }}>
-                <i className="fa-solid fa-cloud-arrow-up mr-1.5" />
-                Hochladen
+                <i className={`fa-solid ${uploadBusy ? 'fa-circle-notch fa-spin' : 'fa-cloud-arrow-up'} mr-1.5`} />
+                {uploadBusy ? 'Wird hochgeladen…' : 'Hochladen'}
               </button>
             </div>
           </div>
