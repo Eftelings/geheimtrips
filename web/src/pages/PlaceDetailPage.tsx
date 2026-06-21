@@ -454,6 +454,18 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
   );
 }
 
+// Erkennt Video-URLs (hochgeladene Videos) anhand der Dateiendung
+const isVideoUrl = (url: string) => /\.(mp4|webm|mov|m4v)$/i.test(url);
+
+// Galerie-Kachel: rendert <video> für Videos, sonst <img> — mit Crop-Position
+function GalleryMedia({ url, pos = 'center', className, onClick }:
+  { url: string; pos?: string; className: string; onClick?: () => void }) {
+  const style = { animation: 'fadeIn 0.7s ease', objectPosition: pos };
+  return isVideoUrl(url)
+    ? <video src={url} muted loop playsInline autoPlay onClick={onClick} className={className} style={style} />
+    : <img src={url} alt="" onClick={onClick} className={className} style={style} />;
+}
+
 // ─── Image Lightbox ──────────────────────────────────────────────────────────
 
 function ImageLightbox({
@@ -526,13 +538,15 @@ function ImageLightbox({
       {/* Image */}
       <div className="relative max-w-[90vw] max-h-[80vh] flex items-center justify-center"
         onClick={e => e.stopPropagation()}>
-        <img
-          key={idx}
-          src={currentUrl}
-          alt=""
-          className="max-w-[90vw] max-h-[80vh] rounded-2xl object-contain shadow-2xl"
-          style={{ animation: 'fadeIn 0.18s ease' }}
-        />
+        {isVideoUrl(currentUrl) ? (
+          <video key={idx} src={currentUrl} controls autoPlay playsInline
+            className="max-w-[90vw] max-h-[80vh] rounded-2xl shadow-2xl"
+            style={{ animation: 'fadeIn 0.18s ease' }} />
+        ) : (
+          <img key={idx} src={currentUrl} alt=""
+            className="max-w-[90vw] max-h-[80vh] rounded-2xl object-contain shadow-2xl"
+            style={{ animation: 'fadeIn 0.18s ease' }} />
+        )}
         {likeCount >= 10 && (
           <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
             style={{ background: 'rgba(249,144,57,0.9)', color: 'white' }}>
@@ -567,7 +581,9 @@ function ImageLightbox({
             <button key={i} onClick={e => { e.stopPropagation(); setIdx(i); }}
               className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden transition-all"
               style={{ opacity: i === idx ? 1 : 0.45, outline: i === idx ? '2px solid white' : 'none', outlineOffset: 2 }}>
-              <img src={p.url} alt="" className="w-full h-full object-cover" />
+              {isVideoUrl(p.url)
+                ? <video src={p.url} muted playsInline className="w-full h-full object-cover" />
+                : <img src={p.url} alt="" className="w-full h-full object-cover" />}
             </button>
           ))}
         </div>
@@ -754,6 +770,7 @@ export function PlaceDetailPage() {
   const [ratingFilterStar, setRatingFilterStar] = useState<number | null>(null);
   const [uploadedPhotos, setUploadedPhotos] = useState<{ url: string; cat: PhotoCat }[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [pendingCrops, setPendingCrops] = useState<{ x: number; y: number }[]>([]);
   const [photoCategory, setPhotoCategory] = useState<PhotoCat>('alle');
   const [galleryOffset, setGalleryOffset] = useState(0);       // rolling-window offset
   // Parking contributions
@@ -1082,6 +1099,7 @@ async function handleVerifyToggle() {
     if (!files.length) return;
     const urls = files.map(f => URL.createObjectURL(f));
     setPendingUpload({ files, urls });
+    setPendingCrops(files.map(() => ({ x: 0.5, y: 0.5 })));
     setPendingCat('alle');
     setPendingCcAccepted(false);
     e.target.value = '';
@@ -1093,11 +1111,13 @@ async function handleVerifyToggle() {
     let ok = 0;
     try {
       // 1) Datei zum Server hochladen (HEIC wird dort zu JPEG), 2) am Ort persistieren
-      for (const file of pendingUpload.files) {
+      for (let i = 0; i < pendingUpload.files.length; i++) {
+        const file = pendingUpload.files[i];
         try {
           const { url } = await mediaApi.upload(file);
           const type = file.type.startsWith('video/') ? 'video' : 'photo';
-          await placesApi.addMedia(place.id, { url, type });
+          const c = pendingCrops[i] ?? { x: 0.5, y: 0.5 };
+          await placesApi.addMedia(place.id, { url, type, cropX: c.x, cropY: c.y });
           ok++;
         } catch { /* einzelne Datei übersprungen */ }
       }
@@ -1180,10 +1200,8 @@ async function handleVerifyToggle() {
                     ? `${(place.heroCropX ?? 0.5) * 100}% ${(place.heroCropY ?? 0.5) * 100}%`
                     : 'center';
                 return (
-                  <img key={heroUrl}
-                    src={heroUrl} alt={place.name}
+                  <GalleryMedia key={heroUrl} url={heroUrl} pos={heroPos}
                     className="w-full h-full object-cover cursor-pointer"
-                    style={{ animation: 'fadeIn 0.7s ease', objectPosition: heroPos }}
                     onClick={() => setLightboxIdx((galleryOffset) % Math.max(allPhotos.length, 1))} />
                 );
               })()}
@@ -1252,17 +1270,17 @@ async function handleVerifyToggle() {
                   {galleryAt(1) && (
                     <div className="rounded-3xl overflow-hidden flex-1 cursor-pointer"
                       onClick={() => setLightboxIdx((galleryOffset + 1) % Math.max(allPhotos.length, 1))}>
-                      <img key={galleryAt(1)!.url} src={galleryAt(1)!.url} alt=""
-                        className="w-full h-full object-cover hover:brightness-95 transition-all"
-                        style={{ animation: 'fadeIn 0.7s ease', objectPosition: (() => { const c = place.galleryCrops?.[galleryAt(1)!.url]; return c ? `${c.cropX*100}% ${c.cropY*100}%` : 'center'; })() }} />
+                      <GalleryMedia key={galleryAt(1)!.url} url={galleryAt(1)!.url}
+                        pos={(() => { const c = place.galleryCrops?.[galleryAt(1)!.url]; return c ? `${c.cropX*100}% ${c.cropY*100}%` : 'center'; })()}
+                        className="w-full h-full object-cover hover:brightness-95 transition-all" />
                     </div>
                   )}
                   {galleryAt(2) && (
                     <div className="rounded-3xl overflow-hidden flex-1 cursor-pointer"
                       onClick={() => setLightboxIdx((galleryOffset + 2) % Math.max(allPhotos.length, 1))}>
-                      <img key={galleryAt(2)!.url} src={galleryAt(2)!.url} alt=""
-                        className="w-full h-full object-cover hover:brightness-95 transition-all"
-                        style={{ animation: 'fadeIn 0.7s ease', objectPosition: (() => { const c = place.galleryCrops?.[galleryAt(2)!.url]; return c ? `${c.cropX*100}% ${c.cropY*100}%` : 'center'; })() }} />
+                      <GalleryMedia key={galleryAt(2)!.url} url={galleryAt(2)!.url}
+                        pos={(() => { const c = place.galleryCrops?.[galleryAt(2)!.url]; return c ? `${c.cropX*100}% ${c.cropY*100}%` : 'center'; })()}
+                        className="w-full h-full object-cover hover:brightness-95 transition-all" />
                     </div>
                   )}
                 </>
@@ -1274,17 +1292,17 @@ async function handleVerifyToggle() {
               {galleryAt(3) && (
                 <div className="rounded-3xl overflow-hidden flex-1 cursor-pointer"
                   onClick={() => setLightboxIdx((galleryOffset + 3) % Math.max(allPhotos.length, 1))}>
-                  <img key={galleryAt(3)!.url} src={galleryAt(3)!.url} alt=""
-                    className="w-full h-full object-cover hover:brightness-95 transition-all"
-                    style={{ animation: 'fadeIn 0.7s ease', objectPosition: (() => { const c = place.galleryCrops?.[galleryAt(3)!.url]; return c ? `${c.cropX*100}% ${c.cropY*100}%` : 'center'; })() }} />
+                  <GalleryMedia key={galleryAt(3)!.url} url={galleryAt(3)!.url}
+                    pos={(() => { const c = place.galleryCrops?.[galleryAt(3)!.url]; return c ? `${c.cropX*100}% ${c.cropY*100}%` : 'center'; })()}
+                    className="w-full h-full object-cover hover:brightness-95 transition-all" />
                 </div>
               )}
               {galleryAt(4) && (
                 <div className="rounded-3xl overflow-hidden flex-1 cursor-pointer"
                   onClick={() => setLightboxIdx((galleryOffset + 4) % Math.max(allPhotos.length, 1))}>
-                  <img key={galleryAt(4)!.url} src={galleryAt(4)!.url} alt=""
-                    className="w-full h-full object-cover hover:brightness-95 transition-all"
-                    style={{ animation: 'fadeIn 0.7s ease', objectPosition: (() => { const c = place.galleryCrops?.[galleryAt(4)!.url]; return c ? `${c.cropX*100}% ${c.cropY*100}%` : 'center'; })() }} />
+                  <GalleryMedia key={galleryAt(4)!.url} url={galleryAt(4)!.url}
+                    pos={(() => { const c = place.galleryCrops?.[galleryAt(4)!.url]; return c ? `${c.cropX*100}% ${c.cropY*100}%` : 'center'; })()}
+                    className="w-full h-full object-cover hover:brightness-95 transition-all" />
                 </div>
               )}
               {/* Grey box: manually advance gallery (or open lightbox when static) */}
@@ -1920,7 +1938,7 @@ async function handleVerifyToggle() {
                 <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-lavender)]">
                   Bildergalerie <span className="font-normal ml-1">({allPhotos.length})</span>
                 </p>
-                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
+                <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple onChange={handlePhotoUpload} className="hidden" />
               </div>
               {/* Category filter — only shown when at least one photo has been tagged */}
               {allPhotos.some(p => p.cat !== 'alle') && (
@@ -2180,9 +2198,9 @@ async function handleVerifyToggle() {
             {/* Header */}
             <div className="flex items-center justify-between px-6 pt-6 pb-4">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)]">Foto hochladen</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)]">Foto / Video hochladen</p>
                 <p className="font-display font-bold text-[var(--color-aubergine)] text-lg leading-tight mt-0.5">
-                  {pendingUpload.files.length === 1 ? 'Dein Foto' : `${pendingUpload.files.length} Fotos`}
+                  {pendingUpload.files.length === 1 ? 'Deine Datei' : `${pendingUpload.files.length} Dateien`}
                 </p>
               </div>
               <button onClick={() => setPendingUpload(null)}
@@ -2192,14 +2210,36 @@ async function handleVerifyToggle() {
               </button>
             </div>
 
-            {/* Preview thumbnails */}
-            <div className="px-6 flex gap-2 overflow-x-auto pb-1 mb-5" style={{ scrollbarWidth: 'none' }}>
-              {pendingUpload.urls.map((url, i) => (
-                <div key={i} className="flex-shrink-0 rounded-2xl overflow-hidden"
-                  style={{ width: pendingUpload.urls.length === 1 ? '100%' : 120, height: 90 }}>
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
+            {/* Vorschau + Bildausschnitt (Fokuspunkt antippen) */}
+            <div className="px-6 mb-5">
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                {pendingUpload.urls.map((url, i) => {
+                  const isVid = pendingUpload.files[i]?.type.startsWith('video/');
+                  const c = pendingCrops[i] ?? { x: 0.5, y: 0.5 };
+                  return (
+                    <div key={i} className="flex-shrink-0 relative rounded-2xl overflow-hidden bg-black/5"
+                      style={{ width: pendingUpload.urls.length === 1 ? '100%' : 150, aspectRatio: '3 / 2' }}
+                      onClick={isVid ? undefined : e => {
+                        const r = e.currentTarget.getBoundingClientRect();
+                        const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+                        const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+                        setPendingCrops(prev => { const n = [...prev]; n[i] = { x, y }; return n; });
+                      }}>
+                      {isVid
+                        ? <video src={url} muted playsInline className="w-full h-full object-cover" />
+                        : <img src={url} alt="" className="w-full h-full object-cover cursor-crosshair"
+                            style={{ objectPosition: `${c.x * 100}% ${c.y * 100}%` }} />}
+                      {!isVid && (
+                        <span className="absolute w-4 h-4 rounded-full border-2 border-white pointer-events-none"
+                          style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%`, transform: 'translate(-50%,-50%)', boxShadow: '0 0 0 1px rgba(0,0,0,0.45)' }} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] mt-1.5" style={{ color: '#71587a' }}>
+                <i className="fa-solid fa-crop-simple mr-1" /> So wird der Ausschnitt angezeigt — tippe aufs Bild, um den Fokuspunkt zu setzen.
+              </p>
             </div>
 
             {/* Category picker */}
