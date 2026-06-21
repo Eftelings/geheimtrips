@@ -53,10 +53,10 @@ db.run(sql`
 
 const router = new Hono();
 
-// GET /places — list all (or filtered)
+// GET /places — list all freigegebenen Orte (ungeprüfte/eingereichte ausgeblendet)
 router.get('/', async (c) => {
   const all = await db.select().from(places).all();
-  return c.json(all.map(hydrate));
+  return c.json(all.filter(p => !p.isUserSubmitted).map(hydrate));
 });
 
 // POST /places/submit — user submits a new place (auth required, stored as pending)

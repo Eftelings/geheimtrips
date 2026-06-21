@@ -1140,6 +1140,14 @@ async function handleVerifyToggle() {
   return (
     <AppShell noHeader>
 
+      {/* „In Prüfung"-Banner — nur bei noch nicht freigegebenen Orten */}
+      {place.isUserSubmitted && (
+        <div className="bg-[var(--color-amber)] text-white px-4 py-2.5 flex items-center justify-center gap-2 text-[13px] font-semibold text-center leading-snug">
+          <i className="fa-solid fa-clock flex-shrink-0" />
+          <span>Dieser Ort wird gerade geprüft und ist für andere Entdecker:innen noch nicht sichtbar.</span>
+        </div>
+      )}
+
       {/* ══════════════════════════════════════════════════════════════════════
           CARD HEADER
       ══════════════════════════════════════════════════════════════════════ */}
