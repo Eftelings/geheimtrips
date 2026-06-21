@@ -1386,6 +1386,7 @@ function ProgressBar({ step }: { step: number }) {
 export function SubmitPage() {
   const navigate          = useNavigate();
   const invalidatePlaces  = useAppStore(s => s.invalidatePlaces);
+  const markVisited       = useAppStore(s => s.markVisited);
   const [step, setStep]       = useState(1);
   const [state, setState]     = useState<WizardState>(EMPTY);
   const [error, setError]     = useState('');
@@ -1528,6 +1529,8 @@ export function SubmitPage() {
       state.media.forEach(m => { if (m.localUrl.startsWith('blob:')) URL.revokeObjectURL(m.localUrl); });
       // Force places list to re-fetch so the new place appears on the map/discover page
       invalidatePlaces();
+      // Ersteller:in war ja vor Ort → als „war hier" markieren (Backend hat das schon getan)
+      markVisited(res.id).catch(() => {});
       setSuccess(res.id);
       scrollTop();
     } catch (e: unknown) {
