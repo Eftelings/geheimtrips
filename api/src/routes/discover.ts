@@ -360,12 +360,18 @@ router.get('/deck', requireAuth, async (c) => {
 
   let pool = all.filter(p => !seen.has(p.id));
   // Reichweiten-Filter (Luftlinie × Tempo) — die Karte daneben zeigt die Lage
-  if (Number.isFinite(lat) && Number.isFinite(lng) && mode && minutes > 0) {
+  const reachActive = Number.isFinite(lat) && Number.isFinite(lng) && !!mode && minutes > 0;
+  if (reachActive) {
     const maxKm = (SPEED[mode] ?? 70) * (minutes / 60);
-    pool = pool.filter(p => p.lat != null && p.lng != null && distKm(lat, lng, p.lat, p.lng) <= maxKm);
+    const inRange = (p: typeof all[number]) =>
+      p.lat != null && p.lng != null && distKm(lat, lng, p.lat, p.lng) <= maxKm;
+    pool = pool.filter(inRange);
+    // Alle in Reichweite schon gesehen → erneut zeigen, ABER weiterhin nur in Reichweite.
+    // KEIN Fallback auf ferne Orte: lieber leeres Deck (Frontend zeigt „nichts in Reichweite").
+    if (!pool.length) pool = all.filter(inRange);
+  } else {
+    if (!pool.length) pool = all; // ohne Reichweiten-Filter: alles wieder zeigen
   }
-  if (!pool.length) pool = all.filter(p => !seen.has(p.id));
-  if (!pool.length) pool = all; // alles gesehen → von vorn
 
   const scored = pool.map(p => {
     const tags = placeTags(p);

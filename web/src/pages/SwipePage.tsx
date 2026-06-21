@@ -7,6 +7,7 @@ import { AppShell } from '../components/layout/AppShell.js';
 import { PlaceImage } from '../components/ui/PlaceImage.js';
 import { discoverApi } from '../services/api.js';
 import type { DeckPlace } from '../services/api.js';
+import { useAppStore } from '../store/useAppStore.js';
 import { requestGpsPosition, getLocationByIp } from '../services/geoService.js';
 import type { Coords } from '../services/geoService.js';
 
@@ -25,6 +26,7 @@ export function SwipePage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const calibrate = params.get('calibrate') === '1';
+  const { toggleSave, savedIds } = useAppStore();
 
   const [deck, setDeck] = useState<DeckPlace[]>([]);
   const [idx, setIdx] = useState(0);
@@ -74,6 +76,8 @@ export function SwipePage() {
     if (!card) return;
     const dwell = Date.now() - shownAt.current;
     discoverApi.swipe(card.id, action, dwell).catch(() => {});
+    // Like = merken → erscheint in „Meine Orte" (Gemerkt)
+    if (action === 'like' && !savedIds.has(card.id)) toggleSave(card.id);
     setFlyOut(action === 'like' ? 'right' : 'left');
     setTimeout(() => {
       setFlyOut(null); setDrag(null);
@@ -181,19 +185,26 @@ export function SwipePage() {
                   </div>
                 ) : done ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center px-6 rounded-3xl bg-white border border-[var(--color-bg-soft)]">
-                    <i className={`fa-solid ${calibrate ? 'fa-circle-check' : 'fa-champagne-glasses'} text-5xl text-[var(--color-amber)]`} />
-                    <p className="font-display font-bold text-xl text-[var(--color-aubergine)]">
-                      {calibrate ? 'Perfekt — wir kennen dich jetzt!' : 'Alle Karten durch!'}
-                    </p>
-                    <p className="text-sm text-[var(--color-lavender)] max-w-xs">
-                      {calibrate ? 'Deine Vorschläge werden ab jetzt persönlicher…' : 'Lade neue Vorschläge — je mehr du wischst, desto besser werden sie.'}
-                    </p>
-                    {!calibrate && (
-                      <button onClick={loadDeck}
-                        className="mt-2 bg-[var(--color-amber)] text-white font-bold px-6 py-3 rounded-2xl text-sm shadow-[var(--shadow-amber)] hover:brightness-105 active:scale-95 transition-all">
-                        <i className="fa-solid fa-rotate mr-2" />Neue Orte laden
-                      </button>
-                    )}
+                    {(() => {
+                      const emptyReach = !calibrate && deck.length === 0;
+                      return (<>
+                        <i className={`fa-solid ${calibrate ? 'fa-circle-check' : emptyReach ? 'fa-location-dot' : 'fa-champagne-glasses'} text-5xl text-[var(--color-amber)]`} />
+                        <p className="font-display font-bold text-xl text-[var(--color-aubergine)]">
+                          {calibrate ? 'Perfekt — wir kennen dich jetzt!' : emptyReach ? 'Nichts in deiner Reichweite' : 'Alle Karten durch!'}
+                        </p>
+                        <p className="text-sm text-[var(--color-lavender)] max-w-xs">
+                          {calibrate ? 'Deine Vorschläge werden ab jetzt persönlicher…'
+                            : emptyReach ? 'In deinem Umkreis gibt es noch keine passenden Geheimtrips. Erhöhe Zeit/Verkehrsmittel — oder schau bald wieder rein, wir wachsen täglich.'
+                            : 'Lade neue Vorschläge — je mehr du wischst, desto besser werden sie.'}
+                        </p>
+                        {!calibrate && (
+                          <button onClick={() => emptyReach ? navigate('/finder') : loadDeck()}
+                            className="mt-2 bg-[var(--color-amber)] text-white font-bold px-6 py-3 rounded-2xl text-sm shadow-[var(--shadow-amber)] hover:brightness-105 active:scale-95 transition-all">
+                            <i className={`fa-solid ${emptyReach ? 'fa-sliders' : 'fa-rotate'} mr-2`} />{emptyReach ? 'Reichweite anpassen' : 'Neue Orte laden'}
+                          </button>
+                        )}
+                      </>);
+                    })()}
                   </div>
                 ) : (
                   <>

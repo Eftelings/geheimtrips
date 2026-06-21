@@ -1192,7 +1192,7 @@ export function DiscoverPage() {
             {MOODS.map(m => (
               <button
                 key={m.label}
-                onClick={() => navigate('/finder')}
+                onClick={() => navigate(m.label === 'Spontan jetzt' ? '/swipe?minutes=60&mode=auto' : '/finder')}
                 className="flex-shrink-0 flex items-center gap-1.5 bg-white border border-[var(--color-bg-soft)] rounded-full px-3 py-1.5 text-xs font-medium text-[var(--color-aubergine)] shadow-[var(--shadow-card)] active:scale-95 transition-transform"
               >
                 <i className={`fa-solid ${m.icon} text-[var(--color-amber)] text-[10px]`} />
