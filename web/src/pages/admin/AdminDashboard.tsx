@@ -65,20 +65,34 @@ function MailDiagnostics() {
           <p className="text-white/40 text-sm">Status konnte nicht geladen werden.</p>
         ) : (
           <>
+            <Row
+              label="Methode"
+              value={status.provider === 'resend' ? 'Resend (HTTP-API)' : status.provider === 'smtp' ? 'SMTP' : 'keine'}
+              bad={status.provider === 'none'}
+              good={status.provider === 'resend'}
+            />
             <Row label="Status" value={status.configured ? 'konfiguriert' : 'NICHT konfiguriert'} bad={!status.configured} good={status.configured} />
-            {status.configured && (
+            {status.provider === 'resend' && (
+              <>
+                <Row label="API-Key" value={status.hasResendKey ? 'gesetzt' : 'FEHLT'} bad={!status.hasResendKey} />
+                <Row label="Absender (FROM)" value={status.from} />
+              </>
+            )}
+            {status.provider === 'smtp' && (
               <>
                 <Row label="Server" value={`${status.host}:${status.port} · ${status.secure ? 'SSL (465)' : 'STARTTLS (587)'}`} />
                 <Row label="Login (User)" value={status.user ?? '— kein Login gesetzt —'} bad={!status.hasAuth} />
                 <Row label="Passwort" value={status.hasPass ? 'gesetzt' : 'FEHLT'} bad={!status.hasPass} />
                 <Row label="Absender (FROM)" value={status.from} />
-                <Row
-                  label="Verbindung & Login"
-                  value={status.verify.ok ? 'OK ✓' : (status.verify.error ?? 'Fehler')}
-                  bad={!status.verify.ok}
-                  good={status.verify.ok}
-                />
               </>
+            )}
+            {status.configured && (
+              <Row
+                label={status.provider === 'resend' ? 'API-Verbindung' : 'Verbindung & Login'}
+                value={status.verify.ok ? 'OK ✓' : (status.verify.error ?? 'Fehler')}
+                bad={!status.verify.ok}
+                good={status.verify.ok}
+              />
             )}
 
             {/* Test-Mail */}

@@ -84,9 +84,11 @@ export interface PlaceQuality {
 }
 
 export interface MailStatus {
+  provider: 'resend' | 'smtp' | 'none';
   configured: boolean;
   host: string | null; port: number; secure: boolean;
   user: string | null; hasAuth: boolean; hasPass: boolean; from: string;
+  hasResendKey: boolean;
   verify: { ok: boolean; error?: string };
 }
 
