@@ -100,13 +100,34 @@ serveRouter.get('/:filename', async (c) => {
 
   const ext  = path.extname(filename).slice(1).toLowerCase();
   const mime = SERVE_MIME[ext] ?? 'application/octet-stream';
-  const data = fs.readFileSync(filepath);
+  const total = fs.statSync(filepath).size;
 
-  return new Response(data, {
-    headers: {
-      'Content-Type':   mime,
-      'Cache-Control':  'public, max-age=31536000, immutable',
-      'Content-Length': String(data.length),
-    },
-  });
+  // Range-Requests unterstützen — Pflicht, damit <video> (v.a. in iOS Safari) abspielt.
+  const baseHeaders: Record<string, string> = {
+    'Content-Type':  mime,
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Accept-Ranges': 'bytes',
+  };
+  const range = c.req.header('range');
+  if (range) {
+    const m = /bytes=(\d*)-(\d*)/.exec(range);
+    let start = m && m[1] ? parseInt(m[1], 10) : 0;
+    let end   = m && m[2] ? parseInt(m[2], 10) : total - 1;
+    if (Number.isNaN(start)) start = 0;
+    if (Number.isNaN(end) || end >= total) end = total - 1;
+    if (start > end || start >= total) {
+      return new Response(null, { status: 416, headers: { ...baseHeaders, 'Content-Range': `bytes */${total}` } });
+    }
+    const size = end - start + 1;
+    const buf  = Buffer.alloc(size);
+    const fd   = fs.openSync(filepath, 'r');
+    try { fs.readSync(fd, buf, 0, size, start); } finally { fs.closeSync(fd); }
+    return new Response(buf, {
+      status: 206,
+      headers: { ...baseHeaders, 'Content-Range': `bytes ${start}-${end}/${total}`, 'Content-Length': String(size) },
+    });
+  }
+
+  const data = fs.readFileSync(filepath);
+  return new Response(data, { headers: { ...baseHeaders, 'Content-Length': String(total) } });
 });

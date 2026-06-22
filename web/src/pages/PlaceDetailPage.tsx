@@ -462,7 +462,9 @@ function GalleryMedia({ url, pos = 'center', className, onClick }:
   { url: string; pos?: string; className: string; onClick?: () => void }) {
   const style = { animation: 'fadeIn 0.7s ease', objectPosition: pos };
   return isVideoUrl(url)
-    ? <video src={url} muted loop playsInline autoPlay onClick={onClick} className={className} style={style} />
+    // preload="metadata" + #t=0.1 → Browser zeigt sofort den ersten Frame, bis das Video läuft
+    ? <video src={`${url}#t=0.1`} muted loop playsInline autoPlay preload="metadata"
+        onClick={onClick} className={className} style={style} />
     : <img src={url} alt="" onClick={onClick} className={className} style={style} />;
 }
 
