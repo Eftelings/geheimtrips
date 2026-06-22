@@ -15,6 +15,7 @@ import { AdminAuthors }      from './pages/admin/AdminAuthors.js';
 import { AdminClaims }       from './pages/admin/AdminClaims.js';
 import { AdminPerks }        from './pages/admin/AdminPerks.js';
 import { AdminCategories }   from './pages/admin/AdminCategories.js';
+import { AdminTaxonomy }     from './pages/admin/AdminTaxonomy.js';
 import { BusinessDashboardPage } from './pages/BusinessDashboardPage.js';
 import { DiscoverPage }      from './pages/DiscoverPage.js';
 import { FunnelPage }      from './pages/FunnelPage.js';
@@ -106,6 +107,7 @@ export function App() {
       <Route path="/admin/claims"  element={<RequireAdmin><AdminClaims /></RequireAdmin>} />
       <Route path="/admin/perks"   element={<RequireAdmin><AdminPerks /></RequireAdmin>} />
       <Route path="/admin/categories" element={<RequireAdmin><AdminCategories /></RequireAdmin>} />
+      <Route path="/admin/taxonomy" element={<RequireAdmin><AdminTaxonomy /></RequireAdmin>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
