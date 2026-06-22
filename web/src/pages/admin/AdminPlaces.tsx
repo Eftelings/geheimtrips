@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from './AdminLayout.js';
 import { adminApi, type AdminPlace, type AdminAuthor } from '../../services/adminApi.js';
 
@@ -142,6 +143,7 @@ function PlaceForm({ place, authors, onSave, onCancel }: {
 }
 
 export function AdminPlaces() {
+  const navigate = useNavigate();
   const [places, setPlaces]   = useState<AdminPlace[]>([]);
   const [authors, setAuthors] = useState<AdminAuthor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -225,7 +227,13 @@ export function AdminPlaces() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
+                      <button onClick={() => navigate(`/submit?edit=${p.id}`)}
+                        title="Vollständig bearbeiten (alle Schritte wie beim Einreichen)"
+                        className="p-1.5 bg-[var(--color-amber)]/15 hover:bg-[var(--color-amber)]/30 rounded-lg text-[var(--color-amber)] transition-colors">
+                        <i className="fa-solid fa-list-check text-xs" />
+                      </button>
                       <button onClick={() => setEditing(p)}
+                        title="Schnell bearbeiten (Kurzform)"
                         className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors">
                         <i className="fa-solid fa-pen text-xs" />
                       </button>
