@@ -1540,7 +1540,7 @@ async function handleVerifyToggle() {
                           {place.submitter.name}
                           {place.submitter.isLocalHero && (
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                              style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }} title="Local Hero – Top 25 % der Geheimtripper">
+                              style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }} title="Local Hero – Top 25 % der Geheimtriper">
                               <i className="fa-solid fa-shield-halved" /> Local Hero
                             </span>
                           )}

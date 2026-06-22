@@ -91,7 +91,7 @@ export function FinderPage() {
             <i className="fa-solid fa-arrow-left" />
           </button>
           <div>
-            <p className="font-display font-bold text-[var(--color-aubergine)] leading-none">Geheimtripp finden</p>
+            <p className="font-display font-bold text-[var(--color-aubergine)] leading-none">Geheimtrip finden</p>
             <p className="text-[11px] text-[var(--color-lavender)] mt-0.5">Lass uns finden, wonach du suchst.</p>
           </div>
         </div>

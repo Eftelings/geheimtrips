@@ -993,19 +993,28 @@ function ImageUploader({
 // ─── Step sub-components ──────────────────────────────────────────────────────
 
 function Step1({ state, set }: { state: WizardState; set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void }) {
+  // Vorschlag aus dem zuvor gewählten Standort (erster Teil der Adresse stimmt oft mit dem Namen überein)
+  const suggestion = state.name.trim() ? '' : (state.locationText.split(',')[0]?.trim() ?? '');
   return (
     <div className="space-y-7">
       <div>
-        <StepHeading>Wie heißt dein Geheimtripp?</StepHeading>
+        <StepHeading>Wie heißt dein Geheimtrip?</StepHeading>
         <StepSub>Der Name erscheint als Titel – ruhig etwas Einladendes wählen.</StepSub>
       </div>
-      <div className="space-y-5">
+      <div className="space-y-2.5">
         <InputField
           label="Name des Ortes" required
           placeholder="z.B. Stausee am Ende der Welt"
           value={state.name} maxLength={100}
           onChange={v => set('name', v)}
         />
+        {suggestion && suggestion.length > 1 && (
+          <button type="button" onClick={() => set('name', suggestion)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border-2 border-[#E4DCF0] text-[#71587A] hover:border-[#F99039] transition-colors">
+            <i className="fa-solid fa-wand-magic-sparkles text-[#F99039]" />
+            Vorschlag aus Standort: „{suggestion}"
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1030,7 +1039,7 @@ function Step2({ state, setLocation }: {
   return (
     <div className="space-y-7">
       <div>
-        <StepHeading>Wo liegt dein Geheimtripp?</StepHeading>
+        <StepHeading>Wo liegt dein Geheimtrip?</StepHeading>
         <StepSub>
           Tippe einen Ort oder eine Adresse ein und wähle einen Vorschlag aus der Liste,
           nutze den GPS-Knopf – oder setze den Punkt direkt auf der Karte. Koordinaten sind
@@ -1405,48 +1414,14 @@ function StepStory({
   return (
     <div className="space-y-7">
       <div>
-        <StepHeading>Beschreib deinen Geheimtripp</StepHeading>
+        <StepHeading>Beschreib deinen Geheimtrip</StepHeading>
         <StepSub>
-          Starte mit dem Besonderen in zwei Sätzen, dann erzähl die ganze Geschichte.
+          Erzähl zuerst die ganze Geschichte, dann bring das Besondere in einem Satz auf den Punkt.
           Trivia und Tipps kannst du darunter ergänzen{aiOn ? ' – oder dir von Gemini helfen lassen ✨' : ''}.
         </StepSub>
       </div>
 
-      {/* 1) Besonderheit — kurz, erscheint auf der Swipe-Karte */}
-      <div className="space-y-1.5">
-        <div className="flex items-start justify-between gap-2">
-          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-            In zwei Sätzen: Was ist das Besondere an diesem Ort?
-          </label>
-          <FieldTip example={'z.B. „Das größte Freilichtmuseum Deutschlands." oder „Das perfekte Café für eine Pause beim Bummel durch Bonn."'} />
-        </div>
-        <p className="text-xs text-[#9A8FAA]">
-          Dieser Satz erscheint auf der Swipe-Karte im Entdecken-Modus. Schreib ihn selbst –
-          oder lass ihn dir aus deiner Beschreibung erzeugen.
-        </p>
-        <textarea
-          rows={3} spellCheck maxLength={350}
-          placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
-          value={state.short}
-          onChange={e => set('short', e.target.value)}
-          className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none"
-        />
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs" style={{ color: state.short.length > 300 ? '#C96442' : '#A89BB5' }}>
-            {state.short.length} / 350
-          </span>
-          {aiOn && (
-            <AiButton onClick={genSummary} loading={sumLoading} disabled={longLen < 30}
-              label="Aus Beschreibung erzeugen" />
-          )}
-        </div>
-        {aiOn && longLen < 30 && (
-          <p className="text-[11px] text-[#B0A3BC]">Schreib zuerst unten die Beschreibung – dann fasst Gemini sie hier zusammen.</p>
-        )}
-        {sumErr && <p className="text-xs text-[#C96442]">{sumErr}</p>}
-      </div>
-
-      {/* 2) Ausführliche Beschreibung — Pflicht, mind. 200 Zeichen */}
+      {/* 1) Ausführliche Beschreibung — Pflicht, mind. 200 Zeichen */}
       <div className="space-y-1.5">
         <div className="flex items-start justify-between gap-2">
           <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
@@ -1470,6 +1445,40 @@ function StepStory({
             ? 'Super – das reicht für eine schöne Beschreibung!'
             : `Noch mind. ${200 - longLen} Zeichen (aktuell ${longLen} / 200).`}
         </p>
+      </div>
+
+      {/* 2) Besonderheit — ein Satz, erscheint auf der Swipe-Karte */}
+      <div className="space-y-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+            In einem Satz: Was ist das Besondere an diesem Ort?
+          </label>
+          <FieldTip example={'z.B. „Das größte Freilichtmuseum Deutschlands." oder „Das perfekte Café für eine Pause beim Bummel durch Bonn."'} />
+        </div>
+        <p className="text-xs text-[#9A8FAA]">
+          Dieser Satz erscheint auf der Swipe-Karte im Entdecken-Modus. Schreib ihn selbst –
+          oder lass ihn dir aus deiner Beschreibung (oben) erzeugen.
+        </p>
+        <textarea
+          rows={2} spellCheck maxLength={350}
+          placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
+          value={state.short}
+          onChange={e => set('short', e.target.value)}
+          className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs" style={{ color: state.short.length > 300 ? '#C96442' : '#A89BB5' }}>
+            {state.short.length} / 350
+          </span>
+          {aiOn && (
+            <AiButton onClick={genSummary} loading={sumLoading} disabled={longLen < 30}
+              label="Aus Beschreibung erzeugen" />
+          )}
+        </div>
+        {aiOn && longLen < 30 && (
+          <p className="text-[11px] text-[#B0A3BC]">Schreib zuerst oben die Beschreibung – dann fasst Gemini sie hier zusammen.</p>
+        )}
+        {sumErr && <p className="text-xs text-[#C96442]">{sumErr}</p>}
       </div>
 
       {/* 3) Trivia — optional */}
@@ -1612,7 +1621,7 @@ function StepMedia({
       >
         {submitting
           ? <><i className="fa-solid fa-circle-notch fa-spin" /> {isEdit ? 'Wird gespeichert…' : 'Wird eingereicht…'}</>
-          : <><i className={`fa-solid ${isEdit ? 'fa-floppy-disk' : 'fa-paper-plane'}`} /> {isEdit ? 'Änderungen speichern' : 'Geheimtripp einreichen'}</>}
+          : <><i className={`fa-solid ${isEdit ? 'fa-floppy-disk' : 'fa-paper-plane'}`} /> {isEdit ? 'Änderungen speichern' : 'Geheimtrip einreichen'}</>}
       </button>
     </div>
   );
@@ -1668,7 +1677,7 @@ function SummaryRow({ icon, label, children }: { icon: string; label: string; ch
 // ─── Progress bar ─────────────────────────────────────────────────────────────
 function ProgressBar({ step }: { step: number }) {
   const pct = Math.round(((step - 1) / (TOTAL_STEPS - 1)) * 100);
-  const LABELS = ['Name', 'Ort', 'Beschreibung', 'Kategorie', 'Details', 'Fotos'];
+  const LABELS = ['Ort', 'Name', 'Beschreibung', 'Kategorie', 'Details', 'Fotos'];
   return (
     <div className="mb-8">
       <div className="flex justify-between mb-3">
@@ -1808,8 +1817,8 @@ export function SubmitPage() {
 
   // ── Navigation ───────────────────────────────────────────────────────────
   function canNext(): boolean {
-    if (step === 1) return state.name.trim().length >= 2;                 // Name
-    if (step === 2) return state.lat !== null && state.lng !== null;      // Standort
+    if (step === 1) return state.lat !== null && state.lng !== null;      // Standort
+    if (step === 2) return state.name.trim().length >= 2;                 // Name
     // Beschreibung: mind. 200 Zeichen Klartext (Kurz-Zusammenfassung optional)
     if (step === 3) return state.long.replace(/<[^>]*>/g, '').trim().length >= 200;
     if (step === 4) return !!state.l3;                                    // Kategorie
@@ -1907,7 +1916,7 @@ export function SubmitPage() {
             <p className="text-sm leading-relaxed" style={{ color: C.lavender }}>
               {isEdit
                 ? 'Deine Änderungen wurden übernommen.'
-                : 'Dein Geheimtripp wurde eingereicht und erscheint nach einer kurzen Prüfung für alle.'}
+                : 'Dein Geheimtrip wurde eingereicht und erscheint nach einer kurzen Prüfung für alle.'}
             </p>
           </div>
           <div className="flex flex-col gap-3">
@@ -1960,7 +1969,7 @@ export function SubmitPage() {
   }
 
   const STEP_TITLES = [
-    'Name', 'Standort', 'Beschreibung',
+    'Standort', 'Name', 'Beschreibung',
     'Kategorie wählen', 'Details', 'Fotos & Abschicken',
   ];
 
@@ -1970,8 +1979,8 @@ export function SubmitPage() {
         <ProgressBar step={step} />
 
         {/* Reihenfolge: 1 Name · 2 Standort · 3 Beschreibung+Kurz+Trivia+Tipps · 4 Kategorie · 5 Details · 6 Fotos */}
-        {step === 1 && <Step1 state={state} set={set} />}
-        {step === 2 && <Step2 state={state} setLocation={setLocation} />}
+        {step === 1 && <Step2 state={state} setLocation={setLocation} />}
+        {step === 2 && <Step1 state={state} set={set} />}
         {step === 3 && <StepStory state={state} set={set} />}
         {step === 4 && <StepCategory state={state} setState={setState} />}
         {step === 5 && <StepDetails state={state} set={set} />}

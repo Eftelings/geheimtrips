@@ -69,7 +69,7 @@ export function ProfilePage() {
             {rankInfo?.isLocalHero && (
               <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full"
                 style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }}
-                title="Top 25 % der Geheimtripper diesen Monat">
+                title="Top 25 % der Geheimtriper diesen Monat">
                 <i className="fa-solid fa-shield-halved" /> Local Hero
               </span>
             )}

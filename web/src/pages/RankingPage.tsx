@@ -34,7 +34,7 @@ const BOARDS: {
   id: RankBoardId; label: string; short: string; icon: string; noun: string; blurb: string;
   value: (e: RankingEntry) => string; sub?: (e: RankingEntry) => string;
 }[] = [
-  { id: 'gesamt', label: 'Gesamt', short: 'Gesamt', icon: 'fa-trophy', noun: 'Geheimtripper',
+  { id: 'gesamt', label: 'Gesamt', short: 'Gesamt', icon: 'fa-trophy', noun: 'Geheimtriper',
     blurb: 'Dein Monats-Score: 10 Punkte je besuchtem Ort · 20 je eingereichtem Ort · 15 je Quiz-Sieg. Er setzt sich jeden Monat zurück — bleib am Ball, um deinen Status zu halten!',
     value: e => `${e.mScore} Pkt`, sub: () => 'Monat' },
   { id: 'orte', label: 'Besuchte Orte', short: 'Besucht', icon: 'fa-location-dot', noun: 'Entdecker:innen',
