@@ -110,6 +110,18 @@ export const placesApi = {
                     patch<{ ok: boolean; id: string }>(`/places/${id}`, payload),
 };
 
+// ─── KI-Unterstützung (Gemini) ──────────────────────────────────────────────────
+
+export interface AiPlaceCtx {
+  name?: string; long?: string; highlight?: string; category?: string; location?: string;
+}
+
+export const aiApi = {
+  status:       ()                  => get<{ configured: boolean }>('/ai/status'),
+  placeSummary: (ctx: AiPlaceCtx)   => post<{ summary: string }>('/ai/place-summary', ctx),
+  placeTips:    (ctx: AiPlaceCtx & { count?: number }) => post<{ tips: string[] }>('/ai/place-tips', ctx),
+};
+
 // ─── Trips ─────────────────────────────────────────────────────────────────────
 
 import type { Trip } from '../types/index.js';

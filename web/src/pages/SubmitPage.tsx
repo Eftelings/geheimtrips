@@ -5,7 +5,7 @@ import { useAppStore } from '../store/useAppStore.js';
 import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
 import type { Place } from '../types/index.js';
-import { placesApi, mediaApi } from '../services/api.js';
+import { placesApi, mediaApi, aiApi } from '../services/api.js';
 import { geocodeSuggestions, reverseGeocode, requestGpsPosition } from '../services/geoService.js';
 import type { GeoLocation } from '../services/geoService.js';
 
@@ -1307,6 +1307,40 @@ function StepDetails({
   );
 }
 
+function FieldTip({ example }: { example: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative flex-shrink-0">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border-2 transition-colors"
+        style={{ borderColor: open ? C.amber : '#E4DCF0', background: open ? '#FFF4EB' : 'white', color: C.amber }}>
+        <i className="fa-solid fa-lightbulb text-[10px]" /> Tipp
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1.5 w-64 z-30 bg-white border border-[#E4DCF0] rounded-xl shadow-lg p-3 text-xs leading-relaxed text-[#71587A]">
+          <button type="button" onClick={() => setOpen(false)}
+            className="absolute top-1.5 right-2 text-[#C4AED0] hover:text-[#71587A]"><i className="fa-solid fa-xmark text-[10px]" /></button>
+          {example}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── KI-Knopf (Gemini) ──────────────────────────────────────────────────────────
+function AiButton({ onClick, loading, disabled, label }: {
+  onClick: () => void; loading: boolean; disabled?: boolean; label: string;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={loading || disabled}
+      className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-opacity disabled:opacity-40"
+      style={{ background: 'linear-gradient(135deg, #7C3AED, #C026D3)', color: 'white' }}>
+      <i className={`fa-solid ${loading ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles'} text-[11px]`} />
+      {loading ? 'Gemini denkt…' : label}
+    </button>
+  );
+}
+
 function StepStory({
   state, set,
 }: {
@@ -1321,21 +1355,91 @@ function StepStory({
   const triviaTypeVal = state.answers['trivia_type'];
   const triviaActive  = typeof triviaTypeVal === 'string' && triviaTypeVal !== '';
 
+  // ── KI-Unterstützung (Gemini) ────────────────────────────────────────────
+  const [aiOn, setAiOn]           = useState(false);
+  const [sumLoading, setSumLoad]  = useState(false);
+  const [sumErr, setSumErr]       = useState('');
+  const [tipsLoading, setTipsLoad]= useState(false);
+  const [tipsErr, setTipsErr]     = useState('');
+  useEffect(() => { aiApi.status().then(s => setAiOn(s.configured)).catch(() => {}); }, []);
+
+  const aiCtx = () => ({
+    name:      state.name,
+    long:      state.long,
+    highlight: typeof state.answers['highlight'] === 'string' ? (state.answers['highlight'] as string) : '',
+    category:  state.l3?.label ?? state.l2?.label ?? state.l1?.label ?? '',
+    location:  state.locationText,
+  });
+
+  async function genSummary() {
+    setSumErr(''); setSumLoad(true);
+    try { const { summary } = await aiApi.placeSummary(aiCtx()); set('short', summary); }
+    catch (e) { setSumErr((e as Error).message || 'Zusammenfassung fehlgeschlagen.'); }
+    setSumLoad(false);
+  }
+  async function genTips() {
+    setTipsErr(''); setTipsLoad(true);
+    try {
+      const { tips } = await aiApi.placeTips(aiCtx());
+      const existing = state.tips.filter(t => t.replace(/<[^>]*>/g, '').trim());
+      const merged   = [...existing, ...tips].slice(0, MAX_TIPS);
+      set('tips', merged.length ? merged : ['']);
+    } catch (e) { setTipsErr((e as Error).message || 'Tipps-Vorschlag fehlgeschlagen.'); }
+    setTipsLoad(false);
+  }
+
   return (
     <div className="space-y-7">
       <div>
         <StepHeading>Beschreib deinen Geheimtripp</StepHeading>
         <StepSub>
-          Erzähl die ganze Geschichte – so, wie du den Ort erlebt hast. Eine kurze
-          Zusammenfassung, eine Trivia und Tipps kannst du darunter ergänzen.
+          Starte mit dem Besonderen in zwei Sätzen, dann erzähl die ganze Geschichte.
+          Trivia und Tipps kannst du darunter ergänzen{aiOn ? ' – oder dir von Gemini helfen lassen ✨' : ''}.
         </StepSub>
       </div>
 
-      {/* 1) Ausführliche Beschreibung — Pflicht, mind. 200 Zeichen */}
+      {/* 1) Besonderheit — kurz, erscheint auf der Swipe-Karte */}
       <div className="space-y-1.5">
-        <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-          Ausführliche Beschreibung <span className="text-[#C96442]">*</span>
-        </label>
+        <div className="flex items-start justify-between gap-2">
+          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+            In zwei Sätzen: Was ist das Besondere an diesem Ort?
+          </label>
+          <FieldTip example={'z.B. „Das größte Freilichtmuseum Deutschlands." oder „Das perfekte Café für eine Pause beim Bummel durch Bonn."'} />
+        </div>
+        <p className="text-xs text-[#9A8FAA]">
+          Dieser Satz erscheint auf der Swipe-Karte im Entdecken-Modus. Schreib ihn selbst –
+          oder lass ihn dir aus deiner Beschreibung erzeugen.
+        </p>
+        <textarea
+          rows={3} spellCheck maxLength={350}
+          placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
+          value={state.short}
+          onChange={e => set('short', e.target.value)}
+          className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs" style={{ color: state.short.length > 300 ? '#C96442' : '#A89BB5' }}>
+            {state.short.length} / 350
+          </span>
+          {aiOn && (
+            <AiButton onClick={genSummary} loading={sumLoading} disabled={longLen < 30}
+              label="Aus Beschreibung erzeugen" />
+          )}
+        </div>
+        {aiOn && longLen < 30 && (
+          <p className="text-[11px] text-[#B0A3BC]">Schreib zuerst unten die Beschreibung – dann fasst Gemini sie hier zusammen.</p>
+        )}
+        {sumErr && <p className="text-xs text-[#C96442]">{sumErr}</p>}
+      </div>
+
+      {/* 2) Ausführliche Beschreibung — Pflicht, mind. 200 Zeichen */}
+      <div className="space-y-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+            Ausführliche Beschreibung <span className="text-[#C96442]">*</span>
+          </label>
+          <FieldTip example={'z.B. „Versteckt hinter der alten Mühle führt ein schmaler Pfad zu einem Wasserfall, den kaum jemand kennt. Am schönsten früh morgens, wenn das Licht durch die Bäume fällt …"'} />
+        </div>
         <p className="text-xs text-[#9A8FAA]">
           Atmosphäre, was dich überrascht hat, was andere übersehen. Nutze{' '}
           <strong>Fett</strong>, <em>Kursiv</em> oder <u>Unterstrichen</u> für Betonung.
@@ -1351,28 +1455,6 @@ function StepStory({
           {longOk
             ? 'Super – das reicht für eine schöne Beschreibung!'
             : `Noch mind. ${200 - longLen} Zeichen (aktuell ${longLen} / 200).`}
-        </p>
-      </div>
-
-      {/* 2) Kurz-Zusammenfassung — optional, max 350 */}
-      <div className="space-y-1.5">
-        <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-          Kurz zusammengefasst <span className="text-[#B0A3BC] font-normal">(optional)</span>
-        </label>
-        <p className="text-xs text-[#9A8FAA]">
-          Fasse kurz zusammen, was den Ort besonders macht – dieser Satz erscheint auf der
-          Swipe-Karte im Entdecken-Modus. Lässt du es leer, erzeugen wir automatisch eine
-          Kurzfassung aus deiner Beschreibung.
-        </p>
-        <textarea
-          rows={3} spellCheck maxLength={350}
-          placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
-          value={state.short}
-          onChange={e => set('short', e.target.value)}
-          className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none"
-        />
-        <p className="text-xs text-right" style={{ color: state.short.length > 300 ? '#C96442' : '#A89BB5' }}>
-          {state.short.length} / 350
         </p>
       </div>
 
@@ -1398,13 +1480,20 @@ function StepStory({
 
       {/* 4) Tipps */}
       <div className="space-y-1.5">
-        <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-          Praktische Tipps
-        </label>
+        <div className="flex items-start justify-between gap-2">
+          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+            Praktische Tipps
+          </label>
+          {aiOn && (
+            <AiButton onClick={genTips} loading={tipsLoading} disabled={longLen < 30}
+              label="Passende Tipps vorschlagen" />
+          )}
+        </div>
         <p className="text-xs text-[#9A8FAA]">
           Jeder Tipp bekommt ein eigenes Feld. Drücke <kbd className="px-1 py-0.5 rounded bg-[#F0EBF7] text-[#71587A] text-[10px] font-mono">Enter</kbd> für den nächsten.
-          Max. {MAX_TIPS} Tipps.
+          Max. {MAX_TIPS} Tipps.{aiOn ? ' Gemini schlägt passende Tipps zum Ort vor – du kannst sie danach anpassen.' : ''}
         </p>
+        {tipsErr && <p className="text-xs text-[#C96442]">{tipsErr}</p>}
         <TipFields tips={state.tips} onChange={v => set('tips', v)} />
       </div>
     </div>
