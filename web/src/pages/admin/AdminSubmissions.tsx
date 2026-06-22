@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from './AdminLayout.js';
 import { adminApi, type AdminPlace } from '../../services/adminApi.js';
 
 export function AdminSubmissions() {
+  const navigate = useNavigate();
   const [items, setItems]   = useState<AdminPlace[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +53,17 @@ export function AdminSubmissions() {
                   <span className="text-white/30 text-[10px]">{p.distanceLabel} · {p.costLabel}</span>
                 </div>
                 {p.lat && <p className="text-[10px] text-white/25 mb-3">📍 {p.lat.toFixed(4)}, {p.lng?.toFixed(4)}</p>}
+                {/* Ansehen / Bearbeiten vor der Freigabe */}
+                <div className="flex gap-2 mb-2">
+                  <button onClick={() => navigate(`/place/${p.id}`)}
+                    className="flex-1 bg-white/5 text-white/70 font-semibold py-2 rounded-xl text-xs hover:bg-white/10 transition-colors">
+                    <i className="fa-solid fa-eye mr-1" /> Ansehen
+                  </button>
+                  <button onClick={() => navigate(`/submit?edit=${p.id}`)}
+                    className="flex-1 bg-white/5 text-white/70 font-semibold py-2 rounded-xl text-xs hover:bg-white/10 transition-colors">
+                    <i className="fa-solid fa-pen mr-1" /> Bearbeiten
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <button onClick={() => approve(p.id)}
                     className="flex-1 bg-[var(--color-success)]/20 text-[var(--color-success)] font-semibold py-2 rounded-xl text-xs hover:bg-[var(--color-success)]/30 transition-colors">

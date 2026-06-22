@@ -106,6 +106,8 @@ export const placesApi = {
                     post<{ ok: boolean; place: Place }>(`/places/${id}/media`, data),
   submit:         (payload: SubmitPlacePayload) =>
                     post<{ ok: boolean; id: string }>('/places/submit', payload),
+  update:         (id: string, payload: SubmitPlacePayload) =>
+                    patch<{ ok: boolean; id: string }>(`/places/${id}`, payload),
 };
 
 // ─── Trips ─────────────────────────────────────────────────────────────────────

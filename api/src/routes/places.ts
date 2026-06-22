@@ -68,6 +68,15 @@ function deriveSummary(longHtml: string, maxLen = 300): string {
   return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trim() + '…';
 }
 
+// L1-Hauptkategorie → Legacy-Kategorie (für Einreichen & Bearbeiten)
+const L1_MAP: Record<string, { category: string; categoryLabel: string }> = {
+  'kultur-geschichte':   { category: 'kultur',  categoryLabel: 'Kultur'  },
+  'freizeit-action':     { category: 'aktiv',   categoryLabel: 'Aktiv'   },
+  'natur-landschaft':    { category: 'natur',   categoryLabel: 'Natur'   },
+  'urbanes-architektur': { category: 'kultur',  categoryLabel: 'Kultur'  },
+  'kulinarik':           { category: 'genuss',  categoryLabel: 'Genuss'  },
+};
+
 // GET /places — list all freigegebenen Orte (ungeprüfte/eingereichte ausgeblendet)
 router.get('/', async (c) => {
   const all = await db.select().from(places).all();
@@ -117,14 +126,6 @@ router.post('/submit', requireAuth,
     const suffix  = Math.random().toString(36).slice(2, 7);
     const id      = `${baseSlug}-${suffix}`;
 
-    // Map L1 → legacy category
-    const L1_MAP: Record<string, { category: string; categoryLabel: string }> = {
-      'kultur-geschichte':   { category: 'kultur',  categoryLabel: 'Kultur'  },
-      'freizeit-action':     { category: 'aktiv',   categoryLabel: 'Aktiv'   },
-      'natur-landschaft':    { category: 'natur',   categoryLabel: 'Natur'   },
-      'urbanes-architektur': { category: 'kultur',  categoryLabel: 'Kultur'  },
-      'kulinarik':           { category: 'genuss',  categoryLabel: 'Genuss'  },
-    };
     const cat = L1_MAP[body.l1Slug ?? ''] ?? { category: 'natur', categoryLabel: 'Natur' };
 
     // Rich-Text-Antworten (Highlight/Trivia) als Klartext säubern — XSS-Schutz
@@ -184,6 +185,90 @@ router.post('/submit', requireAuth,
     } catch { /* bereits markiert — ignorieren */ }
 
     return c.json({ ok: true, id }, 201);
+  }
+);
+
+// PATCH /places/:id — Ersteller:in (solange ungeprüft) oder Admin bearbeitet die Texte/Daten
+router.patch('/:id', requireAuth,
+  zValidator('json', z.object({
+    name:         z.string().min(2).max(120),
+    region:       z.string().max(100).optional().default(''),
+    short:        z.string().max(400).optional().default(''),
+    long:         z.string().max(8000).optional().default(''),
+    hero:         z.string().optional().default(''),
+    lat:          z.number().nullable().optional(),
+    lng:          z.number().nullable().optional(),
+    locationText: z.string().optional(),
+    l1Slug:       z.string().optional(),
+    l2Slug:       z.string().optional(),
+    l3Slug:       z.string().optional(),
+    l4Features:   z.array(z.string()).optional().default([]),
+    answers:      z.record(z.unknown()).optional().default({}),
+    tips:         z.array(z.string()).optional().default([]),
+    mediaItems:   z.array(z.object({
+      url:     z.string(),
+      caption: z.string().optional().default(''),
+      type:    z.string().optional().default('image'),
+      cropX:   z.number().min(0).max(1).optional().default(0.5),
+      cropY:   z.number().min(0).max(1).optional().default(0.5),
+    })).optional().default([]),
+    heroCropX:    z.number().min(0).max(1).optional().default(0.5),
+    heroCropY:    z.number().min(0).max(1).optional().default(0.5),
+  })),
+  async (c) => {
+    const user  = c.get('user');
+    const id    = c.req.param('id');
+    const body  = c.req.valid('json');
+    const place = await db.select().from(places).where(eq(places.id, id)).get();
+    if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+
+    // Berechtigung: Admin immer; Ersteller:in nur solange der Ort noch ungeprüft ist.
+    const isOwner = place.submittedBy === user.id;
+    const isAdmin = !!user.isAdmin;
+    if (!isAdmin && !(isOwner && place.isUserSubmitted)) {
+      return c.json({ error: 'Du darfst diesen Ort nicht bearbeiten.' }, 403);
+    }
+
+    const cat = L1_MAP[body.l1Slug ?? ''] ?? { category: place.category, categoryLabel: place.categoryLabel };
+
+    const safeAnswers = { ...(body.answers ?? {}) } as Record<string, unknown>;
+    if (typeof safeAnswers.highlight === 'string')   safeAnswers.highlight   = cleanPlainText(safeAnswers.highlight);
+    if (typeof safeAnswers.trivia_text === 'string') safeAnswers.trivia_text = cleanPlainText(safeAnswers.trivia_text);
+
+    const cleanShort = cleanPlainText(body.short);
+    const finalShort = cleanShort || deriveSummary(cleanRichText(body.long));
+
+    const attributesJson = JSON.stringify({
+      l1Slug:       body.l1Slug,
+      l2Slug:       body.l2Slug,
+      l3Slug:       body.l3Slug,
+      l4Features:   body.l4Features,
+      answers:      safeAnswers,
+      locationText: body.locationText,
+      heroCropX:    body.heroCropX ?? 0.5,
+      heroCropY:    body.heroCropY ?? 0.5,
+    });
+
+    await db.update(places).set({
+      name:          body.name,
+      region:        body.region || (body.locationText ?? '') || place.region,
+      category:      cat.category,
+      categoryLabel: cat.categoryLabel,
+      short:         finalShort,
+      long:          cleanRichText(body.long),
+      hero:          body.hero || body.mediaItems?.[0]?.url || place.hero,
+      lat:           body.lat ?? null,
+      lng:           body.lng ?? null,
+      attributesJson,
+      tipsJson:      JSON.stringify((body.tips ?? []).map(cleanRichText).filter(Boolean)),
+      galleryJson:   JSON.stringify(
+        (body.mediaItems ?? [])
+          .filter(m => m.url !== (body.hero || ''))
+          .map(m => ({ url: m.url, cropX: m.cropX ?? 0.5, cropY: m.cropY ?? 0.5, caption: m.caption ?? '' }))
+      ),
+    }).where(eq(places.id, id));
+
+    return c.json({ ok: true, id });
   }
 );
 

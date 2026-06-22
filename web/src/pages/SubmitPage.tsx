@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
+import type { Place } from '../types/index.js';
 import { placesApi, mediaApi } from '../services/api.js';
 import { geocodeSuggestions, reverseGeocode, requestGpsPosition } from '../services/geoService.js';
 import type { GeoLocation } from '../services/geoService.js';
@@ -51,6 +52,50 @@ const EMPTY: WizardState = {
   l1: null, l2: null, l3: null, l4Features: [],
   answers: {}, long: '', tips: [''], media: [], heroIndex: 0,
 };
+
+const isVideoUrl = (u: string) => /\.(mp4|webm|mov|m4v|ogg)(\?|#|$)/i.test(u);
+
+// Bestehenden Ort → Wizard-State (für den Bearbeiten-Modus). Löst die Taxonomie
+// aus den gespeicherten Slugs auf und baut die Medienliste aus Titelbild + Galerie.
+function placeToWizardState(place: Place): WizardState {
+  const attrs = (place.attributes ?? {}) as Record<string, unknown>;
+  const l1 = TAXONOMY.find(x => x.slug === attrs.l1Slug) ?? null;
+  const l2 = l1?.children.find(x => x.slug === attrs.l2Slug) ?? null;
+  const l3 = l2?.children.find(x => x.slug === attrs.l3Slug) ?? null;
+  const crops = place.galleryCrops ?? {};
+
+  const media: MediaItem[] = [];
+  if (place.hero) {
+    media.push({
+      id: 'hero', localUrl: place.hero, serverUrl: place.hero, caption: '',
+      cropX: place.heroCropX ?? 0.5, cropY: place.heroCropY ?? 0.5,
+      type: isVideoUrl(place.hero) ? 'video' : 'image', uploading: false, muted: true,
+    });
+  }
+  (place.gallery ?? []).forEach((url, i) => {
+    const c = crops[url] ?? {};
+    media.push({
+      id: `g${i}`, localUrl: url, serverUrl: url, caption: '',
+      cropX: c.cropX ?? 0.5, cropY: c.cropY ?? 0.5,
+      type: isVideoUrl(url) ? 'video' : 'image', uploading: false, muted: true,
+    });
+  });
+
+  return {
+    name:         place.name ?? '',
+    short:        place.short ?? '',
+    locationText: (attrs.locationText as string) ?? place.region ?? '',
+    lat:          place.lat ?? null,
+    lng:          place.lng ?? null,
+    l1, l2, l3,
+    l4Features:   Array.isArray(attrs.l4Features) ? (attrs.l4Features as string[]) : [],
+    answers:      (attrs.answers as Record<string, unknown>) ?? {},
+    long:         place.long ?? '',
+    tips:         place.tips?.length ? place.tips : [''],
+    media,
+    heroIndex:    0,
+  };
+}
 
 // ─── MiniRichText ─────────────────────────────────────────────────────────────
 function MiniRichText({
@@ -1367,9 +1412,10 @@ function StepStory({
 }
 
 function StepMedia({
-  state, onAddFiles, onItemChange, onRemove, onSetHero, onSubmit, submitting,
+  state, isEdit, onAddFiles, onItemChange, onRemove, onSetHero, onSubmit, submitting,
 }: {
   state: WizardState;
+  isEdit: boolean;
   onAddFiles: (files: File[]) => void;
   onItemChange: (id: string, patch: Partial<MediaItem>) => void;
   onRemove: (id: string) => void;
@@ -1433,9 +1479,18 @@ function StepMedia({
 
       <div className="rounded-2xl border border-dashed px-5 py-4 text-xs"
         style={{ borderColor: '#C4AED0', background: '#FAF7FD', color: C.lavender }}>
-        <p className="font-semibold mb-1" style={{ color: C.aubergine }}>Fast live!</p>
-        Dein Vorschlag wird nach einer kurzen Prüfung durch unser Team veröffentlicht.
-        Vielen Dank, dass du die Geheimtrips-Gemeinschaft bereicherst!
+        {isEdit ? (
+          <>
+            <p className="font-semibold mb-1" style={{ color: C.aubergine }}>Änderungen speichern</p>
+            Deine Anpassungen werden sofort übernommen.
+          </>
+        ) : (
+          <>
+            <p className="font-semibold mb-1" style={{ color: C.aubergine }}>Fast live!</p>
+            Dein Vorschlag wird nach einer kurzen Prüfung durch unser Team veröffentlicht.
+            Vielen Dank, dass du die Geheimtrips-Gemeinschaft bereicherst!
+          </>
+        )}
       </div>
 
       {pendingUploads > 0 && (
@@ -1453,8 +1508,8 @@ function StepMedia({
         style={{ background: `linear-gradient(135deg, ${C.aubergine}, ${C.lavender})` }}
       >
         {submitting
-          ? <><i className="fa-solid fa-circle-notch fa-spin" /> Wird eingereicht…</>
-          : <><i className="fa-solid fa-paper-plane" /> Geheimtripp einreichen</>}
+          ? <><i className="fa-solid fa-circle-notch fa-spin" /> {isEdit ? 'Wird gespeichert…' : 'Wird eingereicht…'}</>
+          : <><i className={`fa-solid ${isEdit ? 'fa-floppy-disk' : 'fa-paper-plane'}`} /> {isEdit ? 'Änderungen speichern' : 'Geheimtripp einreichen'}</>}
       </button>
     </div>
   );
@@ -1549,6 +1604,9 @@ function ProgressBar({ step }: { step: number }) {
 // ─── Main wizard component ────────────────────────────────────────────────────
 export function SubmitPage() {
   const navigate          = useNavigate();
+  const [searchParams]    = useSearchParams();
+  const editId            = searchParams.get('edit');
+  const isEdit            = !!editId;
   const invalidatePlaces  = useAppStore(s => s.invalidatePlaces);
   const markVisited       = useAppStore(s => s.markVisited);
   const [step, setStep]       = useState(1);
@@ -1556,7 +1614,27 @@ export function SubmitPage() {
   const [error, setError]     = useState('');
   const [submitting, setSub]  = useState(false);
   const [success, setSuccess] = useState('');
+  // Im Bearbeiten-Modus erst rendern, wenn die Daten geladen sind — sonst
+  // mounten die Rich-Text-Editoren mit leerem Inhalt.
+  const [ready, setReady]     = useState(!editId);
+  const [loadError, setLoadError] = useState('');
   const topRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!editId) return;
+    let alive = true;
+    (async () => {
+      try {
+        const place = await placesApi.get(editId);
+        if (!alive) return;
+        setState(placeToWizardState(place));
+        setReady(true);
+      } catch {
+        if (alive) { setLoadError('Ort konnte nicht geladen werden.'); setReady(true); }
+      }
+    })();
+    return () => { alive = false; };
+  }, [editId]);
 
   function set<K extends keyof WizardState>(key: K, value: WizardState[K]) {
     setState(prev => ({ ...prev, [key]: value }));
@@ -1665,7 +1743,7 @@ export function SubmitPage() {
       const successMedia = state.media.filter(m => m.serverUrl && !m.error);
       // Use heroIndex to pick cover image; fallback to first
       const heroItem = successMedia[state.heroIndex] ?? successMedia[0];
-      const res = await placesApi.submit({
+      const payload = {
         name:         state.name.trim(),
         region:       state.locationText.trim(),
         short:        state.short.trim(),
@@ -1690,17 +1768,20 @@ export function SubmitPage() {
           cropX:   m.cropX,
           cropY:   m.cropY,
         })),
-      });
+      };
+      const res = editId
+        ? await placesApi.update(editId, payload)
+        : await placesApi.submit(payload);
       // Revoke all local blob URLs
       state.media.forEach(m => { if (m.localUrl.startsWith('blob:')) URL.revokeObjectURL(m.localUrl); });
-      // Force places list to re-fetch so the new place appears on the map/discover page
+      // Force places list to re-fetch so the change appears on the map/discover page
       invalidatePlaces();
-      // Ersteller:in war ja vor Ort → als „war hier" markieren (Backend hat das schon getan)
-      markVisited(res.id).catch(() => {});
+      // Nur beim Ersteinreichen: Ersteller:in als „war hier" markieren (Backend tat es schon)
+      if (!editId) markVisited(res.id).catch(() => {});
       setSuccess(res.id);
       scrollTop();
     } catch (e: unknown) {
-      setError((e as Error).message ?? 'Fehler beim Einreichen.');
+      setError((e as Error).message ?? (editId ? 'Fehler beim Speichern.' : 'Fehler beim Einreichen.'));
     }
     setSub(false);
   }
@@ -1708,7 +1789,7 @@ export function SubmitPage() {
   // ── Success screen ───────────────────────────────────────────────────────
   if (success) {
     return (
-      <AppShell title="Eingereicht!" showBack>
+      <AppShell title={isEdit ? 'Gespeichert!' : 'Eingereicht!'} showBack>
         <div className="max-w-xl mx-auto px-5 py-16 text-center space-y-6">
           <div
             className="w-20 h-20 rounded-full mx-auto flex items-center justify-center text-white text-3xl"
@@ -1717,9 +1798,13 @@ export function SubmitPage() {
             <i className="fa-solid fa-check" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold" style={{ color: C.aubergine }}>Danke für deinen Beitrag!</h1>
+            <h1 className="text-2xl font-bold" style={{ color: C.aubergine }}>
+              {isEdit ? 'Änderungen gespeichert!' : 'Danke für deinen Beitrag!'}
+            </h1>
             <p className="text-sm leading-relaxed" style={{ color: C.lavender }}>
-              Dein Geheimtripp wurde eingereicht und erscheint nach einer kurzen Prüfung für alle.
+              {isEdit
+                ? 'Deine Änderungen wurden übernommen.'
+                : 'Dein Geheimtripp wurde eingereicht und erscheint nach einer kurzen Prüfung für alle.'}
             </p>
           </div>
           <div className="flex flex-col gap-3">
@@ -1730,19 +1815,42 @@ export function SubmitPage() {
             >
               Ort jetzt ansehen
             </button>
-            <button
-              onClick={() => {
-                setState({ name: '', short: '', locationText: '', lat: null, lng: null,
-                  l1: null, l2: null, l3: null, l4Features: [], answers: {},
-                  long: '', tips: [''], media: [], heroIndex: 0 });
-                setStep(1); setSuccess('');
-              }}
-              className="py-3 px-6 rounded-2xl font-semibold text-sm border-2 border-[#E4DCF0]"
-              style={{ color: C.lavender }}
-            >
-              Weiteren Ort einreichen
-            </button>
+            {!isEdit && (
+              <button
+                onClick={() => {
+                  setState({ name: '', short: '', locationText: '', lat: null, lng: null,
+                    l1: null, l2: null, l3: null, l4Features: [], answers: {},
+                    long: '', tips: [''], media: [], heroIndex: 0 });
+                  setStep(1); setSuccess('');
+                }}
+                className="py-3 px-6 rounded-2xl font-semibold text-sm border-2 border-[#E4DCF0]"
+                style={{ color: C.lavender }}
+              >
+                Weiteren Ort einreichen
+              </button>
+            )}
           </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // ── Lade-/Fehlerzustand im Bearbeiten-Modus ────────────────────────────────
+  if (!ready) {
+    return (
+      <AppShell title="Bearbeiten" showBack>
+        <div className="max-w-xl mx-auto px-5 py-24 flex justify-center">
+          <i className="fa-solid fa-circle-notch fa-spin text-3xl" style={{ color: C.lavender }} />
+        </div>
+      </AppShell>
+    );
+  }
+  if (loadError) {
+    return (
+      <AppShell title="Bearbeiten" showBack>
+        <div className="max-w-xl mx-auto px-5 py-20 text-center space-y-4">
+          <i className="fa-solid fa-triangle-exclamation text-4xl" style={{ color: '#C96442' }} />
+          <p className="text-sm" style={{ color: C.lavender }}>{loadError}</p>
         </div>
       </AppShell>
     );
@@ -1754,7 +1862,7 @@ export function SubmitPage() {
   ];
 
   return (
-    <AppShell title={`Einreichen · ${STEP_TITLES[step - 1]}`} showBack>
+    <AppShell title={`${isEdit ? 'Bearbeiten' : 'Einreichen'} · ${STEP_TITLES[step - 1]}`} showBack>
       <div ref={topRef} className="max-w-xl mx-auto px-5 py-8 pb-32">
         <ProgressBar step={step} />
 
@@ -1767,6 +1875,7 @@ export function SubmitPage() {
         {step === 6 && (
           <StepMedia
             state={state}
+            isEdit={isEdit}
             onAddFiles={addMediaFiles}
             onItemChange={updateMedia}
             onRemove={removeMedia}

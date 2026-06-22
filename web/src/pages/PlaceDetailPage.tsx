@@ -946,6 +946,9 @@ export function PlaceDetailPage() {
 
   const isSaved      = savedIds.has(place.id);
   const isVisited    = visitedIds.has(place.id);
+  // Bearbeiten erlaubt: Ersteller:in solange ungeprüft – oder Admin
+  const isOwnerPending = place.isUserSubmitted && !!user && user.id === place.submittedBy;
+  const canEditPlace   = isOwnerPending || (!!user?.isAdmin && place.isUserSubmitted);
   const isLongStory  = place.long.length > 280;
   const transport    = funnelAnswers?.transport ?? null;
   const attrs        = place.attributes as Record<string, unknown>;
@@ -1145,6 +1148,21 @@ async function handleVerifyToggle() {
         <div className="bg-[var(--color-amber)] text-white px-4 py-2.5 flex items-center justify-center gap-2 text-[13px] font-semibold text-center leading-snug">
           <i className="fa-solid fa-clock flex-shrink-0" />
           <span>Dieser Ort wird gerade geprüft und ist für andere Entdecker:innen noch nicht sichtbar.</span>
+        </div>
+      )}
+
+      {/* Bearbeiten-Leiste — Ersteller:in (solange ungeprüft) oder Admin */}
+      {canEditPlace && (
+        <div className="bg-[#FFF4EB] border-b border-[#F2DCC4] px-4 py-2 flex items-center justify-center gap-3 text-[13px]">
+          <span className="text-[#9A6A3A]">
+            {user?.isAdmin && !isOwnerPending ? 'Admin-Ansicht.' : 'Das ist dein Vorschlag.'} Du kannst die Texte noch anpassen.
+          </span>
+          <button
+            onClick={() => navigate(`/submit?edit=${place.id}`)}
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--color-amber)] text-white font-semibold text-xs hover:opacity-90 transition-opacity"
+          >
+            <i className="fa-solid fa-pen" /> Bearbeiten
+          </button>
         </div>
       )}
 
