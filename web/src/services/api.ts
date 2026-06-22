@@ -108,7 +108,17 @@ export const placesApi = {
                     post<{ ok: boolean; id: string }>('/places/submit', payload),
   update:         (id: string, payload: SubmitPlacePayload) =>
                     patch<{ ok: boolean; id: string }>(`/places/${id}`, payload),
+  // Community-Q&A
+  questions:      (id: string)       => get<PlaceQuestion[]>(`/places/${id}/questions`),
+  askQuestion:    (id: string, question: string) => post<{ ok: boolean }>(`/places/${id}/questions`, { question }),
+  answerQuestion: (id: string, qid: number, answer: string) =>
+                    post<{ ok: boolean }>(`/places/${id}/questions/${qid}/answer`, { answer }),
 };
+
+export interface PlaceQuestion {
+  id: number; askerName: string; question: string;
+  answer: string | null; answeredBy: string | null; answeredAt: string | null; createdAt: string;
+}
 
 // ─── KI-Unterstützung (Gemini) ──────────────────────────────────────────────────
 

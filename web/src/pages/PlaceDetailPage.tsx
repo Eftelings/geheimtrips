@@ -11,7 +11,7 @@ import { PlaceImage } from '../components/ui/PlaceImage.js';
 import { WeatherForecast } from '../components/ui/WeatherForecast.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { placesApi, businessApi, mediaApi } from '../services/api.js';
-import type { ParkingContributions } from '../services/api.js';
+import type { ParkingContributions, PlaceQuestion } from '../services/api.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import type { Place, Transport } from '../types/index.js';
 
@@ -123,14 +123,16 @@ const TRIVIA_ICONS: Record<string, string> = {
   'Drehort & Popkultur': 'fa-clapperboard',
   'Geheimtipp':          'fa-user-secret',
 };
-const SEED_QA: QAEntry[] = [
-  { id: 1, question: 'Ist der Ort auch im Herbst noch schön?', askedBy: 'Marie K.', askedAt: '15.09.2024',
-    answers: [{ id: 1, text: 'Ja! Im Herbst sogar schöner — weniger Besucher, weiches Licht, bunte Farben.', answeredBy: 'Ersteller', answeredAt: '16.09.2024', isCreator: true, helpful: 12 }] },
-  { id: 2, question: 'Gibt es Parkmöglichkeiten in der Nähe?', askedBy: 'Tom S.', askedAt: '20.09.2024', answers: [] },
-  { id: 3, question: 'Wie lange dauert ein Besuch ungefähr?', askedBy: 'Julia H.', askedAt: '02.10.2024',
-    answers: [{ id: 2, text: 'Plant ca. 1,5 bis 2 Stunden ein. Der Rundweg ist gut ausgeschildert.', answeredBy: 'Kevin B.', answeredAt: '03.10.2024', helpful: 8 }] },
-  { id: 4, question: 'Kann man dort zelten oder übernachten?', askedBy: 'Anna M.', askedAt: '10.11.2024', answers: [] },
-];
+// Backend-Frage → Anzeige-Eintrag (eine Antwort der/des Ersteller:in)
+function toQaEntry(q: PlaceQuestion): QAEntry {
+  const fmt = (d: string | null) => d ? new Date(d.replace(' ', 'T') + 'Z').toLocaleDateString('de') : '';
+  return {
+    id: q.id, question: q.question, askedBy: q.askerName, askedAt: fmt(q.createdAt),
+    answers: q.answer
+      ? [{ id: q.id, text: q.answer, answeredBy: q.answeredBy ?? 'Ersteller:in', answeredAt: fmt(q.answeredAt), isCreator: true, helpful: 0 }]
+      : [],
+  };
+}
 
 // Photo categories
 const PHOTO_CATS = [
@@ -732,6 +734,7 @@ export function PlaceDetailPage() {
   const [qaShowAll, setQaShowAll]      = useState(false);
   const [openQaId, setOpenQaId]        = useState<number | null>(null);
   const [qaEntries, setQaEntries]      = useState<QAEntry[]>([]);
+  const [answerInput, setAnswerInput]  = useState('');
   const [newQuestion, setNewQuestion]  = useState('');
   const [ratingOpen, setRatingOpen]    = useState(false);
   const [addTripOpen, setAddTripOpen]  = useState(false);
@@ -852,10 +855,13 @@ export function PlaceDetailPage() {
     loadTrips();
   }, [id]); // eslint-disable-line
 
-  // Beispiel-Fragen nur bei kuratierten Demo-Orten — neue (nutzer-eingereichte)
-  // Orte starten mit leerem Q&A, das die Community selbst befüllt.
+  // Echte Community-Fragen vom Backend laden (keine Dummy-Fragen mehr)
+  async function loadQuestions(pid: string) {
+    try { setQaEntries((await placesApi.questions(pid)).map(toQaEntry)); }
+    catch { setQaEntries([]); }
+  }
   useEffect(() => {
-    if (place) setQaEntries(place.isUserSubmitted ? [] : SEED_QA);
+    if (place?.id) loadQuestions(place.id);
   }, [place?.id]); // eslint-disable-line
 
   useEffect(() => {
@@ -950,6 +956,8 @@ export function PlaceDetailPage() {
   const isVisited    = visitedIds.has(place.id);
   // Bearbeiten erlaubt: Ersteller:in solange ungeprüft – oder Admin
   const isOwnerPending = place.isUserSubmitted && !!user && user.id === place.submittedBy;
+  // Fragen beantworten darf die/der Ersteller:in (auch nach Freigabe) sowie Admins
+  const canAnswer      = (!!user && user.id === place.submittedBy) || !!user?.isAdmin;
   const canEditPlace   = isOwnerPending || (!!user?.isAdmin && place.isUserSubmitted);
   const isLongStory  = place.long.length > 280;
   const transport    = funnelAnswers?.transport ?? null;
@@ -1079,12 +1087,28 @@ async function handleVerifyToggle() {
     setRatings({}); setRatingComment('');
   }
 
-  function handleAskQuestion() {
+  async function handleAskQuestion() {
     const q = newQuestion.trim();
-    if (!q) return;
-    setQaEntries(prev => [{ id: Date.now(), question: q, askedBy: 'Du', askedAt: 'Gerade eben', answers: [] }, ...prev]);
+    if (!q || !place) return;
     setNewQuestion(''); setQaShowAll(true);
-    showToast('Frage gestellt! Du wirst benachrichtigt wenn jemand antwortet.');
+    try {
+      await placesApi.askQuestion(place.id, q);
+      await loadQuestions(place.id);
+      showToast('Frage gestellt! Die/der Ersteller:in wird benachrichtigt.');
+    } catch (e) {
+      showToast((e as Error).message || 'Frage konnte nicht gesendet werden.');
+    }
+  }
+
+  async function handleAnswerQuestion(qid: number, answer: string) {
+    if (!place || !answer.trim()) return;
+    try {
+      await placesApi.answerQuestion(place.id, qid, answer.trim());
+      await loadQuestions(place.id);
+      showToast('Antwort gespeichert!');
+    } catch (e) {
+      showToast((e as Error).message || 'Antwort konnte nicht gespeichert werden.');
+    }
   }
 
   async function handleParkingContribute(value: 'yes' | 'no' | 'limited') {
@@ -1856,8 +1880,20 @@ async function handleVerifyToggle() {
                             </div>
                           </div>
                         ))}
-                        {qa.answers.length === 0 && (
-                          <p className="text-xs italic" style={{ color: '#b9a8c4' }}>Noch keine Antwort — sei der Erste!</p>
+                        {qa.answers.length === 0 && !canAnswer && (
+                          <p className="text-xs italic" style={{ color: '#b9a8c4' }}>Noch keine Antwort.</p>
+                        )}
+                        {qa.answers.length === 0 && canAnswer && (
+                          <form onSubmit={e => { e.preventDefault(); handleAnswerQuestion(qa.id, answerInput); setAnswerInput(''); }}
+                            className="flex gap-2">
+                            <input value={answerInput} onChange={e => setAnswerInput(e.target.value)}
+                              placeholder="Deine Antwort…" maxLength={2000}
+                              className="flex-1 border rounded-xl px-3 py-2 text-sm outline-none border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C]" />
+                            <button type="submit" disabled={!answerInput.trim()}
+                              className="bg-[var(--color-amber)] text-white font-semibold px-3 rounded-xl text-sm disabled:opacity-50">
+                              Antworten
+                            </button>
+                          </form>
                         )}
                       </div>
                     )}

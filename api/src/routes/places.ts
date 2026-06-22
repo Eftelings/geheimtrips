@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { cleanRichText, cleanPlainText } from '../lib/sanitize.js';
+import { sendMail } from '../lib/mailer.js';
 
 // ── Runtime schema migrations (idempotent) ────────────────────────────────────
 // Add parking column to places if it doesn't exist yet
@@ -20,6 +21,21 @@ db.run(sql`
 `).catch(() => {});
 // Eigene Tags je gemerktem Ort (pro Nutzer:in)
 db.run(sql`ALTER TABLE saved_places ADD COLUMN tags TEXT DEFAULT '[]'`).catch(() => {});
+
+// Fragen zu Orten (Community-Q&A). Antwort optional (vom/von der Ersteller:in).
+db.run(sql`
+  CREATE TABLE IF NOT EXISTS place_questions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    place_id    TEXT    NOT NULL,
+    asker_id    INTEGER NOT NULL,
+    asker_name  TEXT    NOT NULL,
+    question    TEXT    NOT NULL,
+    answer      TEXT,
+    answered_by TEXT,
+    answered_at TEXT,
+    created_at  TEXT    DEFAULT (datetime('now'))
+  )
+`).catch(console.error);
 
 // Ensure place_contributions table exists (no formal migration needed)
 db.run(sql`
@@ -59,6 +75,8 @@ db.run(sql`
 `).catch(console.error);
 
 const router = new Hono();
+
+const APP_URL = (process.env.APP_URL ?? 'https://www.geheimtrips.de').replace(/\/$/, '');
 
 /**
  * Leitet eine Kurz-Zusammenfassung aus der ausführlichen Beschreibung ab,
@@ -495,6 +513,69 @@ router.post('/:id/media', requireAuth,
 
     const updated = await db.select().from(places).where(eq(places.id, id)).get();
     return c.json({ ok: true, place: updated ? hydrate(updated) : null });
+  }
+);
+
+// ─── Community-Q&A ──────────────────────────────────────────────────────────────
+
+// GET /places/:id/questions — alle Fragen zu einem Ort (öffentlich)
+router.get('/:id/questions', async (c) => {
+  const rows = await db.all(sql`
+    SELECT id, asker_name AS askerName, question, answer, answered_by AS answeredBy,
+           answered_at AS answeredAt, created_at AS createdAt
+    FROM place_questions WHERE place_id = ${c.req.param('id')} ORDER BY id DESC`);
+  return c.json(rows);
+});
+
+// POST /places/:id/questions — Frage stellen (benachrichtigt die/den Ersteller:in)
+router.post('/:id/questions', requireAuth,
+  zValidator('json', z.object({ question: z.string().min(3).max(500) })),
+  async (c) => {
+    const user  = c.get('user');
+    const id    = c.req.param('id');
+    const { question } = c.req.valid('json');
+    const place = await db.select().from(places).where(eq(places.id, id)).get();
+    if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+
+    const clean = cleanPlainText(question);
+    await db.run(sql`
+      INSERT INTO place_questions (place_id, asker_id, asker_name, question)
+      VALUES (${id}, ${user.id}, ${user.name}, ${clean})`);
+
+    // Ersteller:in per E-Mail benachrichtigen (nicht bei eigener Frage)
+    if (place.submittedBy && place.submittedBy !== user.id) {
+      const author = await db.select().from(users).where(eq(users.id, place.submittedBy)).get();
+      if (author?.email && author.notificationsEnabled !== false) {
+        const link = `${APP_URL}/place/${id}`;
+        sendMail({
+          to: author.email,
+          subject: `Neue Frage zu „${place.name}" · Geheimtrips.de`,
+          text: `Hallo ${author.name},\n\n${user.name} hat eine Frage zu deinem Ort „${place.name}" gestellt:\n\n„${clean}"\n\nDu kannst sie hier beantworten:\n${link}\n\nLiebe Grüße\nGeheimtrips.de`,
+          html: `<p>Hallo ${author.name},</p><p><strong>${user.name}</strong> hat eine Frage zu deinem Ort „${place.name}" gestellt:</p><blockquote>${clean}</blockquote><p><a href="${link}">Jetzt beantworten</a></p><p>Liebe Grüße<br>Geheimtrips.de</p>`,
+        }).catch(e => console.error('Frage-Mail fehlgeschlagen:', (e as Error).message));
+      }
+    }
+    return c.json({ ok: true });
+  }
+);
+
+// POST /places/:id/questions/:qid/answer — Ersteller:in oder Admin antwortet
+router.post('/:id/questions/:qid/answer', requireAuth,
+  zValidator('json', z.object({ answer: z.string().min(1).max(2000) })),
+  async (c) => {
+    const user  = c.get('user');
+    const id    = c.req.param('id');
+    const qid   = Number(c.req.param('qid'));
+    const place = await db.select().from(places).where(eq(places.id, id)).get();
+    if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+    if (place.submittedBy !== user.id && !user.isAdmin) {
+      return c.json({ error: 'Nur die/der Ersteller:in kann antworten.' }, 403);
+    }
+    await db.run(sql`
+      UPDATE place_questions SET answer = ${cleanPlainText(c.req.valid('json').answer)},
+        answered_by = ${user.name}, answered_at = datetime('now')
+      WHERE id = ${qid} AND place_id = ${id}`);
+    return c.json({ ok: true });
   }
 );
 

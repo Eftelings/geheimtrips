@@ -48,9 +48,17 @@ router.get('/count', requireAuth, async (c) => {
     .get();
   const requestCount = Number(fr?.n ?? 0);
 
+  // Neue Fragen zu meinen Orten (nicht von mir selbst), seit dem letzten Ansehen
+  const qRows = await db.all(sql`
+    SELECT count(*) AS n FROM place_questions
+    WHERE created_at > ${seen} AND asker_id != ${me.id}
+      AND place_id IN (SELECT id FROM places WHERE submitted_by = ${me.id})
+  `).catch(() => [{ n: 0 }]) as { n: number }[];
+  const questionCount = Number(qRows[0]?.n ?? 0);
+
   return c.json({
-    count: ratingCount + likeCount + requestCount,
-    ratings: ratingCount, likes: likeCount, requests: requestCount,
+    count: ratingCount + likeCount + requestCount + questionCount,
+    ratings: ratingCount, likes: likeCount, requests: requestCount, questions: questionCount,
   });
 });
 
