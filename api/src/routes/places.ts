@@ -11,6 +11,13 @@ import { cleanRichText, cleanPlainText } from '../lib/sanitize.js';
 // ── Runtime schema migrations (idempotent) ────────────────────────────────────
 // Add parking column to places if it doesn't exist yet
 db.run(sql`ALTER TABLE places ADD COLUMN parking TEXT`).catch(() => { /* column already exists */ });
+// Ersteller:innen ihrer eigenen Orte rückwirkend als verifiziert markieren (waren ja vor Ort)
+db.run(sql`
+  UPDATE visited_places SET gps_verified = 1
+  WHERE gps_verified = 0 AND place_id IN (
+    SELECT id FROM places WHERE places.submitted_by = visited_places.user_id
+  )
+`).catch(() => {});
 // Eigene Tags je gemerktem Ort (pro Nutzer:in)
 db.run(sql`ALTER TABLE saved_places ADD COLUMN tags TEXT DEFAULT '[]'`).catch(() => {});
 
@@ -179,9 +186,10 @@ router.post('/submit', requireAuth,
       ),
     });
 
-    // Ersteller:in war ja vor Ort → automatisch als „war hier" markieren
+    // Ersteller:in war ja vor Ort → automatisch als „war hier" UND verifiziert markieren
+    // (wer einen Ort dokumentiert, war nachweislich dort → zählt als verifizierte:r Besucher:in).
     try {
-      await db.insert(visitedPlaces).values({ userId: user.id, placeId: id, gpsVerified: false });
+      await db.insert(visitedPlaces).values({ userId: user.id, placeId: id, gpsVerified: true });
     } catch { /* bereits markiert — ignorieren */ }
 
     return c.json({ ok: true, id }, 201);
