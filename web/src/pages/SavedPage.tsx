@@ -109,6 +109,8 @@ function placeMatchesText(p: Place, s: string): boolean {
 export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   const navigate = useNavigate();
   const [tab, setTab]             = useState<Tab>(initialTab);
+  // Trips-Ansicht: Alle anzeigen · nach Anreisezeit filtern · nach Datum sortieren
+  const [tripView, setTripView]  = useState<'alle' | 'anreise' | 'datum'>('alle');
   const [q, setQ]                 = useState('');
   const [catSel, setCatSel] = useState<CategorySelection>(EMPTY_CATEGORY);
   const catActive = catSel.cat !== null || catSel.l1 !== null;
@@ -194,7 +196,8 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
         [t.title, t.subtitle ?? '', ...t.places.map(tp => `${tp.place?.name ?? ''} ${tp.place?.region ?? ''}`)]
           .join(' ').toLowerCase().includes(s));
     }
-    if (reachActive && activeCenter) {
+    // Reichweiten-Filter nur im „Anreisezeit"-Modus
+    if (tripView === 'anreise' && reachActive && activeCenter) {
       list = list
         .map(t => {
           const pts = t.places.filter(tp => tp.place?.lat != null && tp.place?.lng != null);
@@ -205,10 +208,14 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
         .filter(x => x.inReach)
         .sort((a, b) => a.min - b.min)
         .map(x => x.t);
+    } else if (tripView === 'datum') {
+      // Nach Datum: geplantes Startdatum, sonst Erstellungsdatum — neueste zuerst (wie besuchte Orte)
+      list = [...list].sort((a, b) =>
+        (b.startDate ?? b.createdAt ?? '').localeCompare(a.startDate ?? a.createdAt ?? ''));
     }
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trips, q, catSel, catActive, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
+  }, [trips, q, catSel, catActive, tripView, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
 
   // Orte aller gefilterten Trips (dedupliziert) für die Trip-Karte
   const tripMapPlaces = useMemo(() => {
@@ -256,7 +263,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
     setQ(''); setCatSel(EMPTY_CATEGORY); setTagFilter(null);
     setSearchCenter(null); setCenterLabel(null);
     setGeoSugs([]); setShowSugs(false);
-    setTravelMode('radius');
+    setTravelMode('radius'); setTripView('alle');
   }
 
   return (
@@ -278,8 +285,29 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
           ))}
         </div>
 
+        {/* Trips-Ansicht: Alle · nach Anreisezeit · nach Datum */}
+        {tab === 'trips' && (
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {([
+              { id: 'alle',    icon: 'fa-layer-group',  label: 'Alle' },
+              { id: 'anreise', icon: 'fa-car-side',     label: 'Anreisezeit' },
+              { id: 'datum',   icon: 'fa-calendar-day', label: 'Nach Datum' },
+            ] as const).map(v => (
+              <button key={v.id} onClick={() => setTripView(v.id)}
+                className={`flex flex-col items-center gap-1 py-2.5 rounded-2xl border-2 text-xs font-bold transition-colors ${
+                  tripView === v.id
+                    ? 'border-[var(--color-amber)] bg-[var(--color-amber)] text-white'
+                    : 'border-[var(--color-bg-soft)] bg-white text-[var(--color-lavender)]'
+                }`}>
+                <i className={`fa-solid ${v.icon} text-sm`} />
+                {v.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ── Aktives Suchzentrum ───────────────────────────────────────── */}
-        {searchCenter && centerLabel && (
+        {searchCenter && centerLabel && (tab === 'orte' || tripView === 'anreise') && (
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 bg-[var(--color-aubergine)] text-white text-xs font-semibold px-3 py-1 rounded-full">
               <i className="fa-solid fa-location-dot" />
@@ -293,6 +321,8 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
           </div>
         )}
 
+        {/* Suchleiste + Reichweite — nur Orte-Tab oder Trips/Anreisezeit */}
+        {(tab === 'orte' || tripView === 'anreise') && (<>
         {/* ── Suchleiste + Karten-Toggle ─────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-3">
           <div className="relative flex-1">
@@ -360,6 +390,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
             </p>
           )}
         </div>
+        </>)}
 
         {/* ── Orte-Tab ──────────────────────────────────────────────────── */}
         {tab === 'orte' && (
@@ -464,20 +495,21 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
             {/* Kategorien — filtern Trips über ihre enthaltenen Orte */}
             <CategoryFilter value={catSel} onChange={setCatSel} />
 
-            {/* Trefferzahl bei aktivem Filter */}
-            {hasFilter && (
+            {/* Trefferzahl / Sortier-Hinweis */}
+            {(q.trim() || catActive || tripView !== 'alle') && trips.length > 0 && (
               <p className="text-xs text-[var(--color-lavender)]">
                 <span className="font-semibold text-[var(--color-aubergine)]">{filteredTrips.length}</span>{' '}
                 von {trips.length} Trips
-                {reachActive && travelMode === 'radius' && centerLabel && <> im Umkreis von {radiusKm} km um {centerLabel}</>}
-                {reachActive && travelMode !== 'radius' && (
+                {tripView === 'anreise' && reachActive && travelMode === 'radius' && centerLabel && <> im Umkreis von {radiusKm} km um {centerLabel}</>}
+                {tripView === 'anreise' && reachActive && travelMode !== 'radius' && (
                   <> erreichbar in {travelMinutes} Min ({modeLabel}) {centerLabel ? `ab ${centerLabel}` : 'ab deinem Standort'}</>
                 )}
+                {tripView === 'datum' && <> · neueste zuerst</>}
               </p>
             )}
 
-            {/* Karte: alle Orte der gefilterten Trips */}
-            {showMap && mapReady && trips.length > 0 && (
+            {/* Karte: alle Orte der gefilterten Trips — nur im Anreisezeit-Modus */}
+            {tripView === 'anreise' && showMap && mapReady && trips.length > 0 && (
               <CollectionMap places={tripMapPlaces} center={activeCenter} travel={travel}
                 radiusKm={radiusKm} reachActive={reachActive}
                 onOpen={id => navigate(`/place/${id}`)} />
@@ -490,12 +522,12 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
               Neuen Trip erstellen
             </button>
 
-            {filteredTrips.length === 0 && hasFilter ? (
+            {filteredTrips.length === 0 && (q.trim() || catActive || (tripView === 'anreise' && reachActive)) ? (
               <div className="text-center py-10 text-[var(--color-lavender)]">
                 <i className="fa-solid fa-magnifying-glass text-4xl mb-3 opacity-30" />
                 <p className="font-semibold mb-1">Keine Treffer</p>
                 <p className="text-sm">
-                  {reachActive
+                  {tripView === 'anreise' && reachActive
                     ? 'Kein Trip hat Orte in dieser Reichweite — erhöhe Zeit bzw. Umkreis.'
                     : 'Kein Trip passt zu deiner Suche.'}
                 </p>
