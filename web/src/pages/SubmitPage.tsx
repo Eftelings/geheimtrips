@@ -77,8 +77,20 @@ function MiniRichText({
   }, []);
 
   function exec(cmd: string) {
+    // Tag-basierte Formatierung (<b>/<i>/<u>) statt style-Spans erzwingen,
+    // damit Fett/Kursiv/Unterstrichen zuverlässig gespeichert & angezeigt wird.
+    try { document.execCommand('styleWithCSS', false, 'false'); } catch { /* nicht überall unterstützt */ }
     document.execCommand(cmd, false);
     ref.current?.focus();
+    sync();
+  }
+
+  // Einfügen als Klartext — funktioniert zuverlässig (auch wenn der Browser
+  // das Standard-Paste blockt) und verhindert chaotisches Fremd-HTML.
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    if (text) document.execCommand('insertText', false, text);
     sync();
   }
 
@@ -141,6 +153,7 @@ function MiniRichText({
           spellCheck
           suppressContentEditableWarning
           onInput={sync}
+          onPaste={handlePaste}
           style={{ minHeight }}
           className="px-4 py-3 text-sm text-[#34254C] outline-none leading-relaxed"
         />
@@ -183,8 +196,15 @@ function TipFields({ tips, onChange }: { tips: string[]; onChange: (t: string[])
     setTimeout(() => tipRefs.current[Math.max(0, i - 1)]?.focus(), 30);
   }
   function execCmd(i: number, cmd: string) {
+    try { document.execCommand('styleWithCSS', false, 'false'); } catch { /* s.o. */ }
     document.execCommand(cmd, false);
     tipRefs.current[i]?.focus();
+    update(i);
+  }
+  function handlePaste(i: number, e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    if (text) document.execCommand('insertText', false, text);
     update(i);
   }
   function handleKey(i: number, e: React.KeyboardEvent<HTMLDivElement>) {
@@ -251,6 +271,7 @@ function TipFields({ tips, onChange }: { tips: string[]; onChange: (t: string[])
               spellCheck
               suppressContentEditableWarning
               onInput={() => update(i)}
+              onPaste={e => handlePaste(i, e)}
               onKeyDown={e => handleKey(i, e)}
               data-placeholder={`Tipp ${i + 1} – z.B. Am frühen Morgen besuchen`}
               className="px-3 py-2.5 text-sm text-[#34254C] outline-none leading-relaxed min-h-[40px] [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-[#A89BB5] [&:empty]:before:pointer-events-none"
@@ -395,6 +416,94 @@ function LocationSearch({
         </p>
       )}
       {gpsErr && <p className="text-xs text-[#C96442]">{gpsErr}</p>}
+    </div>
+  );
+}
+
+// ─── LocationPickerMap ────────────────────────────────────────────────────────
+// Interaktive Karte zum Sehen & Korrigieren des Standorts: Marker antippen/ziehen
+// oder auf die Karte tippen setzt die Koordinaten. Nutzt das globale window.L.
+function LocationPickerMap({ lat, lng, onPick }: {
+  lat: number | null; lng: number | null;
+  onPick: (lat: number, lng: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef       = useRef<any>(null);
+  const markerRef    = useRef<any>(null);
+  const onPickRef    = useRef(onPick);
+  onPickRef.current  = onPick;
+
+  const PIN_HTML = `<div style="
+    width:30px;height:36px;display:flex;align-items:center;justify-content:center;
+    background:#F99039;color:white;font-size:14px;
+    border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+    box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid white;cursor:grab;
+  "><span style="transform:rotate(45deg);display:block"><i class="fa-solid fa-location-dot"></i></span></div>`;
+
+  // Karte einmalig aufbauen
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    const hasCoords = lat != null && lng != null;
+    const map = L.map(containerRef.current, { zoomControl: true, scrollWheelZoom: false });
+    mapRef.current = map;
+    map.setView(hasCoords ? [lat, lng] : [51.1657, 10.4515], hasCoords ? 14 : 6);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com">CARTO</a> &copy; <a href="https://openstreetmap.org">OSM</a>',
+      subdomains: 'abcd', maxZoom: 19,
+    }).addTo(map);
+
+    const icon = L.divIcon({ html: PIN_HTML, iconSize: [30, 36], iconAnchor: [15, 36], className: '' });
+
+    function placeMarker(la: number, ln: number) {
+      if (markerRef.current) {
+        markerRef.current.setLatLng([la, ln]);
+      } else {
+        const m = L.marker([la, ln], { icon, draggable: true });
+        m.on('dragend', () => { const ll = m.getLatLng(); onPickRef.current(ll.lat, ll.lng); });
+        m.addTo(map);
+        markerRef.current = m;
+      }
+    }
+    if (hasCoords) placeMarker(lat, lng);
+
+    map.on('click', (e: any) => {
+      placeMarker(e.latlng.lat, e.latlng.lng);
+      onPickRef.current(e.latlng.lat, e.latlng.lng);
+    });
+
+    return () => { map.remove(); mapRef.current = null; markerRef.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Externe Änderungen (Suche / GPS / manuelle Eingabe) auf die Karte spiegeln
+  useEffect(() => {
+    const L = (window as any).L;
+    const map = mapRef.current;
+    if (!map || !L || lat == null || lng == null) return;
+    if (markerRef.current) {
+      markerRef.current.setLatLng([lat, lng]);
+    } else {
+      const icon = L.divIcon({ html: PIN_HTML, iconSize: [30, 36], iconAnchor: [15, 36], className: '' });
+      const m = L.marker([lat, lng], { icon, draggable: true });
+      m.on('dragend', () => { const ll = m.getLatLng(); onPickRef.current(ll.lat, ll.lng); });
+      m.addTo(map);
+      markerRef.current = m;
+    }
+    map.setView([lat, lng], Math.max(map.getZoom(), 14));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lat, lng]);
+
+  return (
+    <div className="rounded-2xl overflow-hidden border-2 border-[#E4DCF0]">
+      <div ref={containerRef} className="w-full" style={{ height: 260 }} />
+      <div className="flex items-center gap-2 px-3 py-2 bg-[#FAF7FD] text-[11px] text-[#9A8FAA]">
+        <i className="fa-solid fa-hand-pointer" />
+        Tippe auf die Karte oder ziehe den Marker, um den Standort genau zu setzen.
+      </div>
     </div>
   );
 }
@@ -851,25 +960,6 @@ function Step1({ state, set }: { state: WizardState; set: <K extends keyof Wizar
           value={state.name} maxLength={100}
           onChange={v => set('name', v)}
         />
-        <div className="space-y-1.5">
-          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-            Kurze Beschreibung <span className="text-[#C96442]">*</span>
-          </label>
-          <p className="text-xs text-[#9A8FAA]">
-            Dieser Text fasst den Ort zusammen und beschreibt ihn im Entdecken-Modus (auf der Swipe-Karte).
-            In 1–2 Sätzen: Was erwartet den Besucher hier?
-          </p>
-          <textarea
-            rows={3} spellCheck maxLength={350}
-            placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
-            value={state.short}
-            onChange={e => set('short', e.target.value)}
-            className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none"
-          />
-          <p className="text-xs text-right" style={{ color: state.short.length > 300 ? '#C96442' : '#A89BB5' }}>
-            {state.short.length} / 350
-          </p>
-        </div>
       </div>
     </div>
   );
@@ -880,13 +970,25 @@ function Step2({ state, setLocation }: {
   setLocation: (text: string, lat: number | null, lng: number | null) => void;
 }) {
   const hasCoords = state.lat !== null && state.lng !== null;
+
+  // Auf der Karte gewählter Punkt: Koordinaten sofort setzen, Adresstext per
+  // Reverse-Geocoding nachladen (Koordinaten allein reichen aber schon aus).
+  async function pickOnMap(la: number, ln: number) {
+    setLocation(state.locationText, la, ln);
+    try {
+      const loc = await reverseGeocode({ lat: la, lng: ln });
+      setLocation(loc.fullAddress, la, ln);
+    } catch { /* Standort ohne Adresse ist okay */ }
+  }
+
   return (
     <div className="space-y-7">
       <div>
         <StepHeading>Wo liegt dein Geheimtripp?</StepHeading>
         <StepSub>
-          Tippe einen Ort oder eine Adresse ein und wähle einen Vorschlag aus der Liste –
-          oder nutze den GPS-Knopf. Koordinaten sind Pflicht, damit der Ort auf der Karte erscheint.
+          Tippe einen Ort oder eine Adresse ein und wähle einen Vorschlag aus der Liste,
+          nutze den GPS-Knopf – oder setze den Punkt direkt auf der Karte. Koordinaten sind
+          Pflicht, damit der Ort korrekt erscheint.
         </StepSub>
       </div>
       <LocationSearch
@@ -894,6 +996,9 @@ function Step2({ state, setLocation }: {
         lat={state.lat} lng={state.lng}
         onSelect={setLocation}
       />
+
+      {/* Interaktive Karte zum Sehen & Korrigieren des Standorts */}
+      <LocationPickerMap lat={state.lat} lng={state.lng} onPick={pickOnMap} />
 
       {/* Validation status */}
       {hasCoords ? (
@@ -950,7 +1055,7 @@ function Step2({ state, setLocation }: {
   );
 }
 
-function Step3({ state, setState }: {
+function StepCategory({ state, setState }: {
   state: WizardState;
   setState: React.Dispatch<React.SetStateAction<WizardState>>;
 }) {
@@ -1079,7 +1184,7 @@ function Step3({ state, setState }: {
   );
 }
 
-function Step4({
+function StepDetails({
   state, set,
 }: {
   state: WizardState;
@@ -1090,16 +1195,18 @@ function Step4({
       <div className="py-16 text-center">
         <i className="fa-solid fa-arrow-left text-3xl mb-4" style={{ color: '#D8CEEA' }} />
         <p className="text-sm" style={{ color: '#9A8FAA' }}>
-          Bitte wähle zuerst eine Kategorie in Schritt 3.
+          Bitte wähle zuerst eine Kategorie im vorherigen Schritt.
         </p>
       </div>
     );
   }
 
+  // Trivia wird bereits auf der Beschreibungs-Seite abgefragt → hier ausblenden.
+  const MOVED_TO_STORY = new Set(['trivia_type', 'trivia_text']);
   const l3Questions    = state.l3.questions;
   // Universal-Fragen, deren id nicht schon bei den L3-Fragen vorkommt (kein Doppel)
   const l3Ids          = new Set(l3Questions.map(q => q.id));
-  const universalQs    = UNIVERSAL_QUESTIONS.filter(q => !l3Ids.has(q.id));
+  const universalQs    = UNIVERSAL_QUESTIONS.filter(q => !l3Ids.has(q.id) && !MOVED_TO_STORY.has(q.id));
 
   function setAnswer(id: string, v: unknown) {
     set('answers', { ...state.answers, [id]: v });
@@ -1155,29 +1262,38 @@ function Step4({
   );
 }
 
-function Step5({
+function StepStory({
   state, set,
 }: {
   state: WizardState;
   set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
 }) {
+  const longLen = state.long.replace(/<[^>]*>/g, '').trim().length;
+  const longOk  = longLen >= 200;
+  const setAnswer    = (id: string, v: unknown) => set('answers', { ...state.answers, [id]: v });
+  const triviaTypeQ  = UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_type');
+  const triviaTextQ  = UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_text');
+  const triviaTypeVal = state.answers['trivia_type'];
+  const triviaActive  = typeof triviaTypeVal === 'string' && triviaTypeVal !== '';
+
   return (
     <div className="space-y-7">
       <div>
-        <StepHeading>Die ganze Geschichte</StepHeading>
+        <StepHeading>Beschreib deinen Geheimtripp</StepHeading>
         <StepSub>
-          Beschreibe den Ort so, wie du ihn erlebt hast – Atmosphäre, was dich überrascht hat,
-          was andere übersehen. Tipps kannst du darunter separat eintragen.
+          Erzähl die ganze Geschichte – so, wie du den Ort erlebt hast. Eine kurze
+          Zusammenfassung, eine Trivia und Tipps kannst du darunter ergänzen.
         </StepSub>
       </div>
 
-      {/* Rich-text description */}
+      {/* 1) Ausführliche Beschreibung — Pflicht, mind. 200 Zeichen */}
       <div className="space-y-1.5">
         <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-          Ausführliche Beschreibung
+          Ausführliche Beschreibung <span className="text-[#C96442]">*</span>
         </label>
         <p className="text-xs text-[#9A8FAA]">
-          Erzähl deine Geschichte – nutze <strong>Fett</strong>, <em>Kursiv</em> oder <u>Unterstrichen</u> für Betonung.
+          Atmosphäre, was dich überrascht hat, was andere übersehen. Nutze{' '}
+          <strong>Fett</strong>, <em>Kursiv</em> oder <u>Unterstrichen</u> für Betonung.
         </p>
         <MiniRichText
           value={state.long}
@@ -1185,9 +1301,57 @@ function Step5({
           maxLength={4000}
           placeholder="Ich war spät nachmittags dort, als die Sonne schon tief stand und das Wasser in einem unwirklichen Blaugrün leuchtete…"
         />
+        <p className="text-xs flex items-center gap-1.5" style={{ color: longOk ? '#2D8A4E' : '#C96442' }}>
+          <i className={`fa-solid ${longOk ? 'fa-circle-check' : 'fa-circle-info'} text-[10px]`} />
+          {longOk
+            ? 'Super – das reicht für eine schöne Beschreibung!'
+            : `Noch mind. ${200 - longLen} Zeichen (aktuell ${longLen} / 200).`}
+        </p>
       </div>
 
-      {/* Tips */}
+      {/* 2) Kurz-Zusammenfassung — optional, max 350 */}
+      <div className="space-y-1.5">
+        <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+          Kurz zusammengefasst <span className="text-[#B0A3BC] font-normal">(optional)</span>
+        </label>
+        <p className="text-xs text-[#9A8FAA]">
+          Fasse kurz zusammen, was den Ort besonders macht – dieser Satz erscheint auf der
+          Swipe-Karte im Entdecken-Modus. Lässt du es leer, erzeugen wir automatisch eine
+          Kurzfassung aus deiner Beschreibung.
+        </p>
+        <textarea
+          rows={3} spellCheck maxLength={350}
+          placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
+          value={state.short}
+          onChange={e => set('short', e.target.value)}
+          className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none"
+        />
+        <p className="text-xs text-right" style={{ color: state.short.length > 300 ? '#C96442' : '#A89BB5' }}>
+          {state.short.length} / 350
+        </p>
+      </div>
+
+      {/* 3) Trivia — optional */}
+      {triviaTypeQ && (
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+            {triviaTypeQ.label}
+          </label>
+          {triviaTypeQ.hint && <p className="text-xs text-[#9A8FAA]">{triviaTypeQ.hint}</p>}
+          <QuestionField q={triviaTypeQ} value={triviaTypeVal} onChange={v => setAnswer('trivia_type', v)} />
+          {triviaTextQ && triviaActive && (
+            <div className="space-y-2 pt-1">
+              <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+                {triviaTextQ.label}
+              </label>
+              {triviaTextQ.hint && <p className="text-xs text-[#9A8FAA]">{triviaTextQ.hint}</p>}
+              <QuestionField q={triviaTextQ} value={state.answers['trivia_text']} onChange={v => setAnswer('trivia_text', v)} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 4) Tipps */}
       <div className="space-y-1.5">
         <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
           Praktische Tipps
@@ -1202,7 +1366,7 @@ function Step5({
   );
 }
 
-function Step6({
+function StepMedia({
   state, onAddFiles, onItemChange, onRemove, onSetHero, onSubmit, submitting,
 }: {
   state: WizardState;
@@ -1346,7 +1510,7 @@ function SummaryRow({ icon, label, children }: { icon: string; label: string; ch
 // ─── Progress bar ─────────────────────────────────────────────────────────────
 function ProgressBar({ step }: { step: number }) {
   const pct = Math.round(((step - 1) / (TOTAL_STEPS - 1)) * 100);
-  const LABELS = ['Name', 'Ort', 'Kategorie', 'Details', 'Geschichte', 'Fotos'];
+  const LABELS = ['Name', 'Ort', 'Beschreibung', 'Kategorie', 'Details', 'Fotos'];
   return (
     <div className="mb-8">
       <div className="flex justify-between mb-3">
@@ -1463,9 +1627,11 @@ export function SubmitPage() {
 
   // ── Navigation ───────────────────────────────────────────────────────────
   function canNext(): boolean {
-    if (step === 1) return state.name.trim().length >= 2 && state.short.trim().length >= 5;
-    if (step === 2) return state.lat !== null && state.lng !== null;
-    if (step === 3) return !!state.l3;
+    if (step === 1) return state.name.trim().length >= 2;                 // Name
+    if (step === 2) return state.lat !== null && state.lng !== null;      // Standort
+    // Beschreibung: mind. 200 Zeichen Klartext (Kurz-Zusammenfassung optional)
+    if (step === 3) return state.long.replace(/<[^>]*>/g, '').trim().length >= 200;
+    if (step === 4) return !!state.l3;                                    // Kategorie
     return true;
   }
 
@@ -1583,8 +1749,8 @@ export function SubmitPage() {
   }
 
   const STEP_TITLES = [
-    'Name & Beschreibung', 'Standort', 'Kategorie wählen',
-    'Fragen beantworten', 'Deine Geschichte', 'Fotos & Abschicken',
+    'Name', 'Standort', 'Beschreibung',
+    'Kategorie wählen', 'Details', 'Fotos & Abschicken',
   ];
 
   return (
@@ -1592,13 +1758,14 @@ export function SubmitPage() {
       <div ref={topRef} className="max-w-xl mx-auto px-5 py-8 pb-32">
         <ProgressBar step={step} />
 
+        {/* Reihenfolge: 1 Name · 2 Standort · 3 Beschreibung+Kurz+Trivia+Tipps · 4 Kategorie · 5 Details · 6 Fotos */}
         {step === 1 && <Step1 state={state} set={set} />}
         {step === 2 && <Step2 state={state} setLocation={setLocation} />}
-        {step === 3 && <Step3 state={state} setState={setState} />}
-        {step === 4 && <Step4 state={state} set={set} />}
-        {step === 5 && <Step5 state={state} set={set} />}
+        {step === 3 && <StepStory state={state} set={set} />}
+        {step === 4 && <StepCategory state={state} setState={setState} />}
+        {step === 5 && <StepDetails state={state} set={set} />}
         {step === 6 && (
-          <Step6
+          <StepMedia
             state={state}
             onAddFiles={addMediaFiles}
             onItemChange={updateMedia}

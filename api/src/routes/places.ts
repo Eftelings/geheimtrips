@@ -53,6 +53,21 @@ db.run(sql`
 
 const router = new Hono();
 
+/**
+ * Leitet eine Kurz-Zusammenfassung aus der ausführlichen Beschreibung ab,
+ * falls der/die Einreichende keine eigene angegeben hat. Bricht an einer
+ * Satz- bzw. Wortgrenze ab, damit der Text auf der Swipe-Karte sauber wirkt.
+ */
+function deriveSummary(longHtml: string, maxLen = 300): string {
+  const text = longHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (text.length <= maxLen) return text;
+  const slice = text.slice(0, maxLen);
+  const lastDot   = slice.lastIndexOf('. ');
+  if (lastDot > maxLen * 0.5) return slice.slice(0, lastDot + 1);
+  const lastSpace = slice.lastIndexOf(' ');
+  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trim() + '…';
+}
+
 // GET /places — list all freigegebenen Orte (ungeprüfte/eingereichte ausgeblendet)
 router.get('/', async (c) => {
   const all = await db.select().from(places).all();
@@ -64,7 +79,9 @@ router.post('/submit', requireAuth,
   zValidator('json', z.object({
     name:         z.string().min(2).max(120),
     region:       z.string().min(2).max(100).optional().default(''),
-    short:        z.string().min(5).max(400),
+    // Kurz-Zusammenfassung ist jetzt optional (wird später per KI generiert);
+    // fehlt sie, leiten wir sie aus der ausführlichen Beschreibung ab.
+    short:        z.string().max(400).optional().default(''),
     long:         z.string().min(0).max(8000).optional().default(''),
     hero:         z.string().optional().default(''),
     lat:          z.number().nullable().optional(),
@@ -115,6 +132,11 @@ router.post('/submit', requireAuth,
     if (typeof safeAnswers.highlight === 'string')   safeAnswers.highlight   = cleanPlainText(safeAnswers.highlight);
     if (typeof safeAnswers.trivia_text === 'string') safeAnswers.trivia_text = cleanPlainText(safeAnswers.trivia_text);
 
+    // Kurz-Zusammenfassung: vom Nutzer übernehmen, sonst aus der Beschreibung ableiten
+    // (Platzhalter bis die KI-Generierung in Etappe 4 greift).
+    const cleanShort = cleanPlainText(body.short);
+    const finalShort = cleanShort || deriveSummary(cleanRichText(body.long));
+
     const attributesJson = JSON.stringify({
       l1Slug:       body.l1Slug,
       l2Slug:       body.l2Slug,
@@ -132,7 +154,7 @@ router.post('/submit', requireAuth,
       region:        body.region || (body.locationText ?? ''),
       category:      cat.category,
       categoryLabel: cat.categoryLabel,
-      short:         cleanPlainText(body.short),
+      short:         finalShort,
       long:          cleanRichText(body.long),
       // Kein Stock-Foto erfinden: ohne Upload bleibt das Titelbild leer
       hero:          body.hero || body.mediaItems?.[0]?.url || '',

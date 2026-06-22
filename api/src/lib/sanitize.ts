@@ -8,7 +8,19 @@ import sanitizeHtml from 'sanitize-html';
  */
 const OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'ul', 'ol', 'li', 'span'],
-  allowedAttributes: {},          // keine Attribute (kein style, kein onerror, kein href)
+  // Nur ein gefiltertes style-Attribut: manche Browser (v.a. iOS Safari) erzeugen
+  // beim Formatieren <span style="font-weight:…"> statt <b>/<i>/<u>. Wir erlauben
+  // ausschließlich diese harmlosen Formatierungs-Properties — kein position, url(),
+  // kein onerror etc. → kein XSS / kein Layout-Hijack.
+  allowedAttributes: { '*': ['style'] },
+  allowedStyles: {
+    '*': {
+      'font-weight':          [/^(bold|bolder|[5-9]00)$/],
+      'font-style':           [/^(italic|oblique)$/],
+      'text-decoration':      [/^underline/],
+      'text-decoration-line': [/^underline/],
+    },
+  },
   allowedSchemes: [],
   disallowedTagsMode: 'discard',
 };
