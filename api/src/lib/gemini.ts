@@ -26,7 +26,10 @@ async function callGemini(prompt: string, maxOutputTokens = 300): Promise<string
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens, temperature: 0.85 },
+            // thinkingBudget:0 schaltet das „Nachdenken" der 2.5-Modelle ab — sonst
+            // verbrauchen die internen Reasoning-Tokens das Output-Budget und der
+            // eigentliche Text wird mittendrin abgeschnitten (Symptom: „3-Wort-Antwort").
+            generationConfig: { maxOutputTokens, temperature: 0.85, thinkingConfig: { thinkingBudget: 0 } },
           }),
         },
       );
@@ -59,18 +62,19 @@ export async function generateSummary(input: {
   }
   const prompt =
 `Du schreibst für eine App mit Geheimtipps für Ausflugsorte in Deutschland.
-Fasse den folgenden Ort in genau zwei kurzen, einladenden deutschen Sätzen zusammen.
-Dieser Text erscheint auf einer Swipe-Karte – konkret, treffend, kein Werbe-Blabla, keine Floskeln.
-Gib NUR die zwei Sätze aus, ohne Einleitung, ohne Anführungszeichen.
+Schreibe EINEN einzigen, lebendigen deutschen Satz (ca. 15–25 Wörter), der so neugierig macht,
+dass man sofort Lust bekommt, diesen Ort zu besuchen. Konkret und sinnlich, nenne das Besondere –
+kein Werbe-Blabla, keine Floskeln, keine Aufzählung, keine Anführungszeichen.
+Dieser Satz erscheint als Teaser auf einer Swipe-Karte. Gib NUR den Satz aus.
 
 Name: ${input.name || '—'}
 Kategorie: ${input.category || '—'}
 Standort: ${input.location || '—'}
 Besonderheit: ${stripHtml(input.highlight ?? '') || '—'}
 Beschreibung: ${long || '—'}`;
-  const out = await callGemini(prompt, 160);
-  // evtl. umschließende Anführungszeichen entfernen, Länge begrenzen
-  return out.replace(/^["„»]|["“«]$/g, '').trim().slice(0, 350);
+  const out = await callGemini(prompt, 200);
+  // evtl. umschließende Anführungszeichen / Zeilenumbrüche entfernen, auf einen Satz begrenzen
+  return out.replace(/^["„»]+|["“«]+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 300);
 }
 
 /** Liefert konkrete, zum Ort passende Praxis-Tipps (je ein Satz). */
