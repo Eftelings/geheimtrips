@@ -11,6 +11,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
+import { mailStatus, verifyMail, sendMail } from '../lib/mailer.js';
 
 // ── Runtime migration + Seed: Perks-Tabelle mit zwei Dummy-Vorteilen ───────────
 db.run(sql`
@@ -60,6 +61,36 @@ const router = new Hono();
 
 // All admin routes require auth + admin role
 router.use('*', requireAuth, requireAdmin);
+
+// ─── E-Mail-Versand (SMTP) Diagnose ─────────────────────────────────────────────
+// Zeigt den (maskierten) SMTP-Status und prüft Verbindung + Login.
+router.get('/mail/status', async (c) => {
+  const status = mailStatus();
+  const verify = await verifyMail();
+  return c.json({ ...status, verify });
+});
+
+// Schickt eine echte Test-Mail und gibt die exakte Fehlermeldung zurück (statt sie zu verschlucken).
+router.post('/mail/test',
+  zValidator('json', z.object({ to: z.string().email() })),
+  async (c) => {
+    const { to } = c.req.valid('json');
+    if (!mailStatus().configured) {
+      return c.json({ ok: false, error: 'SMTP ist nicht konfiguriert — bitte SMTP_HOST/PORT/USER/PASS/FROM setzen.' });
+    }
+    try {
+      await sendMail({
+        to,
+        subject: 'Test-E-Mail · Geheimtrips.de',
+        text: 'Diese Test-E-Mail bestätigt, dass der Mail-Versand von Geheimtrips.de funktioniert. 🎉',
+        html: '<p>Diese Test-E-Mail bestätigt, dass der Mail-Versand von <strong>Geheimtrips.de</strong> funktioniert. 🎉</p>',
+      });
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ ok: false, error: (e as Error).message });
+    }
+  }
+);
 
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────
 

@@ -6,15 +6,15 @@ import nodemailer from 'nodemailer';
 // der jeweilige Ablauf funktioniert trotzdem, ohne dass etwas crasht.
 const host = process.env.SMTP_HOST?.trim();
 const port = Number(process.env.SMTP_PORT ?? 587);
+const user = process.env.SMTP_USER?.trim();
+const pass = (process.env.SMTP_PASS ?? '').trim();
 
 const transport = host
   ? nodemailer.createTransport({
       host,
       port,
       secure: port === 465, // 465 = implizites TLS, 587 = STARTTLS
-      auth: process.env.SMTP_USER
-        ? { user: process.env.SMTP_USER.trim(), pass: (process.env.SMTP_PASS ?? '').trim() }
-        : undefined,
+      auth: user ? { user, pass } : undefined,
     })
   : null;
 
@@ -29,3 +29,48 @@ export async function sendMail(opts: { to: string; subject: string; html: string
 }
 
 export const mailConfigured = !!transport;
+
+// E-Mail-Adresse für die Diagnose maskieren (nie das volle Postfach/Passwort verraten)
+function maskEmail(addr: string): string {
+  const [local, domain] = addr.split('@');
+  if (!domain) return addr.slice(0, 2) + '…';
+  const shown = local.slice(0, 2);
+  return `${shown}${'•'.repeat(Math.max(1, local.length - 2))}@${domain}`;
+}
+
+/** Aktueller (maskierter) SMTP-Status — für die Admin-Diagnose. */
+export function mailStatus() {
+  return {
+    configured: !!transport,
+    host:    host ?? null,
+    port,
+    secure:  port === 465,
+    user:    user ? maskEmail(user) : null,
+    hasAuth: !!user,
+    hasPass: !!pass,
+    from:    FROM,
+  };
+}
+
+/** Prüft Verbindung + Login beim SMTP-Server, ohne eine Mail zu senden. */
+export async function verifyMail(): Promise<{ ok: boolean; error?: string }> {
+  if (!transport) {
+    return { ok: false, error: 'SMTP ist nicht konfiguriert — SMTP_HOST fehlt.' };
+  }
+  try {
+    await transport.verify();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+// Beim Start einmal prüfen, damit der Status klar in den Deploy-Logs steht.
+if (transport) {
+  transport.verify()
+    .then(() => console.log(`[Mail] SMTP bereit · ${host}:${port} (secure=${port === 465}) · from ${FROM}`))
+    .catch((e: unknown) =>
+      console.error(`[Mail] SMTP-Verbindung FEHLGESCHLAGEN · ${host}:${port}:`, (e as Error).message));
+} else {
+  console.warn('[Mail] SMTP NICHT konfiguriert — Mails werden nur geloggt. Setze SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.');
+}

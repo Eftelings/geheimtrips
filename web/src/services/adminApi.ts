@@ -83,8 +83,18 @@ export interface PlaceQuality {
   starsAvg: number | null; ratingCount: number;
 }
 
+export interface MailStatus {
+  configured: boolean;
+  host: string | null; port: number; secure: boolean;
+  user: string | null; hasAuth: boolean; hasPass: boolean; from: string;
+  verify: { ok: boolean; error?: string };
+}
+
 export const adminApi = {
   stats:       ()           => get<AdminStats>('/stats'),
+  // E-Mail-Versand (SMTP) Diagnose
+  mailStatus:  ()           => get<MailStatus>('/mail/status'),
+  mailTest:    (to: string) => post<{ ok: boolean; error?: string }>('/mail/test', { to }),
   // Perks
   perks:       ()           => get<AdminPerk[]>('/perks'),
   createPerk:  (d: object)  => post<AdminPerk>('/perks', d),

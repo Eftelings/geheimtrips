@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AdminLayout } from './AdminLayout.js';
-import { adminApi, type AdminStats } from '../../services/adminApi.js';
+import { adminApi, type AdminStats, type MailStatus } from '../../services/adminApi.js';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../store/useAuthStore.js';
 
 interface StatCard {
   key: keyof AdminStats['stats'];
@@ -20,6 +21,99 @@ const STAT_CARDS: StatCard[] = [
   { key: 'openReports',        label: 'Offene Meldungen',  icon: 'fa-flag',                color: '#C96442', urgent: true },
   { key: 'pendingSubmissions', label: 'Neue Einreichungen', icon: 'fa-inbox',               color: '#F99039', urgent: true },
 ];
+
+// ─── SMTP-Diagnose (Passwort-Reset-Mails) ──────────────────────────────────────
+function MailDiagnostics() {
+  const meEmail = useAuthStore(s => s.user?.email ?? '');
+  const [status, setStatus]   = useState<MailStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [to, setTo]           = useState('');
+  const [sending, setSending] = useState(false);
+  const [result, setResult]   = useState<{ ok: boolean; error?: string } | null>(null);
+
+  function load() {
+    setLoading(true); setResult(null);
+    adminApi.mailStatus().then(setStatus).catch(() => setStatus(null)).finally(() => setLoading(false));
+  }
+  useEffect(load, []);
+  useEffect(() => { setTo(prev => prev || meEmail); }, [meEmail]);
+
+  async function sendTest() {
+    if (!to) return;
+    setSending(true); setResult(null);
+    try { setResult(await adminApi.mailTest(to)); }
+    catch (e) { setResult({ ok: false, error: (e as Error).message }); }
+    setSending(false);
+  }
+
+  const Row = ({ label, value, bad, good }: { label: string; value: string; bad?: boolean; good?: boolean }) => (
+    <div className="flex items-start justify-between gap-3 text-xs">
+      <span className="text-white/40 flex-shrink-0">{label}</span>
+      <span className={`text-right break-all ${bad ? 'text-[#F0A38A] font-semibold' : good ? 'text-[var(--color-success)] font-semibold' : 'text-white/80'}`}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div>
+      <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-3">E-Mail-Versand (SMTP)</h2>
+      <div className="bg-white/5 border border-white/8 rounded-2xl p-4 space-y-2.5">
+        {loading ? (
+          <div className="flex items-center gap-2 text-white/30 text-sm py-2">
+            <i className="fa-solid fa-circle-notch fa-spin" /> Prüfe SMTP…
+          </div>
+        ) : !status ? (
+          <p className="text-white/40 text-sm">Status konnte nicht geladen werden.</p>
+        ) : (
+          <>
+            <Row label="Status" value={status.configured ? 'konfiguriert' : 'NICHT konfiguriert'} bad={!status.configured} good={status.configured} />
+            {status.configured && (
+              <>
+                <Row label="Server" value={`${status.host}:${status.port} · ${status.secure ? 'SSL (465)' : 'STARTTLS (587)'}`} />
+                <Row label="Login (User)" value={status.user ?? '— kein Login gesetzt —'} bad={!status.hasAuth} />
+                <Row label="Passwort" value={status.hasPass ? 'gesetzt' : 'FEHLT'} bad={!status.hasPass} />
+                <Row label="Absender (FROM)" value={status.from} />
+                <Row
+                  label="Verbindung & Login"
+                  value={status.verify.ok ? 'OK ✓' : (status.verify.error ?? 'Fehler')}
+                  bad={!status.verify.ok}
+                  good={status.verify.ok}
+                />
+              </>
+            )}
+
+            {/* Test-Mail */}
+            <div className="pt-3 mt-1 border-t border-white/8 space-y-2">
+              <label className="text-xs text-white/40">Test-E-Mail senden an:</label>
+              <div className="flex gap-2">
+                <input
+                  type="email" value={to} onChange={e => setTo(e.target.value)}
+                  placeholder="deine@email.de"
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white/90 placeholder-white/25 outline-none focus:border-[var(--color-amber)]/50"
+                />
+                <button
+                  onClick={sendTest} disabled={sending || !to}
+                  className="flex-shrink-0 bg-[var(--color-amber)] text-black font-semibold px-4 py-2 rounded-xl text-xs disabled:opacity-50 transition-opacity">
+                  {sending ? <i className="fa-solid fa-circle-notch fa-spin" /> : 'Senden'}
+                </button>
+              </div>
+              {result && (
+                <p className={`text-xs ${result.ok ? 'text-[var(--color-success)]' : 'text-[#F0A38A]'}`}>
+                  {result.ok
+                    ? '✓ Test-Mail wurde verschickt — schau in dein Postfach (ggf. Spam).'
+                    : `✗ ${result.error}`}
+                </p>
+              )}
+            </div>
+
+            <button onClick={load} className="text-xs text-white/40 hover:text-white/70 transition-colors pt-1">
+              <i className="fa-solid fa-rotate-right mr-1" /> Erneut prüfen
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -86,6 +180,9 @@ export function AdminDashboard() {
               ))}
             </div>
           </div>
+
+          {/* SMTP-Diagnose */}
+          <MailDiagnostics />
 
           {/* Recent Activity */}
           {stats.recentVisits.length > 0 && (
