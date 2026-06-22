@@ -999,8 +999,11 @@ export function PlaceDetailPage() {
     .replace(/&nbsp;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const highlightText = typeof answers.highlight === 'string' ? stripHtml(answers.highlight) : '';
-  const highlight = (highlightText.length > 1 && !/Was macht diesen Ort/i.test(highlightText)) ? highlightText : '';
+  // „Das Besondere" speist sich jetzt aus der Kurz-Besonderheit (Schritt 3 / place.short);
+  // Fallback auf die alte highlight-Antwort für ältere Datensätze.
+  const legacyHighlight = typeof answers.highlight === 'string' ? stripHtml(answers.highlight) : '';
+  const highlight = (place.short ?? '').trim()
+    || ((legacyHighlight.length > 1 && !/Was macht diesen Ort/i.test(legacyHighlight)) ? legacyHighlight : '');
   const triviaType = typeof answers.trivia_type === 'string' ? answers.trivia_type : '';
   const triviaText = typeof answers.trivia_text === 'string' ? stripHtml(answers.trivia_text) : '';
 
@@ -1258,12 +1261,7 @@ async function handleVerifyToggle() {
                   style={{ fontSize: 'clamp(1.25rem, 2.8vw, 1.9rem)', letterSpacing: '-0.02em', textShadow: '0 2px 12px rgba(0,0,0,0.45)' }}>
                   {place.name}
                 </h1>
-                {place.short && (
-                  <p className="text-white/75 text-[13px] leading-snug mt-1 mb-0.5 line-clamp-2"
-                    style={{ textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                    {place.short}
-                  </p>
-                )}
+                {/* Kurz-Besonderheit erscheint prominent im „Das Besondere"-Banner weiter unten */}
                 <div className="flex items-center gap-3 mt-1 flex-wrap">
                   <span className="text-white/75 text-xs flex items-center gap-1">
                     <i className="fa-solid fa-location-dot text-[10px]" /> {place.region}

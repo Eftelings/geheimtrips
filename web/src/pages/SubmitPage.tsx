@@ -1246,12 +1246,12 @@ function StepDetails({
     );
   }
 
-  // Trivia wird bereits auf der Beschreibungs-Seite abgefragt → hier ausblenden.
-  const MOVED_TO_STORY = new Set(['trivia_type', 'trivia_text']);
-  const l3Questions    = state.l3.questions;
+  // Trivia + „Besonderheit" werden bereits auf der Beschreibungs-Seite abgefragt → hier ausblenden.
+  const HIDDEN         = new Set(['trivia_type', 'trivia_text', 'highlight']);
+  const l3Questions    = state.l3.questions.filter(q => !HIDDEN.has(q.id));
   // Universal-Fragen, deren id nicht schon bei den L3-Fragen vorkommt (kein Doppel)
-  const l3Ids          = new Set(l3Questions.map(q => q.id));
-  const universalQs    = UNIVERSAL_QUESTIONS.filter(q => !l3Ids.has(q.id) && !MOVED_TO_STORY.has(q.id));
+  const l3Ids          = new Set(state.l3.questions.map(q => q.id));
+  const universalQs    = UNIVERSAL_QUESTIONS.filter(q => !l3Ids.has(q.id) && !HIDDEN.has(q.id));
 
   function setAnswer(id: string, v: unknown) {
     set('answers', { ...state.answers, [id]: v });
