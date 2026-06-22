@@ -1,4 +1,10 @@
 import nodemailer from 'nodemailer';
+import dns from 'node:dns';
+
+// Cloud-Hoster wie Railway haben kein IPv6-Egress. Löst ein Hostname sowohl A (IPv4)
+// als auch AAAA (IPv6) auf, wählt Node sonst evtl. IPv6 → „ENETUNREACH"/Timeout.
+// IPv4 bevorzugen behebt das für SMTP (und alle anderen ausgehenden Verbindungen).
+dns.setDefaultResultOrder('ipv4first');
 
 // SMTP-Konfiguration über Env-Variablen (z. B. netcup-Postfach):
 //   SMTP_HOST, SMTP_PORT (587/465), SMTP_USER, SMTP_PASS, SMTP_FROM
@@ -15,6 +21,10 @@ const transport = host
       port,
       secure: port === 465, // 465 = implizites TLS, 587 = STARTTLS
       auth: user ? { user, pass } : undefined,
+      // Schneller, klarer Fehler statt langem Hängen (IPv4 wird global erzwungen, s.o.)
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     })
   : null;
 
