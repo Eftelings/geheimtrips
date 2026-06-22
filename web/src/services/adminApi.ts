@@ -92,11 +92,25 @@ export interface MailStatus {
   verify: { ok: boolean; error?: string };
 }
 
+export interface MerkmalRow { l3Slug: string; key: string; label: string; hidden: number }
+export interface MerkmaleData {
+  db: MerkmalRow[];
+  usage: { l3Slug: string; key: string; count: number }[];
+}
+
 export const adminApi = {
   stats:       ()           => get<AdminStats>('/stats'),
   // E-Mail-Versand (SMTP) Diagnose
   mailStatus:  ()           => get<MailStatus>('/mail/status'),
   mailTest:    (to: string) => post<{ ok: boolean; error?: string }>('/mail/test', { to }),
+  // Merkmale (Features) verwalten
+  merkmale:       ()                                  => get<MerkmaleData>('/merkmale'),
+  addMerkmal:     (l3Slug: string, label: string)     => post<{ ok: boolean; key: string }>('/merkmale', { l3Slug, label }),
+  mergeMerkmal:   (l3Slug: string, fromKey: string, toKey: string) =>
+                    post<{ ok: boolean; changed: number }>('/merkmale/merge', { l3Slug, fromKey, toKey }),
+  deleteMerkmal:  (l3Slug: string, key: string, mode: 'remove' | 'reassign', toKey?: string) =>
+                    post<{ ok: boolean; changed: number }>('/merkmale/delete', { l3Slug, key, mode, toKey }),
+  restoreMerkmal: (l3Slug: string, key: string)       => post<{ ok: boolean }>('/merkmale/restore', { l3Slug, key }),
   // Perks
   perks:       ()           => get<AdminPerk[]>('/perks'),
   createPerk:  (d: object)  => post<AdminPerk>('/perks', d),

@@ -38,4 +38,13 @@ router.get('/', async (c) => {
   return c.json(rows);
 });
 
+// GET /categories/merkmale — DB-Overrides der Merkmale (neu hinzugefügte + ausgeblendete)
+// Das Frontend mischt diese mit der Code-Taxonomie (taxonomy.ts).
+router.get('/merkmale', async (c) => {
+  const rows = await db.all(
+    sql`SELECT l3_slug as l3Slug, key, label, hidden FROM merkmale`
+  ).catch(() => []) as { l3Slug: string; key: string; label: string; hidden: number }[];
+  return c.json(rows);
+});
+
 export default router;

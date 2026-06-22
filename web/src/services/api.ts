@@ -302,8 +302,12 @@ export const discoverApi = {
 
 import type { CategoryDef } from '../types/index.js';
 
+export interface MerkmalOverride { l3Slug: string; key: string; label: string; hidden: number }
+
 export const categoriesApi = {
-  list: () => get<CategoryDef[]>('/categories'),
+  list:     () => get<CategoryDef[]>('/categories'),
+  // DB-Overrides der Merkmale (neu hinzugefügt / ausgeblendet) — fürs Anlege-Formular
+  merkmale: () => get<MerkmalOverride[]>('/categories/merkmale'),
 };
 
 // ─── Friends ───────────────────────────────────────────────────────────────────

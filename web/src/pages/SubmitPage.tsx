@@ -1,11 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
 import type { Place } from '../types/index.js';
-import { placesApi, mediaApi, aiApi } from '../services/api.js';
+import { placesApi, mediaApi, aiApi, categoriesApi } from '../services/api.js';
+import type { MerkmalOverride } from '../services/api.js';
 import { geocodeSuggestions, reverseGeocode, requestGpsPosition } from '../services/geoService.js';
 import type { GeoLocation } from '../services/geoService.js';
 
@@ -1126,6 +1127,19 @@ function StepCategory({ state, setState }: {
     }));
   }
 
+  // Admin-Overrides der Merkmale laden und mit der Code-Taxonomie mischen
+  const [overrides, setOverrides] = useState<MerkmalOverride[]>([]);
+  useEffect(() => { categoriesApi.merkmale().then(setOverrides).catch(() => {}); }, []);
+  const effFeatures = useMemo(() => {
+    if (!state.l3) return [] as { key: string; label: string }[];
+    const forL3    = overrides.filter(o => o.l3Slug === state.l3!.slug);
+    const hidden   = new Set(forL3.filter(o => o.hidden).map(o => o.key));
+    const codeKeys = new Set(state.l3.features.map(f => f.key));
+    const code     = state.l3.features.filter(f => !hidden.has(f.key)).map(f => ({ key: f.key, label: f.label }));
+    const custom   = forL3.filter(o => !o.hidden && !codeKeys.has(o.key)).map(o => ({ key: o.key, label: o.label }));
+    return [...code, ...custom];
+  }, [state.l3, overrides]);
+
   return (
     <div className="space-y-7">
       <div>
@@ -1202,12 +1216,12 @@ function StepCategory({ state, setState }: {
         </div>
       )}
 
-      {/* L4 feature chips */}
-      {state.l3 && state.l3.features.length > 0 && (
+      {/* L4 feature chips (Code-Merkmale + Admin-Ergänzungen) */}
+      {state.l3 && effFeatures.length > 0 && (
         <div>
           <SectionLabel>Merkmale</SectionLabel>
           <div className="flex flex-wrap gap-2">
-            {state.l3.features.map(f => {
+            {effFeatures.map(f => {
               const on = state.l4Features.includes(f.key);
               return (
                 <button key={f.key} type="button" onClick={() => toggleL4(f.key)}
