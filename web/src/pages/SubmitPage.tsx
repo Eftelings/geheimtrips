@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
+import { buildEffectiveTaxonomy } from '../data/effectiveTaxonomy.js';
+import type { TaxonomyNode } from '../data/effectiveTaxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
 import type { Place } from '../types/index.js';
 import { placesApi, mediaApi, aiApi, categoriesApi } from '../services/api.js';
@@ -1136,6 +1138,15 @@ function StepCategory({ state, setState }: {
     }));
   }
 
+  // Admin-Overrides der Kategorien laden → effektiver Baum (Code + DB-Ergänzungen)
+  const [taxNodes, setTaxNodes] = useState<TaxonomyNode[]>([]);
+  useEffect(() => { categoriesApi.taxonomyNodes().then(setTaxNodes).catch(() => {}); }, []);
+  const tree   = useMemo(() => buildEffectiveTaxonomy(taxNodes), [taxNodes]);
+  const l1eff  = tree.find(x => x.slug === state.l1?.slug) ?? null;
+  const l2list = l1eff?.children ?? [];
+  const l2eff  = l2list.find(x => x.slug === state.l2?.slug) ?? null;
+  const l3list = l2eff?.children ?? [];
+
   // Admin-Overrides der Merkmale laden und mit der Code-Taxonomie mischen
   const [overrides, setOverrides] = useState<MerkmalOverride[]>([]);
   useEffect(() => { categoriesApi.merkmale().then(setOverrides).catch(() => {}); }, []);
@@ -1160,7 +1171,7 @@ function StepCategory({ state, setState }: {
       <div>
         <SectionLabel>Hauptkategorie</SectionLabel>
         <div className="grid grid-cols-2 gap-3">
-          {TAXONOMY.map(l1 => (
+          {tree.map(l1 => (
             <button key={l1.slug} type="button" onClick={() => selectL1(l1)}
               className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 text-left transition-all"
               style={{
@@ -1185,7 +1196,7 @@ function StepCategory({ state, setState }: {
         <div>
           <SectionLabel>Unterkategorie</SectionLabel>
           <div className="space-y-1.5">
-            {state.l1.children.map(l2 => (
+            {l2list.map(l2 => (
               <button key={l2.slug} type="button" onClick={() => selectL2(l2)}
                 className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 text-left transition-all"
                 style={{
@@ -1208,7 +1219,7 @@ function StepCategory({ state, setState }: {
         <div>
           <SectionLabel>Typ</SectionLabel>
           <div className="space-y-1.5">
-            {state.l2.children.map(l3 => (
+            {l3list.map(l3 => (
               <button key={l3.slug} type="button" onClick={() => selectL3(l3)}
                 className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 text-left transition-all"
                 style={{

@@ -47,4 +47,12 @@ router.get('/merkmale', async (c) => {
   return c.json(rows);
 });
 
+// GET /categories/taxonomy-nodes — DB-Overrides der Haupt-/Unterkategorien (fürs Anlege-Formular)
+router.get('/taxonomy-nodes', async (c) => {
+  const rows = await db.all(
+    sql`SELECT level, slug, label, icon, parent_slug AS parentSlug, hidden, is_custom AS isCustom, sort FROM taxonomy_nodes`
+  ).catch(() => []);
+  return c.json(rows);
+});
+
 export default router;

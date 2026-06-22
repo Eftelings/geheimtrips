@@ -1,3 +1,5 @@
+import type { TaxonomyNode as TaxNode } from '../data/effectiveTaxonomy.js';
+
 const BASE = (import.meta.env.VITE_API_BASE ?? '/api') + '/admin';
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -111,6 +113,14 @@ export const adminApi = {
   deleteMerkmal:  (l3Slug: string, key: string, mode: 'remove' | 'reassign', toKey?: string) =>
                     post<{ ok: boolean; changed: number }>('/merkmale/delete', { l3Slug, key, mode, toKey }),
   restoreMerkmal: (l3Slug: string, key: string)       => post<{ ok: boolean }>('/merkmale/restore', { l3Slug, key }),
+  // Haupt-/Unterkategorien (Taxonomie-Overrides)
+  taxonomyNodes:  ()  => get<TaxNode[]>('/taxonomy-nodes'),
+  addTaxNode:     (level: 2 | 3, label: string, parentSlug: string, icon?: string) =>
+                    post<{ ok: boolean; slug: string }>('/taxonomy-nodes', { level, label, parentSlug, icon }),
+  editTaxNode:    (level: 2 | 3, slug: string, d: { label?: string; icon?: string; parentSlug?: string }) =>
+                    patch<{ ok: boolean }>('/taxonomy-nodes', { level, slug, ...d }),
+  hideTaxNode:    (level: 2 | 3, slug: string) => post<{ ok: boolean }>('/taxonomy-nodes/hide', { level, slug }),
+  restoreTaxNode: (level: 2 | 3, slug: string) => post<{ ok: boolean }>('/taxonomy-nodes/restore', { level, slug }),
   // Perks
   perks:       ()           => get<AdminPerk[]>('/perks'),
   createPerk:  (d: object)  => post<AdminPerk>('/perks', d),

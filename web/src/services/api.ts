@@ -318,7 +318,14 @@ export const categoriesApi = {
   list:     () => get<CategoryDef[]>('/categories'),
   // DB-Overrides der Merkmale (neu hinzugefügt / ausgeblendet) — fürs Anlege-Formular
   merkmale: () => get<MerkmalOverride[]>('/categories/merkmale'),
+  // DB-Overrides der Haupt-/Unterkategorien — fürs Anlege-Formular
+  taxonomyNodes: () => get<TaxNodeDto[]>('/categories/taxonomy-nodes'),
 };
+
+export interface TaxNodeDto {
+  level: number; slug: string; label: string | null; icon: string | null;
+  parentSlug: string | null; hidden: number; isCustom: number; sort?: number;
+}
 
 // ─── Friends ───────────────────────────────────────────────────────────────────
 
