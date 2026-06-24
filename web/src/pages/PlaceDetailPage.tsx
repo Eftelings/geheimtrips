@@ -2626,7 +2626,19 @@ async function handleVerifyToggle() {
           ? suggestHours.some(r => r.open.trim() || r.close.trim())
           : !!suggestText.trim();
 
-        const handleSubmit = () => { setSuggestSent(true); showToast('Hinweis eingegangen — danke!'); };
+        const handleSubmit = async () => {
+          const cat = suggestCategory ?? 'sonstiges';
+          let text = suggestText.trim();
+          if (cat === 'bilder')      text = `Foto-Hinweis: ${suggestPhotoReason}`.trim();
+          else if (cat === 'zeiten') text = 'Öffnungszeiten-Vorschlag: ' + suggestHours.filter(r => r.open.trim() || r.close.trim()).map(r => `${r.label}: ${r.open}–${r.close}`).join(', ');
+          try {
+            await placesApi.suggestChange(place.id, cat, text || '(ohne Text)');
+            setSuggestSent(true);
+            showToast('Änderungsvorschlag gesendet — danke!');
+          } catch (e) {
+            showToast((e as Error).message || 'Vorschlag konnte nicht gesendet werden.');
+          }
+        };
 
         const iCls  = 'w-full rounded-2xl px-4 py-3 text-sm resize-none outline-none text-[var(--color-body)] placeholder:text-[var(--color-lavender-lt)]';
         const iStyl = { background: 'white', border: '1px solid #e5dcea' } as const;

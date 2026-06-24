@@ -294,6 +294,27 @@ router.post('/taxonomy-nodes/restore', zValidator('json', z.object({
   return c.json({ ok: true });
 });
 
+// ─── Änderungsanfragen ──────────────────────────────────────────────────────────
+router.get('/change-requests', async (c) => {
+  const rows = await db.all(sql`
+    SELECT cr.id, cr.place_id AS placeId, cr.user_name AS userName, cr.category, cr.text,
+           cr.status, cr.created_at AS createdAt, p.name AS placeName
+    FROM change_requests cr LEFT JOIN places p ON p.id = cr.place_id
+    ORDER BY (cr.status = 'open') DESC, cr.id DESC`).catch(() => []);
+  return c.json(rows);
+});
+
+router.patch('/change-requests/:id', zValidator('json', z.object({
+  status: z.enum(['open', 'done', 'dismissed']),
+})), async (c) => {
+  const user = c.get('user');
+  await db.run(sql`
+    UPDATE change_requests SET status = ${c.req.valid('json').status},
+      resolved_by = ${user.name}, resolved_at = datetime('now')
+    WHERE id = ${Number(c.req.param('id'))}`);
+  return c.json({ ok: true });
+});
+
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────
 
 router.get('/stats', async (c) => {

@@ -114,6 +114,8 @@ export const placesApi = {
   answerQuestion: (id: string, qid: number, answer: string) =>
                     post<{ ok: boolean }>(`/places/${id}/questions/${qid}/answer`, { answer }),
   deleteQuestion: (id: string, qid: number) => del<{ ok: boolean }>(`/places/${id}/questions/${qid}`),
+  suggestChange:  (id: string, category: string, text: string) =>
+                    post<{ ok: boolean }>(`/places/${id}/change-request`, { category, text }),
 };
 
 export interface PlaceQuestion {
@@ -197,8 +199,14 @@ export const rankingsApi = {
 };
 
 // ─── Benachrichtigungen (Punkt im Header) ───────────────────────────────────────
+export interface InboxItem {
+  type: 'friend_request' | 'question' | 'change_request';
+  id: string; title: string; body: string; link: string; createdAt: string;
+}
+
 export const notificationsApi = {
-  count: () => get<{ count: number; ratings: number; likes: number; requests: number }>('/notifications/count'),
+  count: () => get<{ count: number; ratings: number; likes: number; requests: number; questions?: number; changes?: number }>('/notifications/count'),
+  list:  () => get<InboxItem[]>('/notifications/list'),
   seen:  () => post<{ ok: boolean }>('/notifications/seen'),
 };
 

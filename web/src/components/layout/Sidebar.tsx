@@ -5,6 +5,7 @@ import { Avatar } from '../ui/Avatar.js';
 
 const TABS = [
   { to: '/',        icon: 'fa-compass',            label: 'Entdecken'   },
+  { to: '/notifications', icon: 'fa-bell',         label: 'Postfach'    },
   { to: '/game',    icon: 'fa-earth-europe',       label: 'Geheimquiz'  },
   { to: '/saved',   icon: 'fa-bookmark',           label: 'Meine Orte'  },
   { to: '/trips',   icon: 'fa-route',              label: 'Meine Trips' },

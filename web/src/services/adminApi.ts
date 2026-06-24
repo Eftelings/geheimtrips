@@ -94,6 +94,11 @@ export interface MailStatus {
   verify: { ok: boolean; error?: string };
 }
 
+export interface AdminChangeRequest {
+  id: number; placeId: string; placeName: string | null; userName: string;
+  category: string; text: string; status: 'open' | 'done' | 'dismissed'; createdAt: string;
+}
+
 export interface MerkmalRow { l3Slug: string; key: string; label: string; hidden: number }
 export interface MerkmaleData {
   db: MerkmalRow[];
@@ -121,6 +126,10 @@ export const adminApi = {
                     patch<{ ok: boolean }>('/taxonomy-nodes', { level, slug, ...d }),
   hideTaxNode:    (level: 2 | 3, slug: string) => post<{ ok: boolean }>('/taxonomy-nodes/hide', { level, slug }),
   restoreTaxNode: (level: 2 | 3, slug: string) => post<{ ok: boolean }>('/taxonomy-nodes/restore', { level, slug }),
+  // Änderungsanfragen
+  changeRequests:       ()  => get<AdminChangeRequest[]>('/change-requests'),
+  resolveChangeRequest: (id: number, status: 'open' | 'done' | 'dismissed') =>
+                          patch<{ ok: boolean }>(`/change-requests/${id}`, { status }),
   // Perks
   perks:       ()           => get<AdminPerk[]>('/perks'),
   createPerk:  (d: object)  => post<AdminPerk>('/perks', d),

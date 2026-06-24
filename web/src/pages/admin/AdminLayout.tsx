@@ -8,6 +8,7 @@ const NAV = [
   { to: '/admin/quality',     icon: 'fa-star-half-stroke', label: 'Qualität' },
   { to: '/admin/users',       icon: 'fa-users',          label: 'Nutzer:innen' },
   { to: '/admin/submissions', icon: 'fa-inbox',          label: 'Einreichungen' },
+  { to: '/admin/change-requests', icon: 'fa-pen-to-square', label: 'Änderungsanfragen' },
   { to: '/admin/takedown',    icon: 'fa-flag',           label: 'Notice & Takedown' },
   { to: '/admin/authors',     icon: 'fa-user-pen',       label: 'Autoren' },
   { to: '/admin/claims',      icon: 'fa-building',       label: 'Betreiber-Anfragen' },

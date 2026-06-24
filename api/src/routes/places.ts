@@ -22,6 +22,22 @@ db.run(sql`
 // Eigene Tags je gemerktem Ort (pro Nutzer:in)
 db.run(sql`ALTER TABLE saved_places ADD COLUMN tags TEXT DEFAULT '[]'`).catch(() => {});
 
+// Änderungsanfragen zu Orten — gehen an Admins, Ersteller:in und (falls vorhanden) Business.
+db.run(sql`
+  CREATE TABLE IF NOT EXISTS change_requests (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    place_id    TEXT    NOT NULL,
+    user_id     INTEGER NOT NULL,
+    user_name   TEXT    NOT NULL,
+    category    TEXT    NOT NULL DEFAULT 'sonstiges',
+    text        TEXT    NOT NULL,
+    status      TEXT    NOT NULL DEFAULT 'open',
+    resolved_by TEXT,
+    resolved_at TEXT,
+    created_at  TEXT    DEFAULT (datetime('now'))
+  )
+`).catch(console.error);
+
 // Fragen zu Orten (Community-Q&A). Antwort optional (vom/von der Ersteller:in).
 db.run(sql`
   CREATE TABLE IF NOT EXISTS place_questions (
@@ -592,6 +608,48 @@ router.delete('/:id/questions/:qid', requireAuth, async (c) => {
   await db.run(sql`DELETE FROM place_questions WHERE id = ${qid} AND place_id = ${id}`);
   return c.json({ ok: true });
 });
+
+// POST /places/:id/change-request — Änderung vorschlagen → Admins + Ersteller:in + Business
+router.post('/:id/change-request', requireAuth,
+  zValidator('json', z.object({
+    category: z.string().max(40).optional().default('sonstiges'),
+    text:     z.string().min(3).max(2000),
+  })),
+  async (c) => {
+    const user  = c.get('user');
+    const id    = c.req.param('id');
+    const { category, text } = c.req.valid('json');
+    const place = await db.select().from(places).where(eq(places.id, id)).get();
+    if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+
+    const clean = cleanPlainText(text);
+    await db.run(sql`
+      INSERT INTO change_requests (place_id, user_id, user_name, category, text)
+      VALUES (${id}, ${user.id}, ${user.name}, ${category}, ${clean})`);
+
+    // Empfänger sammeln: Ersteller:in + (falls vorhanden) Business-Inhaber:in — nicht die/den Vorschlagende:n
+    const recipientIds = new Set<number>();
+    if (place.submittedBy && place.submittedBy !== user.id) recipientIds.add(place.submittedBy);
+    const claim = await db.select().from(businessClaims)
+      .where(and(eq(businessClaims.placeId, id), eq(businessClaims.status, 'approved'))).get();
+    if (claim?.userId && claim.userId !== user.id) recipientIds.add(claim.userId);
+
+    if (recipientIds.size) {
+      const recips = await db.select().from(users).where(inArray(users.id, [...recipientIds])).all();
+      const link = `${APP_URL}/place/${id}`;
+      for (const r of recips) {
+        if (!r.email || r.notificationsEnabled === false) continue;
+        sendMail({
+          to: r.email,
+          subject: `Änderungsvorschlag zu „${place.name}" · Geheimtrips.de`,
+          text: `Hallo ${r.name},\n\n${user.name} schlägt eine Änderung zu „${place.name}" vor (${category}):\n\n„${clean}"\n\nAnsehen: ${link}\n\nLiebe Grüße\nGeheimtrips.de`,
+          html: `<p>Hallo ${r.name},</p><p><strong>${user.name}</strong> schlägt eine Änderung zu „${place.name}" vor (${category}):</p><blockquote>${clean}</blockquote><p><a href="${link}">Ort ansehen</a></p>`,
+        }).catch(e => console.error('Änderungs-Mail fehlgeschlagen:', (e as Error).message));
+      }
+    }
+    return c.json({ ok: true });
+  }
+);
 
 // GET /places/me/saved — current user's saved places
 router.get('/me/saved', requireAuth, async (c) => {

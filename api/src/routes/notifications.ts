@@ -56,10 +56,57 @@ router.get('/count', requireAuth, async (c) => {
   `).catch(() => [{ n: 0 }]) as { n: number }[];
   const questionCount = Number(qRows[0]?.n ?? 0);
 
+  // Offene Änderungsanfragen zu meinen Orten (als Ersteller:in oder Business), nicht von mir
+  const crRows = await db.all(sql`
+    SELECT count(*) AS n FROM change_requests
+    WHERE status = 'open' AND user_id != ${me.id} AND created_at > ${seen}
+      AND place_id IN (
+        SELECT id FROM places WHERE submitted_by = ${me.id}
+        UNION SELECT place_id FROM business_claims WHERE user_id = ${me.id} AND status = 'approved'
+      )
+  `).catch(() => [{ n: 0 }]) as { n: number }[];
+  const changeCount = Number(crRows[0]?.n ?? 0);
+
   return c.json({
-    count: ratingCount + likeCount + requestCount + questionCount,
-    ratings: ratingCount, likes: likeCount, requests: requestCount, questions: questionCount,
+    count: ratingCount + likeCount + requestCount + questionCount + changeCount,
+    ratings: ratingCount, likes: likeCount, requests: requestCount, questions: questionCount, changes: changeCount,
   });
+});
+
+// GET /notifications/list — Postfach: Freundschaftsanfragen, Fragen & Änderungswünsche zu meinen Orten
+router.get('/list', requireAuth, async (c) => {
+  const me = c.get('user');
+  type Item = { type: string; id: string; title: string; body: string; link: string; createdAt: string };
+  const items: Item[] = [];
+
+  // 1) Freundschaftsanfragen
+  const reqs = await db.select({ id: friendships.id, name: users.name, handle: users.handle, createdAt: friendships.createdAt })
+    .from(friendships).innerJoin(users, eq(users.id, friendships.requesterId))
+    .where(and(eq(friendships.addresseeId, me.id), eq(friendships.status, 'pending'))).all();
+  for (const r of reqs) items.push({ type: 'friend_request', id: `fr-${r.id}`, title: 'Freundschaftsanfrage', body: `${r.name} (@${r.handle}) möchte sich mit dir vernetzen.`, link: '/profile', createdAt: r.createdAt ?? '' });
+
+  // 2) Fragen zu meinen Orten
+  const qs = await db.all(sql`
+    SELECT q.id, q.question, q.asker_name AS askerName, q.created_at AS createdAt, p.id AS placeId, p.name AS placeName
+    FROM place_questions q JOIN places p ON p.id = q.place_id
+    WHERE p.submitted_by = ${me.id} AND q.asker_id != ${me.id} AND (q.answer IS NULL OR q.answer = '')
+    ORDER BY q.id DESC LIMIT 50`).catch(() => []) as any[];
+  for (const q of qs) items.push({ type: 'question', id: `q-${q.id}`, title: `Frage zu „${q.placeName}"`, body: `${q.askerName}: ${q.question}`, link: `/place/${q.placeId}`, createdAt: q.createdAt ?? '' });
+
+  // 3) Änderungswünsche zu meinen Orten (Ersteller oder Business)
+  const crs = await db.all(sql`
+    SELECT cr.id, cr.text, cr.category, cr.user_name AS userName, cr.created_at AS createdAt, p.id AS placeId, p.name AS placeName
+    FROM change_requests cr JOIN places p ON p.id = cr.place_id
+    WHERE cr.status = 'open' AND cr.user_id != ${me.id}
+      AND cr.place_id IN (
+        SELECT id FROM places WHERE submitted_by = ${me.id}
+        UNION SELECT place_id FROM business_claims WHERE user_id = ${me.id} AND status = 'approved'
+      )
+    ORDER BY cr.id DESC LIMIT 50`).catch(() => []) as any[];
+  for (const cr of crs) items.push({ type: 'change_request', id: `cr-${cr.id}`, title: `Änderungswunsch zu „${cr.placeName}"`, body: `${cr.userName} (${cr.category}): ${cr.text}`, link: `/place/${cr.placeId}`, createdAt: cr.createdAt ?? '' });
+
+  items.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  return c.json(items);
 });
 
 // POST /notifications/seen — alles als gesehen markieren (löscht den Punkt)

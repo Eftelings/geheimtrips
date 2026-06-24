@@ -16,6 +16,7 @@ import { AdminClaims }       from './pages/admin/AdminClaims.js';
 import { AdminPerks }        from './pages/admin/AdminPerks.js';
 import { AdminCategories }   from './pages/admin/AdminCategories.js';
 import { AdminTaxonomy }     from './pages/admin/AdminTaxonomy.js';
+import { AdminChangeRequests } from './pages/admin/AdminChangeRequests.js';
 import { BusinessDashboardPage } from './pages/BusinessDashboardPage.js';
 import { DiscoverPage }      from './pages/DiscoverPage.js';
 import { FunnelPage }      from './pages/FunnelPage.js';
@@ -34,6 +35,7 @@ import { VisitedPage }     from './pages/VisitedPage.js';
 import { MapPage }         from './pages/MapPage.js';
 import { RankingPage }     from './pages/RankingPage.js';
 import { ProfilePage }     from './pages/ProfilePage.js';
+import { NotificationInboxPage } from './pages/NotificationInboxPage.js';
 import { LegalPage }       from './pages/LegalPage.js';
 import { ResetPasswordPage } from './pages/ResetPasswordPage.js';
 import { SubmitPage }      from './pages/SubmitPage.js';
@@ -92,6 +94,7 @@ export function App() {
       <Route path="/map"       element={<RequireAuth><MapPage /></RequireAuth>} />
       <Route path="/ranking"  element={<RequireAuth><RankingPage /></RequireAuth>} />
       <Route path="/profile"  element={<RequireAuth><ProfilePage /></RequireAuth>} />
+      <Route path="/notifications" element={<RequireAuth><NotificationInboxPage /></RequireAuth>} />
       <Route path="/submit"    element={<RequireAuth><SubmitPage /></RequireAuth>} />
       <Route path="/game"      element={<RequireAuth><GeoGamePage /></RequireAuth>} />
       <Route path="/business"  element={<RequireAuth><BusinessDashboardPage /></RequireAuth>} />
@@ -108,6 +111,7 @@ export function App() {
       <Route path="/admin/perks"   element={<RequireAdmin><AdminPerks /></RequireAdmin>} />
       <Route path="/admin/categories" element={<RequireAdmin><AdminCategories /></RequireAdmin>} />
       <Route path="/admin/taxonomy" element={<RequireAdmin><AdminTaxonomy /></RequireAdmin>} />
+      <Route path="/admin/change-requests" element={<RequireAdmin><AdminChangeRequests /></RequireAdmin>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
