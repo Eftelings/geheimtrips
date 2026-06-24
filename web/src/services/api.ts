@@ -113,6 +113,7 @@ export const placesApi = {
   askQuestion:    (id: string, question: string) => post<{ ok: boolean }>(`/places/${id}/questions`, { question }),
   answerQuestion: (id: string, qid: number, answer: string) =>
                     post<{ ok: boolean }>(`/places/${id}/questions/${qid}/answer`, { answer }),
+  deleteQuestion: (id: string, qid: number) => del<{ ok: boolean }>(`/places/${id}/questions/${qid}`),
 };
 
 export interface PlaceQuestion {
@@ -127,9 +128,10 @@ export interface AiPlaceCtx {
 }
 
 export const aiApi = {
-  status:       ()                  => get<{ configured: boolean }>('/ai/status'),
-  placeSummary: (ctx: AiPlaceCtx)   => post<{ summary: string }>('/ai/place-summary', ctx),
-  placeTips:    (ctx: AiPlaceCtx & { count?: number }) => post<{ tips: string[] }>('/ai/place-tips', ctx),
+  status:          ()                  => get<{ configured: boolean }>('/ai/status'),
+  placeSummary:    (ctx: AiPlaceCtx)   => post<{ summary: string }>('/ai/place-summary', ctx),
+  placeDescription:(ctx: AiPlaceCtx)   => post<{ description: string }>('/ai/place-description', ctx),
+  placeTips:       (ctx: AiPlaceCtx & { count?: number }) => post<{ tips: string[] }>('/ai/place-tips', ctx),
 };
 
 // ─── Trips ─────────────────────────────────────────────────────────────────────

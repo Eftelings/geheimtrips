@@ -579,6 +579,20 @@ router.post('/:id/questions/:qid/answer', requireAuth,
   }
 );
 
+// DELETE /places/:id/questions/:qid — Frage löschen (Ersteller:in oder Admin) — Moderation/Missbrauch
+router.delete('/:id/questions/:qid', requireAuth, async (c) => {
+  const user  = c.get('user');
+  const id    = c.req.param('id');
+  const qid   = Number(c.req.param('qid'));
+  const place = await db.select().from(places).where(eq(places.id, id)).get();
+  if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+  if (place.submittedBy !== user.id && !user.isAdmin) {
+    return c.json({ error: 'Keine Berechtigung.' }, 403);
+  }
+  await db.run(sql`DELETE FROM place_questions WHERE id = ${qid} AND place_id = ${id}`);
+  return c.json({ ok: true });
+});
+
 // GET /places/me/saved — current user's saved places
 router.get('/me/saved', requireAuth, async (c) => {
   const user = c.get('user');

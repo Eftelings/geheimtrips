@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { generateSummary, generateTips, geminiConfigured } from '../lib/gemini.js';
+import { generateSummary, generateTips, generateDescription, geminiConfigured } from '../lib/gemini.js';
 
 const router = new Hono();
 
@@ -26,6 +26,17 @@ router.post('/place-summary', zValidator('json', placeCtx), async (c) => {
   try {
     const summary = await generateSummary(c.req.valid('json'));
     return c.json({ summary });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 502);
+  }
+});
+
+// POST /ai/place-description — Beschreibung ausformulieren / entwerfen
+router.post('/place-description', zValidator('json', placeCtx), async (c) => {
+  if (!geminiConfigured) return c.json({ error: 'KI ist nicht konfiguriert (GEMINI_API_KEY fehlt).' }, 503);
+  try {
+    const description = await generateDescription(c.req.valid('json'));
+    return c.json({ description });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 502);
   }

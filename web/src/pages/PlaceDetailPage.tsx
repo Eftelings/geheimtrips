@@ -1111,6 +1111,17 @@ async function handleVerifyToggle() {
     }
   }
 
+  async function handleDeleteQuestion(qid: number) {
+    if (!place) return;
+    try {
+      await placesApi.deleteQuestion(place.id, qid);
+      await loadQuestions(place.id);
+      showToast('Frage gelöscht.');
+    } catch (e) {
+      showToast((e as Error).message || 'Frage konnte nicht gelöscht werden.');
+    }
+  }
+
   async function handleParkingContribute(value: 'yes' | 'no' | 'limited') {
     if (!place || !user) return;
     setParkingSubmitting(true);
@@ -1895,6 +1906,13 @@ async function handleVerifyToggle() {
                             </button>
                           </form>
                         )}
+                        {/* Moderation: Ersteller:in/Admin kann die Frage löschen (z.B. bei Missbrauch) */}
+                        {canAnswer && (
+                          <button onClick={() => { if (confirm('Diese Frage wirklich löschen?')) handleDeleteQuestion(qa.id); }}
+                            className="self-start text-[11px] font-semibold text-[#C96442] hover:underline mt-0.5">
+                            <i className="fa-solid fa-trash mr-1 text-[10px]" /> Frage löschen
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2025,9 +2043,8 @@ async function handleVerifyToggle() {
                       const iLiked = myLikedPhotos.has(photo.url);
                       return (
                         <div key={i} className="relative aspect-square rounded-2xl overflow-hidden group">
-                          <img src={photo.url} alt={`${place.name} ${i + 1}`}
+                          <GalleryMedia url={photo.url} pos={cropPos}
                             className="w-full h-full object-cover cursor-pointer hover:brightness-95 transition-all"
-                            style={{ objectPosition: cropPos }}
                             onClick={() => setLightboxIdx(globalIdx >= 0 ? globalIdx : i)} />
                           {/* Like button */}
                           <button

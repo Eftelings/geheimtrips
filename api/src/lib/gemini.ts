@@ -83,19 +83,46 @@ export async function generateTips(input: {
 }): Promise<string[]> {
   const n = Math.min(Math.max(input.count ?? 4, 1), 5);
   const prompt =
-`Du bist ein erfahrener Local Guide. Erstelle ${n} kurze, konkrete und praktische Insider-Tipps
+`Du bist ein erfahrener Local Guide. Erstelle ${n} konkrete, praktische Insider-Tipps
 für den Besuch dieses Ortes (Anreise, beste Zeit, Parken, was man nicht verpassen sollte, Geheimtipp).
-Beziehe dich wenn möglich konkret auf diesen Ort. Jeder Tipp ein einzelner, vollständiger deutscher Satz.
-Gib NUR die Tipps aus – einen pro Zeile, ohne Nummerierung, ohne Aufzählungszeichen.
+Beziehe dich wenn möglich konkret auf diesen Ort.
+
+WICHTIG:
+- Jeder Tipp ist ein VOLLSTÄNDIG ausformulierter deutscher Satz (mindestens 8 Wörter), keine Stichworte.
+- Schreibe jeden Tipp auf GENAU eine Zeile (kein Zeilenumbruch innerhalb eines Tipps).
+- Gib NUR die ${n} Tipps aus – einen pro Zeile, ohne Nummerierung, ohne Aufzählungszeichen, ohne Anführungszeichen.
 
 Name: ${input.name || '—'}
 Standort: ${input.location || '—'}
 Kategorie: ${input.category || '—'}
 Beschreibung: ${stripHtml(input.long ?? '') || '—'}`;
-  const out = await callGemini(prompt, 400);
+  const out = await callGemini(prompt, 600);
   return out
     .split('\n')
-    .map(l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').replace(/^["„»]|["“«]$/g, '').trim())
-    .filter(l => l.length > 3)
+    .map(l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').replace(/^["„»]+|["“«]+$/g, '').trim())
+    // nur vollständige Sätze (Fragmente/Überschriften rausfiltern)
+    .filter(l => l.length >= 15 && /\s/.test(l))
     .slice(0, n);
+}
+
+/** Formuliert eine lebendige Beschreibung — aus Notizen ausgebaut oder neu entworfen. */
+export async function generateDescription(input: {
+  name?: string; long?: string; category?: string; location?: string;
+}): Promise<string> {
+  const draft = stripHtml(input.long ?? '');
+  const hasDraft = draft.length > 10;
+  const prompt =
+`Du hilfst beim Beschreiben eines Ausflugsorts für eine App mit Geheimtipps in Deutschland.
+${hasDraft
+  ? 'Formuliere die folgenden Notizen zu einer lebendigen, persönlichen Beschreibung aus (3–5 Sätze). Behalte alle genannten Fakten bei und erfinde nichts dazu.'
+  : 'Schreibe eine lebendige, einladende Beschreibung (3–5 Sätze) für diesen Ort.'}
+Atmosphärisch und konkret, kein Werbe-Blabla, keine Floskeln, keine Überschrift, keine Anführungszeichen.
+Gib NUR den Beschreibungstext aus.
+
+Name: ${input.name || '—'}
+Kategorie: ${input.category || '—'}
+Standort: ${input.location || '—'}
+${hasDraft ? `Notizen: ${draft}` : ''}`;
+  const out = await callGemini(prompt, 600);
+  return out.replace(/^["„»]+|["“«]+$/g, '').trim();
 }

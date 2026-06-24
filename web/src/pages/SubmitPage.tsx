@@ -1395,6 +1395,8 @@ function StepStory({
   const [sumErr, setSumErr]       = useState('');
   const [tipsLoading, setTipsLoad]= useState(false);
   const [tipsErr, setTipsErr]     = useState('');
+  const [descLoading, setDescLoad]= useState(false);
+  const [descErr, setDescErr]     = useState('');
   useEffect(() => { aiApi.status().then(s => setAiOn(s.configured)).catch(() => {}); }, []);
 
   const aiCtx = () => ({
@@ -1410,6 +1412,12 @@ function StepStory({
     try { const { summary } = await aiApi.placeSummary(aiCtx()); set('short', summary); }
     catch (e) { setSumErr((e as Error).message || 'Zusammenfassung fehlgeschlagen.'); }
     setSumLoad(false);
+  }
+  async function genDescription() {
+    setDescErr(''); setDescLoad(true);
+    try { const { description } = await aiApi.placeDescription(aiCtx()); set('long', description); }
+    catch (e) { setDescErr((e as Error).message || 'Ausformulieren fehlgeschlagen.'); }
+    setDescLoad(false);
   }
   async function genTips() {
     setTipsErr(''); setTipsLoad(true);
@@ -1450,12 +1458,26 @@ function StepStory({
           maxLength={4000}
           placeholder="Ich war spät nachmittags dort, als die Sonne schon tief stand und das Wasser in einem unwirklichen Blaugrün leuchtete…"
         />
-        <p className="text-xs flex items-center gap-1.5" style={{ color: longOk ? '#2D8A4E' : '#C96442' }}>
-          <i className={`fa-solid ${longOk ? 'fa-circle-check' : 'fa-circle-info'} text-[10px]`} />
-          {longOk
-            ? 'Super – das reicht für eine schöne Beschreibung!'
-            : `Noch mind. ${200 - longLen} Zeichen (aktuell ${longLen} / 200).`}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs flex items-center gap-1.5" style={{ color: longOk ? '#2D8A4E' : '#C96442' }}>
+            <i className={`fa-solid ${longOk ? 'fa-circle-check' : 'fa-circle-info'} text-[10px]`} />
+            {longOk
+              ? 'Super – das reicht für eine schöne Beschreibung!'
+              : `Noch mind. ${200 - longLen} Zeichen (aktuell ${longLen} / 200).`}
+          </p>
+          {aiOn && (
+            <AiButton onClick={genDescription} loading={descLoading}
+              label={longLen < 30 ? 'Entwurf von Gemini' : 'Ausformulieren'} />
+          )}
+        </div>
+        {aiOn && (
+          <p className="text-[11px] text-[#B0A3BC]">
+            {longLen < 30
+              ? 'Tipp: Name & Standort genügen für einen ersten Entwurf – den du dann anpasst.'
+              : 'Gemini baut deine Stichpunkte zu einer lebendigen Beschreibung aus (du kannst danach editieren).'}
+          </p>
+        )}
+        {descErr && <p className="text-xs text-[#C96442]">{descErr}</p>}
       </div>
 
       {/* 2) Besonderheit — ein Satz, erscheint auf der Swipe-Karte */}
