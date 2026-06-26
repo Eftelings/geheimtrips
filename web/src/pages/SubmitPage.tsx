@@ -10,6 +10,7 @@ import type { Place } from '../types/index.js';
 import { placesApi, mediaApi, aiApi, categoriesApi } from '../services/api.js';
 import type { MerkmalOverride } from '../services/api.js';
 import { geocodeSuggestions, reverseGeocode, requestGpsPosition } from '../services/geoService.js';
+import exifr from 'exifr';
 import type { GeoLocation } from '../services/geoService.js';
 
 // ─── Brand tokens ─────────────────────────────────────────────────────────────
@@ -48,12 +49,14 @@ interface WizardState {
   tips:         string[];
   media:        MediaItem[];
   heroIndex:    number;     // index of selected cover image
+  exifSuggestion: { lat: number; lng: number } | null;  // aus Foto-EXIF gelesener Standortvorschlag
 }
 
 const EMPTY: WizardState = {
   name: '', short: '', locationText: '', lat: null, lng: null,
   l1: null, l2: null, l3: null, l4Features: [],
   answers: {}, long: '', tips: [''], media: [], heroIndex: 0,
+  exifSuggestion: null,
 };
 
 const isVideoUrl = (u: string) => /\.(mp4|webm|mov|m4v|ogg)(\?|#|$)/i.test(u);
@@ -97,6 +100,7 @@ function placeToWizardState(place: Place): WizardState {
     tips:         place.tips?.length ? place.tips : [''],
     media,
     heroIndex:    0,
+    exifSuggestion: null,
   };
 }
 
@@ -1048,6 +1052,22 @@ function Step2({ state, setLocation }: {
           Pflicht, damit der Ort korrekt erscheint.
         </StepSub>
       </div>
+
+      {/* Vorschlag aus den GPS-Daten des hochgeladenen Fotos */}
+      {state.exifSuggestion && state.lat == null && (
+        <button type="button" onClick={() => pickOnMap(state.exifSuggestion!.lat, state.exifSuggestion!.lng)}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-[#F99039] bg-[#FFF4EB] text-left transition-all active:scale-[0.99]">
+          <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white text-sm" style={{ background: C.amber }}>
+            <i className="fa-solid fa-location-dot" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-bold" style={{ color: C.aubergine }}>Standort aus deinem Foto übernehmen</span>
+            <span className="text-xs" style={{ color: C.lavender }}>Dein erstes Bild enthält GPS-Daten – tippen, um den Ort zu setzen.</span>
+          </span>
+          <i className="fa-solid fa-arrow-right text-[#F99039] flex-shrink-0" />
+        </button>
+      )}
+
       <LocationSearch
         value={state.locationText}
         lat={state.lat} lng={state.lng}
@@ -1557,26 +1577,21 @@ function StepStory({
 }
 
 function StepMedia({
-  state, isEdit, onAddFiles, onItemChange, onRemove, onSetHero, onSubmit, submitting,
+  state, onAddFiles, onItemChange, onRemove, onSetHero,
 }: {
   state: WizardState;
-  isEdit: boolean;
   onAddFiles: (files: File[]) => void;
   onItemChange: (id: string, patch: Partial<MediaItem>) => void;
   onRemove: (id: string) => void;
   onSetHero: (index: number) => void;
-  onSubmit: () => void;
-  submitting: boolean;
 }) {
-  const pendingUploads = state.media.filter(m => m.uploading).length;
-
   return (
     <div className="space-y-7">
       <div>
-        <StepHeading>Fotos & Fertigstellen</StepHeading>
+        <StepHeading>Zuerst: Fotos & Videos</StepHeading>
         <StepSub>
-          Lade Fotos oder Videos hoch. Wähle mit dem Radio-Button, welches Bild als Titelbild erscheint.
-          Du kannst den Bildausschnitt für Hochformat-Darstellung anpassen.
+          Lade deine schönsten Aufnahmen hoch – aus Fotos mit Standortdaten schlagen wir dir gleich
+          den Ort vor. Wähle ein Titelbild und passe bei Bedarf den Ausschnitt an.
         </StepSub>
       </div>
 
@@ -1588,8 +1603,15 @@ function StepMedia({
         onRemove={onRemove}
         onSetHero={onSetHero}
       />
+    </div>
+  );
+}
 
-      {/* Summary */}
+// Zusammenfassung + Hinweis am Ende (Abschicken passiert über die untere Leiste)
+function ReviewSubmit({ state, isEdit }: { state: WizardState; isEdit: boolean }) {
+  const pendingUploads = state.media.filter(m => m.uploading).length;
+  return (
+    <div className="space-y-5 mt-8 pt-6 border-t border-[#E4DCF0]">
       <div className="rounded-2xl border border-[#E4DCF0] bg-white overflow-hidden">
         <div className="px-5 py-4 border-b border-[#F0EBF7]">
           <p className="text-xs font-bold uppercase tracking-widest mb-1 text-[#B0A3BC]">Zusammenfassung</p>
@@ -1607,11 +1629,6 @@ function StepMedia({
           </SummaryRow>
           {state.l4Features.length > 0 && (
             <SummaryRow icon="fa-tags" label="Merkmale">{state.l4Features.join(', ')}</SummaryRow>
-          )}
-          {Object.keys(state.answers).length > 0 && (
-            <SummaryRow icon="fa-comment" label="Antworten">
-              {Object.keys(state.answers).length} Frage{Object.keys(state.answers).length !== 1 ? 'n' : ''} beantwortet
-            </SummaryRow>
           )}
           {state.media.filter(m => m.serverUrl).length > 0 && (
             <SummaryRow icon="fa-image" label="Fotos/Videos">
@@ -1645,17 +1662,6 @@ function StepMedia({
           {pendingUploads} Datei{pendingUploads !== 1 ? 'en werden' : ' wird'} noch hochgeladen…
         </div>
       )}
-
-      <button
-        type="button" onClick={onSubmit}
-        disabled={submitting || pendingUploads > 0}
-        className="w-full py-4 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-        style={{ background: `linear-gradient(135deg, ${C.aubergine}, ${C.lavender})` }}
-      >
-        {submitting
-          ? <><i className="fa-solid fa-circle-notch fa-spin" /> {isEdit ? 'Wird gespeichert…' : 'Wird eingereicht…'}</>
-          : <><i className={`fa-solid ${isEdit ? 'fa-floppy-disk' : 'fa-paper-plane'}`} /> {isEdit ? 'Änderungen speichern' : 'Geheimtrip einreichen'}</>}
-      </button>
     </div>
   );
 }
@@ -1710,7 +1716,7 @@ function SummaryRow({ icon, label, children }: { icon: string; label: string; ch
 // ─── Progress bar ─────────────────────────────────────────────────────────────
 function ProgressBar({ step }: { step: number }) {
   const pct = Math.round(((step - 1) / (TOTAL_STEPS - 1)) * 100);
-  const LABELS = ['Ort', 'Name', 'Beschreibung', 'Kategorie', 'Details', 'Fotos'];
+  const LABELS = ['Fotos', 'Ort', 'Name', 'Beschreibung', 'Kategorie', 'Details'];
   return (
     <div className="mb-8">
       <div className="flex justify-between mb-3">
@@ -1815,6 +1821,16 @@ export function SubmitPage() {
     const toAdd     = filtered.slice(0, Math.max(0, available));
     if (!toAdd.length) return;
 
+    // EXIF-Standort aus dem ersten Bild lesen → Vorschlag für den Standort-Schritt
+    const firstImage = toAdd.find(f => f.type.startsWith('image/') || /\.(heic|heif|jpe?g)$/i.test(f.name));
+    if (firstImage) {
+      exifr.gps(firstImage).then(g => {
+        if (g && typeof g.latitude === 'number' && typeof g.longitude === 'number') {
+          setState(prev => prev.exifSuggestion ? prev : { ...prev, exifSuggestion: { lat: g.latitude, lng: g.longitude } });
+        }
+      }).catch(() => { /* keine GPS-Daten im Bild — okay */ });
+    }
+
     const newItems: MediaItem[] = toAdd.map(f => ({
       id:       crypto.randomUUID?.() ?? Math.random().toString(36).slice(2, 10),
       localUrl: URL.createObjectURL(f),
@@ -1850,11 +1866,12 @@ export function SubmitPage() {
 
   // ── Navigation ───────────────────────────────────────────────────────────
   function canNext(): boolean {
-    if (step === 1) return state.lat !== null && state.lng !== null;      // Standort
-    if (step === 2) return state.name.trim().length >= 2;                 // Name
+    if (step === 1) return true;                                          // Fotos (optional)
+    if (step === 2) return state.lat !== null && state.lng !== null;      // Standort
+    if (step === 3) return state.name.trim().length >= 2;                 // Name
     // Beschreibung: mind. 200 Zeichen Klartext (Kurz-Zusammenfassung optional)
-    if (step === 3) return state.long.replace(/<[^>]*>/g, '').trim().length >= 200;
-    if (step === 4) return !!state.l3;                                    // Kategorie
+    if (step === 4) return state.long.replace(/<[^>]*>/g, '').trim().length >= 200;
+    if (step === 5) return !!state.l3;                                    // Kategorie
     return true;
   }
 
@@ -1965,7 +1982,7 @@ export function SubmitPage() {
                 onClick={() => {
                   setState({ name: '', short: '', locationText: '', lat: null, lng: null,
                     l1: null, l2: null, l3: null, l4Features: [], answers: {},
-                    long: '', tips: [''], media: [], heroIndex: 0 });
+                    long: '', tips: [''], media: [], heroIndex: 0, exifSuggestion: null });
                   setStep(1); setSuccess('');
                 }}
                 className="py-3 px-6 rounded-2xl font-semibold text-sm border-2 border-[#E4DCF0]"
@@ -2002,8 +2019,8 @@ export function SubmitPage() {
   }
 
   const STEP_TITLES = [
-    'Standort', 'Name', 'Beschreibung',
-    'Kategorie wählen', 'Details', 'Fotos & Abschicken',
+    'Fotos & Videos', 'Standort', 'Name',
+    'Beschreibung', 'Kategorie wählen', 'Details & Abschicken',
   ];
 
   return (
@@ -2011,23 +2028,25 @@ export function SubmitPage() {
       <div ref={topRef} className="max-w-xl mx-auto px-5 py-8 pb-32">
         <ProgressBar step={step} />
 
-        {/* Reihenfolge: 1 Name · 2 Standort · 3 Beschreibung+Kurz+Trivia+Tipps · 4 Kategorie · 5 Details · 6 Fotos */}
-        {step === 1 && <Step2 state={state} setLocation={setLocation} />}
-        {step === 2 && <Step1 state={state} set={set} />}
-        {step === 3 && <StepStory state={state} set={set} />}
-        {step === 4 && <StepCategory state={state} setState={setState} />}
-        {step === 5 && <StepDetails state={state} set={set} />}
-        {step === 6 && (
+        {/* Reihenfolge: 1 Fotos · 2 Standort · 3 Name · 4 Beschreibung · 5 Kategorie · 6 Details + Abschicken */}
+        {step === 1 && (
           <StepMedia
             state={state}
-            isEdit={isEdit}
             onAddFiles={addMediaFiles}
             onItemChange={updateMedia}
             onRemove={removeMedia}
             onSetHero={idx => setState(prev => ({ ...prev, heroIndex: idx }))}
-            onSubmit={handleSubmit}
-            submitting={submitting}
           />
+        )}
+        {step === 2 && <Step2 state={state} setLocation={setLocation} />}
+        {step === 3 && <Step1 state={state} set={set} />}
+        {step === 4 && <StepStory state={state} set={set} />}
+        {step === 5 && <StepCategory state={state} setState={setState} />}
+        {step === 6 && (
+          <>
+            <StepDetails state={state} set={set} />
+            <ReviewSubmit state={state} isEdit={isEdit} />
+          </>
         )}
 
         {error && (
@@ -2038,38 +2057,45 @@ export function SubmitPage() {
           </div>
         )}
 
-        {/* Sticky bottom nav — steps 1-5 only */}
-        {step < 6 && (
-          <div
-            className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#E4DCF0]"
-            style={{ background: 'rgba(251,249,252,0.97)', backdropFilter: 'blur(12px)' }}
-          >
-            <div className="max-w-xl mx-auto px-5 py-4 flex gap-3">
-              {step > 1 && (
-                <button
-                  type="button" onClick={back}
-                  className="py-3 px-6 rounded-2xl font-semibold text-sm border-2 border-[#E4DCF0] flex items-center gap-2 transition-colors hover:border-[#C4AED0]"
-                  style={{ color: C.lavender }}
-                >
-                  <i className="fa-solid fa-arrow-left text-xs" /> Zurück
-                </button>
-              )}
+        {/* Sticky bottom nav — letzter Schritt schickt ab */}
+        <div
+          className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#E4DCF0]"
+          style={{ background: 'rgba(251,249,252,0.97)', backdropFilter: 'blur(12px)' }}
+        >
+          <div className="max-w-xl mx-auto px-5 py-4 flex gap-3">
+            {step > 1 && (
+              <button
+                type="button" onClick={back}
+                className="py-3 px-6 rounded-2xl font-semibold text-sm border-2 border-[#E4DCF0] flex items-center gap-2 transition-colors hover:border-[#C4AED0]"
+                style={{ color: C.lavender }}
+              >
+                <i className="fa-solid fa-arrow-left text-xs" /> Zurück
+              </button>
+            )}
+            {step < 6 ? (
               <button
                 type="button" onClick={next}
                 disabled={!canNext()}
                 className="flex-1 py-3 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40"
-                style={{
-                  background: canNext()
-                    ? `linear-gradient(135deg, ${C.aubergine}, ${C.lavender})`
-                    : '#D8CEEA',
-                }}
+                style={{ background: canNext() ? `linear-gradient(135deg, ${C.aubergine}, ${C.lavender})` : '#D8CEEA' }}
               >
-                {step === 5 ? 'Zu Fotos & Abschicken' : 'Weiter'}
+                Weiter
                 <i className="fa-solid fa-arrow-right text-xs" />
               </button>
-            </div>
+            ) : (
+              <button
+                type="button" onClick={handleSubmit}
+                disabled={submitting || state.media.some(m => m.uploading)}
+                className="flex-1 py-3 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
+                style={{ background: `linear-gradient(135deg, ${C.aubergine}, ${C.lavender})` }}
+              >
+                {submitting
+                  ? <><i className="fa-solid fa-circle-notch fa-spin" /> {isEdit ? 'Wird gespeichert…' : 'Wird eingereicht…'}</>
+                  : <><i className={`fa-solid ${isEdit ? 'fa-floppy-disk' : 'fa-paper-plane'}`} /> {isEdit ? 'Änderungen speichern' : 'Geheimtrip einreichen'}</>}
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </AppShell>
   );
