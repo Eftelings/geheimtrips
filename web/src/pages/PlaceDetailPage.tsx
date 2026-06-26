@@ -13,6 +13,7 @@ import { useAppStore } from '../store/useAppStore.js';
 import { placesApi, businessApi, mediaApi } from '../services/api.js';
 import type { ParkingContributions, PlaceQuestion } from '../services/api.js';
 import { useAuthStore } from '../store/useAuthStore.js';
+import { Avatar } from '../components/ui/Avatar.js';
 import type { Place, Transport } from '../types/index.js';
 
 // ─── Transport helpers ────────────────────────────────────────────────────────
@@ -475,7 +476,7 @@ function GalleryMedia({ url, pos = 'center', className, onClick }:
 function ImageLightbox({
   photos, startIndex, onClose, photoLikes, myLikedPhotos, onLike,
 }: {
-  photos: { url: string }[];
+  photos: { url: string; caption?: string; author?: { name: string; avatarUrl: string | null } }[];
   startIndex: number;
   onClose: () => void;
   photoLikes?: Record<string, number>;
@@ -485,7 +486,8 @@ function ImageLightbox({
   const [idx, setIdx] = useState(startIndex);
   const prev = () => setIdx(i => Math.max(0, i - 1));
   const next = () => setIdx(i => Math.min(photos.length - 1, i + 1));
-  const currentUrl = photos[idx]?.url ?? '';
+  const cur = photos[idx];
+  const currentUrl = cur?.url ?? '';
   const liked = myLikedPhotos?.has(currentUrl) ?? false;
   const likeCount = photoLikes?.[currentUrl] ?? 0;
 
@@ -558,6 +560,23 @@ function ImageLightbox({
           </div>
         )}
       </div>
+
+      {/* Bildunterschrift + Profilbild der Urheber:in */}
+      {(cur?.caption || cur?.author) && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-20 w-[92vw] max-w-xl flex items-center gap-3 px-4 py-3 rounded-2xl"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)' }}
+          onClick={e => e.stopPropagation()}>
+          <p className="flex-1 min-w-0 text-white/90 text-sm leading-snug">
+            {cur?.caption || <span className="text-white/40 italic">Ohne Beschreibung</span>}
+          </p>
+          {cur?.author && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="hidden sm:block text-white/70 text-xs font-medium">{cur.author.name}</span>
+              <Avatar name={cur.author.name} src={cur.author.avatarUrl} size={34} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Prev */}
       {idx > 0 && (
@@ -796,7 +815,10 @@ export function PlaceDetailPage() {
 
   // All photos: hero first, then gallery (deduped), then uploads. Sorted by likes.
   const allPhotos = useMemo(() => {
-    if (!place) return [] as { url: string; cat: PhotoCat }[];
+    type P = { url: string; cat: PhotoCat; caption?: string; author?: { name: string; avatarUrl: string | null } };
+    if (!place) return [] as P[];
+    const authorFor = (url: string) =>
+      place.photoAuthors?.[url] ?? (place.submitter ? { name: place.submitter.name, avatarUrl: place.submitter.avatarUrl } : undefined);
     const seen = new Set<string>();
     const base = [place.hero, ...place.gallery]
       .filter((x): x is string => Boolean(x))
@@ -804,7 +826,9 @@ export function PlaceDetailPage() {
       .map(url => ({ url, cat: 'alle' as PhotoCat }));
     const all = [...base, ...uploadedPhotos];
     // Sort by likes descending; stable sort preserves hero-first when likes are equal
-    return [...all].sort((a, b) => (photoLikes[b.url] ?? 0) - (photoLikes[a.url] ?? 0));
+    return [...all]
+      .sort((a, b) => (photoLikes[b.url] ?? 0) - (photoLikes[a.url] ?? 0))
+      .map(p => ({ ...p, caption: place.captions?.[p.url], author: authorFor(p.url) }));
   }, [place, uploadedPhotos, photoLikes]);
 
 

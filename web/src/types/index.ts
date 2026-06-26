@@ -58,6 +58,8 @@ export interface Place {
   heroCropX?: number;
   heroCropY?: number;
   photoLikes?: Record<string, number>;
+  captions?: Record<string, string>;
+  photoAuthors?: Record<string, { name: string; avatarUrl: string | null }>;
   createdAt: string;
 }
 

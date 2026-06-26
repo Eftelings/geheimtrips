@@ -353,7 +353,27 @@ router.get('/:id', async (c) => {
   const photoLikesMap: Record<string, number> = {};
   for (const row of likesRows) photoLikesMap[row.photoUrl] = row.cnt;
 
-  return c.json({ ...hydrate(place), author, submitter, media, approvedClaim, photoLikes: photoLikesMap });
+  // Bildunterschriften je Foto-URL (aus galleryJson)
+  const captions: Record<string, string> = {};
+  try {
+    const gal = JSON.parse(place.galleryJson ?? '[]') as { url: string; caption?: string }[];
+    for (const g of gal) if (g.url && g.caption) captions[g.url] = g.caption;
+  } catch { /* ignore */ }
+
+  // Urheber:in je Foto-URL: hochgeladene Fotos → ihr:e Uploader:in; sonst die/der Ersteller:in
+  const photoAuthors: Record<string, { name: string; avatarUrl: string | null }> = {};
+  const uploaderIds = [...new Set(media.map(m => m.userId).filter((x): x is number => x != null))];
+  if (uploaderIds.length) {
+    const uploaders = await db.select({ id: users.id, name: users.name, avatarUrl: users.avatarUrl })
+      .from(users).where(inArray(users.id, uploaderIds)).all();
+    const byId = new Map(uploaders.map(u => [u.id, u]));
+    for (const m of media) {
+      const u = m.userId != null ? byId.get(m.userId) : null;
+      if (u) photoAuthors[m.url] = { name: u.name, avatarUrl: u.avatarUrl };
+    }
+  }
+
+  return c.json({ ...hydrate(place), author, submitter, media, approvedClaim, photoLikes: photoLikesMap, captions, photoAuthors });
 });
 
 // POST /places/:id/save — save a place (auth required)
