@@ -106,15 +106,43 @@ function placeToWizardState(place: Place): WizardState {
 
 // ─── MiniRichText ─────────────────────────────────────────────────────────────
 function MiniRichText({
-  value, onChange, placeholder = '', maxLength = 4000, minHeight = 160,
+  value, onChange, placeholder = '', maxLength = 4000, minHeight = 160, images = [], maxImages = 2,
 }: {
   value: string; onChange: (html: string) => void;
   placeholder?: string; maxLength?: number; minHeight?: number;
+  images?: string[]; maxImages?: number;
 }) {
   const ref           = useRef<HTMLDivElement>(null);
   const lastValid     = useRef(value);        // last HTML that was within limit
+  const savedRange    = useRef<Range | null>(null);
   const [count, setCount] = useState(0);
   const [empty, setEmpty] = useState(!value);
+  const [imgCount, setImgCount]   = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Aktuelle Auswahl im Editor merken (für das Einfügen nach Klick auf eine Miniatur)
+  function saveSelection() {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && ref.current?.contains(sel.anchorNode)) {
+      savedRange.current = sel.getRangeAt(0).cloneRange();
+    }
+  }
+  function insertImage(url: string) {
+    const el = ref.current; if (!el) return;
+    if (el.querySelectorAll('img').length >= maxImages) return;
+    el.focus();
+    const sel = window.getSelection();
+    if (savedRange.current && el.contains(savedRange.current.startContainer)) {
+      sel?.removeAllRanges(); sel?.addRange(savedRange.current);
+    } else {
+      const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+      sel?.removeAllRanges(); sel?.addRange(r);
+    }
+    document.execCommand('insertHTML', false, `<img src="${url}" class="gt-embed" alt="" /><br>`);
+    savedRange.current = null;
+    setPickerOpen(false);
+    sync();
+  }
 
   // Set initial content only on mount
   useEffect(() => {
@@ -123,7 +151,8 @@ function MiniRichText({
       lastValid.current = value;
       const len = ref.current.textContent?.length ?? 0;
       setCount(len);
-      setEmpty(len === 0);
+      setImgCount(ref.current.querySelectorAll('img').length);
+      setEmpty(len === 0 && ref.current.querySelectorAll('img').length === 0);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -163,10 +192,11 @@ function MiniRichText({
       return;
     }
     const html  = el.innerHTML ?? '';
-    const empty = text.trim() === '';
+    const empty = text.trim() === '' && el.querySelectorAll('img').length === 0;
     lastValid.current = html;
     setCount(text.length);
     setEmpty(empty);
+    setImgCount(el.querySelectorAll('img').length);
     onChange(empty ? '' : html);
   }
 
@@ -191,7 +221,27 @@ function MiniRichText({
         ))}
         <span className="mx-1 text-[#E4DCF0]">|</span>
         <span className="text-[10px] text-[#B0A3BC] font-normal ml-0.5 select-none">Fett / Kursiv / Unterstrichen</span>
+        {images.length > 0 && (
+          <button type="button" disabled={imgCount >= maxImages}
+            onMouseDown={e => { e.preventDefault(); saveSelection(); setPickerOpen(o => !o); }}
+            title="Bild in den Text einfügen"
+            className="ml-auto inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-semibold text-[#71587A] hover:bg-[#E4DCF0] hover:text-[#34254C] transition-colors disabled:opacity-40">
+            <i className="fa-solid fa-image text-[11px]" /> Bild ({imgCount}/{maxImages})
+          </button>
+        )}
       </div>
+      {/* Bild-Auswahl: eingereichte Fotos in den Fließtext einbetten (Reiseblog-Stil) */}
+      {pickerOpen && images.length > 0 && (
+        <div className="flex gap-2 px-2 py-2 border-b border-[#F0EBF7] bg-[#FAF7FD] overflow-x-auto">
+          {images.map(url => (
+            <button key={url} type="button" disabled={imgCount >= maxImages}
+              onMouseDown={e => { e.preventDefault(); insertImage(url); }}
+              className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 border-transparent hover:border-[#F99039] disabled:opacity-40 transition-all">
+              <img src={url} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
       {/* Editable area */}
       <div className="relative">
         {empty && placeholder && (
@@ -206,8 +256,11 @@ function MiniRichText({
           suppressContentEditableWarning
           onInput={sync}
           onPaste={handlePaste}
+          onKeyUp={saveSelection}
+          onMouseUp={saveSelection}
+          onBlur={saveSelection}
           style={{ minHeight }}
-          className="px-4 py-3 text-sm text-[#34254C] outline-none leading-relaxed"
+          className="px-4 py-3 text-sm text-[#34254C] outline-none leading-relaxed [&_img.gt-embed]:rounded-xl [&_img.gt-embed]:my-2 [&_img.gt-embed]:max-h-60 [&_img.gt-embed]:w-auto"
         />
       </div>
       {/* Char counter */}
@@ -1476,6 +1529,8 @@ function StepStory({
           value={state.long}
           onChange={v => set('long', v)}
           maxLength={4000}
+          images={state.media.filter(m => m.type === 'image' && m.serverUrl).map(m => m.serverUrl!)}
+          maxImages={2}
           placeholder="Ich war spät nachmittags dort, als die Sonne schon tief stand und das Wasser in einem unwirklichen Blaugrün leuchtete…"
         />
         <div className="flex items-center justify-between gap-2">

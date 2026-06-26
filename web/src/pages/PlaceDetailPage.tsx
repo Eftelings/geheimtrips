@@ -1702,7 +1702,7 @@ async function handleVerifyToggle() {
               <section>
                 <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">Über diesen Ort</p>
                 <div
-                  className={`text-[15px] text-[var(--color-body)] leading-relaxed prose prose-sm max-w-none ${!storyExpanded && isLongStory ? 'line-clamp-5' : ''}`}
+                  className={`text-[15px] text-[var(--color-body)] leading-relaxed prose prose-sm max-w-none [&_img]:rounded-2xl [&_img]:w-full [&_img]:my-4 [&_img]:shadow-[var(--shadow-card)] ${!storyExpanded && isLongStory ? 'line-clamp-5' : ''}`}
                   // eslint-disable-next-line react/no-danger
                   dangerouslySetInnerHTML={{ __html: place.long }}
                 />

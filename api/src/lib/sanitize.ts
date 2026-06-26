@@ -7,12 +7,14 @@ import sanitizeHtml from 'sanitize-html';
  * im Frontend per dangerouslySetInnerHTML gerendert werden.
  */
 const OPTIONS: sanitizeHtml.IOptions = {
-  allowedTags: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'ul', 'ol', 'li', 'span'],
+  // img erlaubt eingebettete Reiseblog-Bilder; Schemes leer → nur relative /api/uploads/-URLs,
+  // keine externen Bilder/Tracking-Pixel/data:-URIs.
+  allowedTags: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'ul', 'ol', 'li', 'span', 'img'],
   // Nur ein gefiltertes style-Attribut: manche Browser (v.a. iOS Safari) erzeugen
   // beim Formatieren <span style="font-weight:…"> statt <b>/<i>/<u>. Wir erlauben
   // ausschließlich diese harmlosen Formatierungs-Properties — kein position, url(),
   // kein onerror etc. → kein XSS / kein Layout-Hijack.
-  allowedAttributes: { '*': ['style'] },
+  allowedAttributes: { '*': ['style'], img: ['src', 'class', 'alt'] },
   allowedStyles: {
     '*': {
       'font-weight':          [/^(bold|bolder|[5-9]00)$/],
@@ -22,6 +24,7 @@ const OPTIONS: sanitizeHtml.IOptions = {
     },
   },
   allowedSchemes: [],
+  allowedSchemesByTag: { img: [] },   // img-src: nur schemalos (relativ) → blockt http(s)/data
   disallowedTagsMode: 'discard',
 };
 
