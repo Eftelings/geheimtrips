@@ -11,6 +11,7 @@ export const users = sqliteTable('users', {
   handle: text('handle').notNull().unique(),
   bio: text('bio').default(''),
   avatarUrl: text('avatar_url'),
+  age: integer('age'),
   instagram: text('instagram'),
   tiktok: text('tiktok'),
   website: text('website'),

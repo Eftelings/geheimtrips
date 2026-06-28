@@ -71,7 +71,7 @@ export function MeetPeoplePage() {
                       <span className="font-display font-semibold text-[var(--color-aubergine)] text-sm">
                         {p.name}{p.isLocalHero && <i className="fa-solid fa-star text-[var(--color-amber)] text-[10px] ml-1" />}
                       </span>
-                      <span className="text-xs text-[var(--color-lavender)] ml-1.5">@{p.handle}</span>
+                      <span className="text-xs text-[var(--color-lavender)] ml-1.5">@{p.handle}{p.age ? ` · ${p.age}` : ''}</span>
                     </button>
                     {p.bio && <p className="text-xs text-[var(--color-lavender)] mt-0.5 line-clamp-2">{p.bio}</p>}
                     {p.sharedCount > 0 && (

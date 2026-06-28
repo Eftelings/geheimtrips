@@ -22,6 +22,9 @@ await db.run(sql`CREATE TABLE IF NOT EXISTS password_reset_tokens (
   created_at TEXT DEFAULT (datetime('now'))
 )`).catch(() => {});
 
+// Alter-Spalte nachrüsten (für Phase C / Profil)
+await db.run(sql`ALTER TABLE users ADD COLUMN age INTEGER`).catch(() => {});
+
 const APP_URL = (process.env.APP_URL ?? 'https://www.geheimtrips.de').replace(/\/$/, '');
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
@@ -81,6 +84,11 @@ router.patch('/me', requireAuth, async (c) => {
   const update: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) update[key] = body[key];
+  }
+  // Alter separat (Zahl/leer → null, plausibel begrenzt)
+  if ('age' in body) {
+    const n = body.age == null || body.age === '' ? null : Number(body.age);
+    update.age = n != null && Number.isFinite(n) && n >= 13 && n <= 120 ? Math.floor(n) : null;
   }
   const [updated] = await db.update(users).set(update).where(eq(users.id, user.id)).returning();
   const { passwordHash: _, ...safeUser } = updated;

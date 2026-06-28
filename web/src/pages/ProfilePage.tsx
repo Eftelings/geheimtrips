@@ -16,7 +16,7 @@ export function ProfilePage() {
   const { visitedIds, places, playVideos, setPlayVideos } = useAppStore();
   const [editOpen, setEditOpen]         = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '' });
+  const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '', age: user?.age != null ? String(user.age) : '' });
   const [pwData, setPwData]             = useState({ current: '', next: '' });
   const [pwError, setPwError]           = useState('');
   const [saving, setSaving]             = useState(false);
@@ -44,7 +44,8 @@ export function ProfilePage() {
 
   async function saveProfile() {
     setSaving(true);
-    await updateUser(editData).catch(() => {});
+    const { age, ...rest } = editData;
+    await updateUser({ ...rest, age: age.trim() === '' ? null : Number(age) }).catch(() => {});
     setSaving(false);
     setEditOpen(false);
   }
@@ -186,6 +187,13 @@ export function ProfilePage() {
               )}
             </div>
           ))}
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-1 block">Alter</label>
+            <input type="number" min={13} max={120} value={editData.age}
+              onChange={e => setEditData(d => ({ ...d, age: e.target.value }))}
+              placeholder="z.B. 28"
+              className="w-full border border-[var(--color-bg-soft)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)]" />
+          </div>
           <button onClick={saveProfile} disabled={saving}
             className="w-full bg-[var(--color-amber)] text-white font-bold py-3 rounded-xl text-sm disabled:opacity-50">
             {saving ? 'Speichern…' : 'Speichern'}

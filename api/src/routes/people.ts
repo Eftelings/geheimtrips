@@ -66,7 +66,7 @@ router.get('/suggestions', requireAuth, async (c) => {
     .sort((a, b) => (sharedMap.get(b.id) ?? 0) - (sharedMap.get(a.id) ?? 0))
     .slice(0, 24)
     .map(async u => ({
-      id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl, bio: u.bio ?? '',
+      id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl, bio: u.bio ?? '', age: u.age ?? null,
       sharedCount: sharedMap.get(u.id) ?? 0,
       sharedPlaces: sharedNames.get(u.id) ?? [],
       isLocalHero: await isUserLocalHero(u.id),

@@ -9,7 +9,7 @@ import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data
 import type { Place } from '../types/index.js';
 import { placesApi, mediaApi, aiApi, categoriesApi } from '../services/api.js';
 import type { MerkmalOverride } from '../services/api.js';
-import { geocodeSuggestions, reverseGeocode, requestGpsPosition } from '../services/geoService.js';
+import { geocodeSuggestions, reverseGeocode, requestGpsPosition, distanceKm } from '../services/geoService.js';
 import exifr from 'exifr';
 import type { GeoLocation } from '../services/geoService.js';
 
@@ -1084,6 +1084,9 @@ function Step2({ state, setLocation }: {
   setLocation: (text: string, lat: number | null, lng: number | null) => void;
 }) {
   const hasCoords = state.lat !== null && state.lng !== null;
+  const navigate  = useNavigate();
+  const places    = useAppStore(s => s.places);
+  const [fromExif, setFromExif] = useState(false);
 
   // Auf der Karte gewählter Punkt: Koordinaten sofort setzen, Adresstext per
   // Reverse-Geocoding nachladen (Koordinaten allein reichen aber schon aus).
@@ -1094,6 +1097,28 @@ function Step2({ state, setLocation }: {
       setLocation(loc.fullAddress, la, ln);
     } catch { /* Standort ohne Adresse ist okay */ }
   }
+
+  // EXIF-Standort automatisch übernehmen (kein Berechtigungs-Prompt nötig) + Hinweis
+  useEffect(() => {
+    if (state.exifSuggestion && state.lat == null) {
+      pickOnMap(state.exifSuggestion.lat, state.exifSuggestion.lng);
+      setFromExif(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 50-Meter-Duplikatenprüfung gegen bereits vorhandene Orte
+  const nearby = useMemo(() => {
+    if (state.lat == null || state.lng == null) return [];
+    const here = { lat: state.lat, lng: state.lng };
+    return places
+      .filter(p => p.lat != null && p.lng != null)
+      .map(p => ({ p, d: distanceKm(here, { lat: p.lat!, lng: p.lng! }) }))
+      .filter(x => x.d <= 0.05)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 5)
+      .map(x => x.p);
+  }, [state.lat, state.lng, places]);
 
   return (
     <div className="space-y-7">
@@ -1106,16 +1131,23 @@ function Step2({ state, setLocation }: {
         </StepSub>
       </div>
 
-      {/* Vorschlag aus den GPS-Daten des hochgeladenen Fotos */}
-      {state.exifSuggestion && state.lat == null && (
-        <button type="button" onClick={() => pickOnMap(state.exifSuggestion!.lat, state.exifSuggestion!.lng)}
+      {/* Standort automatisch aus den Bild-Metadaten ermittelt (EXIF) */}
+      {fromExif && hasCoords && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs" style={{ background: '#FFF4EB', color: '#C96442' }}>
+          <i className="fa-solid fa-location-dot flex-shrink-0" />
+          <span>Der Standort wurde aus deinen Bildern ermittelt – du kannst ihn unten anpassen.</span>
+        </div>
+      )}
+      {/* Fallback: EXIF vorhanden, aber Standort (noch) nicht gesetzt */}
+      {state.exifSuggestion && state.lat == null && !fromExif && (
+        <button type="button" onClick={() => { pickOnMap(state.exifSuggestion!.lat, state.exifSuggestion!.lng); setFromExif(true); }}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-[#F99039] bg-[#FFF4EB] text-left transition-all active:scale-[0.99]">
           <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white text-sm" style={{ background: C.amber }}>
             <i className="fa-solid fa-location-dot" />
           </span>
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-bold" style={{ color: C.aubergine }}>Standort aus deinem Foto übernehmen</span>
-            <span className="text-xs" style={{ color: C.lavender }}>Dein erstes Bild enthält GPS-Daten – tippen, um den Ort zu setzen.</span>
+            <span className="text-xs" style={{ color: C.lavender }}>Dein erstes Bild enthält GPS-Daten.</span>
           </span>
           <i className="fa-solid fa-arrow-right text-[#F99039] flex-shrink-0" />
         </button>
@@ -1129,6 +1161,30 @@ function Step2({ state, setLocation }: {
 
       {/* Interaktive Karte zum Sehen & Korrigieren des Standorts */}
       <LocationPickerMap lat={state.lat} lng={state.lng} onPick={pickOnMap} />
+
+      {/* 50-Meter-Duplikatenprüfung: bestehende Orte in der Nähe */}
+      {nearby.length > 0 && (
+        <div className="rounded-2xl border-2 px-4 py-3 space-y-2" style={{ borderColor: '#F0C674', background: '#FFFBF0' }}>
+          <p className="text-sm font-semibold" style={{ color: C.aubergine }}>
+            <i className="fa-solid fa-triangle-exclamation text-[#C96442] mr-1.5" />
+            In der Nähe (50&nbsp;m) gibt es schon {nearby.length === 1 ? 'einen Ort' : `${nearby.length} Orte`}. Ist dein Geheimtrip einer davon?
+          </p>
+          <div className="space-y-1.5">
+            {nearby.map(p => (
+              <button key={p.id} type="button" onClick={() => navigate(`/place/${p.id}`)}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl bg-white border border-[#E4DCF0] text-left hover:border-[#F99039] transition-colors">
+                {p.hero && <img src={p.hero} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />}
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-medium truncate" style={{ color: C.aubergine }}>{p.name}</span>
+                  <span className="text-xs" style={{ color: C.lavender }}>{p.region}</span>
+                </span>
+                <i className="fa-solid fa-arrow-right text-[#B0A3BC] text-xs flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+          <p className="text-xs" style={{ color: C.lavender }}>Ist deiner nicht dabei? Dann mach einfach weiter.</p>
+        </div>
+      )}
 
       {/* Validation status */}
       {hasCoords ? (

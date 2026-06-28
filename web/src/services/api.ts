@@ -351,7 +351,7 @@ export const friendsApi = {
 
 // ─── Neue Leute kennenlernen (Phase C) ──────────────────────────────────────────
 export interface PersonSuggestion {
-  id: number; name: string; handle: string; avatarUrl: string | null; bio: string;
+  id: number; name: string; handle: string; avatarUrl: string | null; bio: string; age: number | null;
   sharedCount: number; sharedPlaces: string[]; isLocalHero: boolean;
 }
 export const peopleApi = {
