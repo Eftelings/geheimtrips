@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
@@ -10,6 +11,7 @@ import type { MyRankStats } from '../services/api.js';
 import type { FriendRequest } from '../types/index.js';
 
 export function ProfilePage() {
+  const navigate = useNavigate();
   const { user, updateUser, logout } = useAuthStore();
   const { visitedIds, places, playVideos, setPlayVideos } = useAppStore();
   const [editOpen, setEditOpen]         = useState(false);
@@ -127,6 +129,14 @@ export function ProfilePage() {
             </div>
           ))}
         </div>
+
+        {/* Neue Leute kennenlernen */}
+        <button onClick={() => navigate('/people')}
+          className="w-full flex items-center gap-3 bg-white border-2 border-[var(--color-amber)]/30 text-[var(--color-aubergine)] font-semibold py-3 px-4 rounded-xl text-sm mb-3 active:scale-[0.98] transition-transform">
+          <span className="w-8 h-8 rounded-xl bg-[var(--color-amber)]/15 flex items-center justify-center"><i className="fa-solid fa-user-group text-[var(--color-amber)]" /></span>
+          <span className="flex-1 text-left">Neue Leute kennenlernen</span>
+          <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)]" />
+        </button>
 
         {/* Edit Profile */}
         <button onClick={() => setEditOpen(true)}

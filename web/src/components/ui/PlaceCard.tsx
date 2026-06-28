@@ -3,6 +3,7 @@ import type { Place } from '../../types/index.js';
 import { useAppStore } from '../../store/useAppStore.js';
 import { WeatherBadge } from './WeatherBadge.js';
 import { PlaceImage } from './PlaceImage.js';
+import { Avatar } from './Avatar.js';
 
 interface Props {
   place: Place;
@@ -51,6 +52,18 @@ export function PlaceCard({ place, showMatch, className = '' }: Props) {
           <span className="text-xs text-[var(--color-lavender)]">{place.distanceLabel}</span>
           <WeatherBadge lat={place.lat} lng={place.lng} placeId={place.id} compact />
         </div>
+        {(place.saverCount ?? 0) > 0 && (
+          <div className="flex items-center gap-1.5 mt-2">
+            <div className="flex -space-x-2">
+              {(place.savers ?? []).map((s, i) => (
+                <Avatar key={i} name={s.name} src={s.avatarUrl} size={20} className="ring-2 ring-white" />
+              ))}
+            </div>
+            <span className="text-[11px] text-[var(--color-lavender)]">
+              {place.saverCount === 1 ? '1 hat das gemerkt' : `${place.saverCount} haben das gemerkt`}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

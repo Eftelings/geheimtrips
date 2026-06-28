@@ -121,7 +121,25 @@ const L1_MAP: Record<string, { category: string; categoryLabel: string }> = {
 // GET /places — list all freigegebenen Orte (ungeprüfte/eingereichte ausgeblendet)
 router.get('/', async (c) => {
   const all = await db.select().from(places).all();
-  return c.json(all.filter(p => !p.isUserSubmitted).map(hydrate));
+  const visible = all.filter(p => !p.isUserSubmitted);
+
+  // Saver-Avatare je Ort (für die überlappenden Profilbilder auf den Karten)
+  const saverRows = await db.select({
+    placeId: savedPlaces.placeId, name: users.name, avatarUrl: users.avatarUrl, profileVisible: users.profileVisible,
+  }).from(savedPlaces).innerJoin(users, eq(users.id, savedPlaces.userId)).all();
+  const saversBy = new Map<string, { name: string; avatarUrl: string | null }[]>();
+  const saverCnt = new Map<string, number>();
+  for (const r of saverRows) {
+    if (!r.profileVisible) continue;
+    saverCnt.set(r.placeId, (saverCnt.get(r.placeId) ?? 0) + 1);
+    const arr = saversBy.get(r.placeId) ?? [];
+    if (arr.length < 3) arr.push({ name: r.name, avatarUrl: r.avatarUrl });
+    saversBy.set(r.placeId, arr);
+  }
+
+  return c.json(visible.map(p => ({
+    ...hydrate(p), savers: saversBy.get(p.id) ?? [], saverCount: saverCnt.get(p.id) ?? 0,
+  })));
 });
 
 // POST /places/submit — user submits a new place (auth required, stored as pending)

@@ -349,6 +349,15 @@ export const friendsApi = {
   decline:  (id: number)    => del<{ ok: boolean }>(`/friends/decline/${id}`),
 };
 
+// ─── Neue Leute kennenlernen (Phase C) ──────────────────────────────────────────
+export interface PersonSuggestion {
+  id: number; name: string; handle: string; avatarUrl: string | null; bio: string;
+  sharedCount: number; sharedPlaces: string[]; isLocalHero: boolean;
+}
+export const peopleApi = {
+  suggestions: () => get<{ meetPeopleEnabled: boolean; suggestions: PersonSuggestion[] }>('/people/suggestions'),
+};
+
 // ─── Öffentliche Profile (reale Nutzer:innen) ──────────────────────────────────
 export type FriendStatus = 'self' | 'none' | 'pending_out' | 'pending_in' | 'friends';
 export interface PublicUser {

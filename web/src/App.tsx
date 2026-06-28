@@ -36,6 +36,7 @@ import { MapPage }         from './pages/MapPage.js';
 import { RankingPage }     from './pages/RankingPage.js';
 import { ProfilePage }     from './pages/ProfilePage.js';
 import { NotificationInboxPage } from './pages/NotificationInboxPage.js';
+import { MeetPeoplePage }   from './pages/MeetPeoplePage.js';
 import { LegalPage }       from './pages/LegalPage.js';
 import { ResetPasswordPage } from './pages/ResetPasswordPage.js';
 import { SubmitPage }      from './pages/SubmitPage.js';
@@ -95,6 +96,7 @@ export function App() {
       <Route path="/ranking"  element={<RequireAuth><RankingPage /></RequireAuth>} />
       <Route path="/profile"  element={<RequireAuth><ProfilePage /></RequireAuth>} />
       <Route path="/notifications" element={<RequireAuth><NotificationInboxPage /></RequireAuth>} />
+      <Route path="/people"    element={<RequireAuth><MeetPeoplePage /></RequireAuth>} />
       <Route path="/submit"    element={<RequireAuth><SubmitPage /></RequireAuth>} />
       <Route path="/game"      element={<RequireAuth><GeoGamePage /></RequireAuth>} />
       <Route path="/business"  element={<RequireAuth><BusinessDashboardPage /></RequireAuth>} />

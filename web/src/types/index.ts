@@ -60,6 +60,8 @@ export interface Place {
   photoLikes?: Record<string, number>;
   captions?: Record<string, string>;
   photoAuthors?: Record<string, { name: string; avatarUrl: string | null }>;
+  savers?: { name: string; avatarUrl: string | null }[];
+  saverCount?: number;
   createdAt: string;
 }
 
