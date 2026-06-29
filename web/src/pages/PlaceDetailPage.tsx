@@ -1329,10 +1329,18 @@ async function handleVerifyToggle() {
             <i className="fa-solid fa-arrow-left text-sm" style={{ color: '#34254c' }} />
           </button>
 
-          {/* Visited toggle */}
-          <VisitedToggle isVisited={isVisited} gpsLoading={gpsLoading} onToggle={handleVerifyToggle} />
+          {/* „Ich war hier": grüner Status-Button (besucht) oder Toggle */}
+          {isVisited ? (
+            <button onClick={() => showToast('Du hast diesen Ort besucht ✓')} title="Besucht"
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95"
+              style={{ background: 'var(--color-success)', color: 'white' }}>
+              <i className="fa-solid fa-check text-sm" />
+            </button>
+          ) : (
+            <VisitedToggle isVisited={isVisited} gpsLoading={gpsLoading} onToggle={handleVerifyToggle} />
+          )}
 
-          {/* Rating button — only when visited */}
+          {/* Bewerten — nur wenn besucht */}
           {isVisited && (
             <button onClick={() => setRatingOpen(true)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold flex-shrink-0 transition-all hover:brightness-110 active:scale-95"
@@ -1341,8 +1349,20 @@ async function handleVerifyToggle() {
             </button>
           )}
 
-          {/* Right: share + save */}
+          {/* Foto/Video hinzufügen */}
+          <button onClick={() => fileInputRef.current?.click()} title="Foto oder Video hinzufügen"
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
+            style={{ background: '#F1ECF4', color: '#71587A' }}>
+            <i className="fa-solid fa-camera text-sm" />
+          </button>
+
+          {/* Right: Trip + share + save */}
           <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => setAddTripOpen(true)} title="Zu Trip hinzufügen"
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+              style={{ background: '#F1ECF4', color: '#71587A' }}>
+              <i className="fa-solid fa-route text-sm" />
+            </button>
             <button onClick={() => navigator.share?.({ title: place.name, url: window.location.href }).catch(() => {})}
               className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
               style={{ background: '#F1ECF4', color: '#71587A' }}>
@@ -1642,11 +1662,7 @@ async function handleVerifyToggle() {
           {/* ═══ LEFT ════════════════════════════════════════════════════════ */}
           <div className="lg:col-span-2 flex flex-col gap-10">
 
-            {/* Mobile only: Zu Trip hinzufügen above author card */}
-            <button className="lg:hidden w-full flex items-center justify-center gap-2 bg-[var(--color-amber)] text-white font-bold py-3.5 rounded-2xl shadow-[var(--shadow-amber)] hover:brightness-110 transition-all text-sm"
-              onClick={() => setAddTripOpen(true)}>
-              <i className="fa-solid fa-plus" /> Zu Trip hinzufügen
-            </button>
+            {/* „Zu Trip hinzufügen" ist mobil jetzt im Header (runder Icon-Button) */}
 
             {/* ── Author card + business claim tile + primary actions ──────────── */}
             <div className="flex flex-col gap-3">
