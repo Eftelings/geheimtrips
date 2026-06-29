@@ -1685,7 +1685,7 @@ async function handleVerifyToggle() {
                           : place.submitter.name[0]}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: '#b9a8c4' }}>Eingereicht von</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: '#b9a8c4' }}>Entdeckt von</p>
                         <p className="text-sm font-bold leading-tight truncate flex items-center gap-1.5" style={{ color: '#34254c' }}>
                           {place.submitter.name}
                           {place.submitter.isLocalHero && (
@@ -1704,13 +1704,14 @@ async function handleVerifyToggle() {
                     <div className="flex-1" />
                   )}
 
-                  {/* Actions (only in author card, no business claim) */}
+                  {/* Actions (only in author card, no business claim) — kompakter Icon-Button */}
                   {!place.approvedClaim && (
                     <div className="flex gap-2 flex-shrink-0">
                       <button onClick={() => { setSuggestOpen(true); setSuggestCategory(null); setSuggestText(''); setSuggestSent(false); }}
-                        className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all hover:brightness-95"
-                        style={{ background: '#F1ECF4', color: '#34254c' }}>
-                        <i className="fa-solid fa-pen-to-square text-[var(--color-lavender)]" /> Änderungen vorschlagen
+                        title="Änderungen vorschlagen"
+                        className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:brightness-95"
+                        style={{ background: '#F1ECF4', color: '#71587A' }}>
+                        <i className="fa-solid fa-pen-to-square text-sm" />
                       </button>
                     </div>
                   )}
@@ -1755,9 +1756,10 @@ async function handleVerifyToggle() {
               {place.approvedClaim && (
                 <div className="flex justify-end">
                   <button onClick={() => { setSuggestOpen(true); setSuggestCategory(null); setSuggestText(''); setSuggestSent(false); }}
-                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all hover:brightness-95"
-                    style={{ background: '#F1ECF4', color: '#34254c' }}>
-                    <i className="fa-solid fa-pen-to-square text-[var(--color-lavender)]" /> Änderungen vorschlagen
+                    title="Änderungen vorschlagen"
+                    className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:brightness-95"
+                    style={{ background: '#F1ECF4', color: '#71587A' }}>
+                    <i className="fa-solid fa-pen-to-square text-sm" />
                   </button>
                 </div>
               )}
@@ -1775,16 +1777,10 @@ async function handleVerifyToggle() {
 
             {/* Das Besondere — der USP-Teaser aus dem Einreichformular (highlight) */}
             {highlight && (
-              <section className="rounded-2xl p-4 flex items-start gap-3"
+              <section className="rounded-2xl p-4"
                 style={{ background: 'linear-gradient(135deg, #FFF4EB, #FFEAD6)' }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'var(--color-amber)' }}>
-                  <i className="fa-solid fa-star text-white text-sm" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-amber)] mb-0.5">Das Besondere</p>
-                  <p className="text-[15px] text-[var(--color-aubergine)] leading-snug font-medium">{highlight}</p>
-                </div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-amber)] mb-1">Das Besondere</p>
+                <p className="text-[15px] text-[var(--color-aubergine)] leading-snug font-medium">{highlight}</p>
               </section>
             )}
 
@@ -1957,7 +1953,7 @@ async function handleVerifyToggle() {
               )}
 
               <div className="flex flex-col mb-4" style={{ borderTop: '1px solid #F1ECF4' }}>
-                {visibleQa.length === 0 && <p className="text-sm italic py-4 text-center" style={{ color: '#b9a8c4' }}>Keine Fragen gefunden.</p>}
+                {visibleQa.length === 0 && qaSearch && <p className="text-sm italic py-4 text-center" style={{ color: '#b9a8c4' }}>Keine Fragen gefunden.</p>}
                 {visibleQa.map(qa => (
                   <div key={qa.id} style={{ borderBottom: '1px solid #F1ECF4' }}>
                     {/* Question row */}
