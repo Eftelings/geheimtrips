@@ -2083,7 +2083,11 @@ async function handleVerifyToggle() {
               <WeatherForecast lat={place.lat} lng={place.lng} placeId={place.id} />
             </div>
 
-            {/* Verify CTA */}
+            {/* Datei-Input fürs Hochladen (vom Header-Kamera-Button + der Galerie genutzt) */}
+            <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple onChange={handlePhotoUpload} className="hidden" />
+
+            {/* Verify CTA — mobil über den Header abgebildet, daher erst ab sm */}
+            <div className="hidden sm:block">
             {!isVisited ? (
               <section className="rounded-3xl p-6" style={{ background: '#34254c' }}>
                 <div className="flex items-start gap-4">
@@ -2138,14 +2142,14 @@ async function handleVerifyToggle() {
                 )}
               </section>
             )}
+            </div>
 
-            {/* ── Bildergalerie ────────────────────────────────────────────── */}
-            <div className="pt-4 pb-2">
+            {/* ── Bildergalerie — mobil durch Slider + Lightbox ersetzt, daher ab sm ── */}
+            <div className="hidden sm:block pt-4 pb-2">
               <div className="flex items-center mb-4">
                 <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-lavender)]">
                   Bildergalerie <span className="font-normal ml-1">({allPhotos.length})</span>
                 </p>
-                <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple onChange={handlePhotoUpload} className="hidden" />
               </div>
               {/* Category filter — only shown when at least one photo has been tagged */}
               {allPhotos.some(p => p.cat !== 'alle') && (
