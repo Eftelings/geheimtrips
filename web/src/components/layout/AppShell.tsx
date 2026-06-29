@@ -76,8 +76,11 @@ export function AppShell({ children, showBack, title, headerRight, noHeader }: P
                         </span>
                       )}
                     </button>
-                    <button onClick={() => navigate('/profile')} aria-label="Profil">
+                    <button onClick={() => navigate('/profile')} aria-label="Profil" className="relative">
                       <Avatar name={user.name} src={user.avatarUrl} size={32} />
+                      {notif > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--color-amber)] border-2 border-[var(--color-bg)]" />
+                      )}
                     </button>
                   </>
                 )

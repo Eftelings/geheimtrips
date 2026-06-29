@@ -471,6 +471,91 @@ function GalleryMedia({ url, pos = 'center', className, onClick }:
     : <img src={url} alt="" onClick={onClick} className={className} style={style} />;
 }
 
+// ─── Mobiler Titelbild-Slider (Swipe + Dots + „X Bilder"-Badge → Lightbox) ──────
+function MobileHero({ place, photos, onOpen, onReviews }: {
+  place: Place;
+  photos: { url: string }[];
+  onOpen: (idx: number) => void;
+  onReviews: () => void;
+}) {
+  const [active, setActive] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const list = photos.length ? photos : [{ url: place.hero ?? '' }];
+  const cropFor = (url: string) => {
+    const c = place.galleryCrops?.[url];
+    if (c) return `${c.cropX * 100}% ${c.cropY * 100}%`;
+    if (url === place.hero) return `${(place.heroCropX ?? 0.5) * 100}% ${(place.heroCropY ?? 0.5) * 100}%`;
+    return 'center';
+  };
+  const onScroll = () => { const el = ref.current; if (el) setActive(Math.round(el.scrollLeft / Math.max(el.clientWidth, 1))); };
+
+  return (
+    <div>
+      <div className="relative rounded-3xl overflow-hidden" style={{ aspectRatio: '4 / 3' }}>
+        <div ref={ref} onScroll={onScroll}
+          className="flex w-full h-full overflow-x-auto snap-x snap-mandatory scrollbar-none">
+          {list.map((p, i) => (
+            <button key={`${p.url}-${i}`} type="button" onClick={() => onOpen(i)}
+              className="snap-center shrink-0 w-full h-full">
+              {p.url
+                ? <GalleryMedia url={p.url} pos={cropFor(p.url)} className="w-full h-full object-cover" />
+                : <PlaceImage src={null} category={place.category} className="w-full h-full" iconClass="text-5xl" />}
+            </button>
+          ))}
+        </div>
+
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 45%)' }} />
+
+        <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-white/90 flex items-center gap-1"
+              style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }}>
+              <i className={`fa-solid ${categoryIcon(place.category)}`} /> {place.categoryLabel}
+            </span>
+            {place.isUserSubmitted && (
+              <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-white flex items-center gap-1"
+                style={{ background: 'rgba(249,144,57,0.92)' }}>
+                <i className="fa-solid fa-clock" /> In Prüfung
+              </span>
+            )}
+          </div>
+          <h1 className="font-display font-bold text-white leading-tight"
+            style={{ fontSize: 'clamp(1.25rem, 6vw, 1.6rem)', letterSpacing: '-0.02em', textShadow: '0 2px 12px rgba(0,0,0,0.45)' }}>
+            {place.name}
+          </h1>
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
+            <span className="text-white/75 text-xs flex items-center gap-1">
+              <i className="fa-solid fa-location-dot text-[10px]" /> {place.region}
+            </span>
+            <button onClick={onReviews} className="flex items-center gap-1.5 pointer-events-auto">
+              <StarDisplay rating={place.rating} size="xs" />
+              <span className="text-white/90 text-xs font-semibold">{place.rating}</span>
+              <span className="text-white/60 text-[10px] underline underline-offset-2">({place.reviews})</span>
+            </button>
+          </div>
+        </div>
+
+        {photos.length > 0 && (
+          <button type="button" onClick={() => onOpen(active)}
+            className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', color: 'white' }}>
+            <i className="fa-solid fa-images" style={{ fontSize: 10 }} /> {photos.length} {photos.length === 1 ? 'Bild' : 'Bilder'}
+          </button>
+        )}
+      </div>
+
+      {list.length > 1 && (
+        <div className="flex justify-center gap-1.5 mt-2.5">
+          {list.map((_, i) => (
+            <span key={i} className={`h-1.5 rounded-full transition-all ${i === active ? 'w-4 bg-[var(--color-amber)]' : 'w-1.5 bg-[var(--color-bg-soft)]'}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Image Lightbox ──────────────────────────────────────────────────────────
 
 function ImageLightbox({
@@ -1271,9 +1356,15 @@ async function handleVerifyToggle() {
           </div>
         </div>
 
-        {/* ── 3-panel static gallery (hero | video/2photos | 2photos+all) ─── */}
+        {/* ── Galerie: mobil Swipe-Slider, ab sm 3-Panel-Mosaik ─── */}
         <div className="max-w-7xl mx-auto px-4 pb-4">
-          <div className="flex gap-2" style={{ height: GALLERY_H }}>
+          {/* Mobil: Titelbild als Swipe-Slider mit Dots + „X Bilder"-Badge */}
+          <div className="sm:hidden">
+            <MobileHero place={place} photos={allPhotos}
+              onOpen={idx => setLightboxIdx(idx)} onReviews={() => setShowReviews(v => !v)} />
+          </div>
+          {/* Ab sm: bestehendes 3-Panel-Mosaik */}
+          <div className="hidden sm:flex gap-2" style={{ height: GALLERY_H }}>
 
             {/* ── Hero tile (large, ~60%) ── */}
             <div className="rounded-3xl overflow-hidden relative flex-1 sm:flex-[3] min-w-0">

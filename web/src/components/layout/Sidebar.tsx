@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { BrandLogo } from '../ui/BrandLogo.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
+import { notificationsApi } from '../../services/api.js';
 import { Avatar } from '../ui/Avatar.js';
 
 const TABS = [
@@ -18,6 +20,8 @@ const TABS = [
 export function Sidebar() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const [notif, setNotif] = useState(0);
+  useEffect(() => { if (user) notificationsApi.count().then(r => setNotif(r.count)).catch(() => {}); }, [user]);
 
   return (
     <aside className="hidden md:flex flex-col w-60 min-h-screen bg-white border-r border-[var(--color-bg-soft)] px-4 py-6 sticky top-0 shrink-0">
@@ -33,7 +37,12 @@ export function Sidebar() {
           onClick={() => navigate('/profile')}
           className="flex items-center gap-3 w-full px-3 py-3 rounded-2xl bg-[var(--color-bg-soft)] hover:bg-[var(--color-bg-soft)]/80 transition-colors mb-5 text-left group"
         >
-          <Avatar name={user.name} src={user.avatarUrl} size={42} />
+          <span className="relative flex-shrink-0">
+            <Avatar name={user.name} src={user.avatarUrl} size={42} />
+            {notif > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[var(--color-amber)] border-2 border-white" />
+            )}
+          </span>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-bold text-[var(--color-aubergine)] truncate leading-tight">
               {user.name}
