@@ -858,7 +858,7 @@ export function PlaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { places, savedIds, visitedIds, toggleSave, markVisited, trips, loadTrips, funnelAnswers } = useAppStore();
+  const { places, savedIds, visitedIds, toggleSave, markVisited, trips, loadTrips, loadPlaces, funnelAnswers } = useAppStore();
 
   // State
   const [place, setPlace]              = useState<Place | null>(places.find(p => p.id === id) ?? null);
@@ -995,6 +995,7 @@ export function PlaceDetailPage() {
       placesApi.get(id).then(setPlace).catch(() => {});
     }
     loadTrips();
+    loadPlaces();   // andere Orte für die Karten-Marker / Suche (im Store 30s gecacht)
   }, [id]); // eslint-disable-line
 
   // Echte Community-Fragen vom Backend laden (keine Dummy-Fragen mehr)
