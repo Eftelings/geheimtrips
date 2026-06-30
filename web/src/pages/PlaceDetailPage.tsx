@@ -70,6 +70,20 @@ function MapRecenter({ lat, lng }: { lat: number; lng: number }) {
   return null;
 }
 
+// Erkennt mobile Viewports (< lg). Steuert den Vollbildkarten-+-Bottom-Sheet-Modus.
+function useIsMobile(breakpoint = 1024) {
+  const [mobile, setMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const on = () => setMobile(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [breakpoint]);
+  return mobile;
+}
+
 // ─── Rating criteria ──────────────────────────────────────────────────────────
 //  Dimensionen: Hedonic | Economic | Social | Functional | Quality
 
@@ -1042,6 +1056,23 @@ export function PlaceDetailPage() {
     return () => obs.disconnect();
   }, [visibleFilterPhotos.length]);
 
+  // ── Mobiles Bottom-Sheet über der Vollbildkarte ────────────────────────────
+  const isMobile = useIsMobile(1024);
+  const sheetScrollRef = useRef<HTMLDivElement>(null);
+  const [sheetCollapsed, setSheetCollapsed] = useState(false);
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const [sheetDragging, setSheetDragging] = useState(false);
+  const sheetDrag = useRef<{ startOffset: number; startY: number; lastY: number; lastT: number; v: number; moved: number } | null>(null);
+  const collapsedOffset = () => Math.round((typeof window !== 'undefined' ? window.innerHeight : 800) * 0.56);
+  // Sheet-Position bei Statuswechsel / Resize aktuell halten (nicht während des Ziehens)
+  useEffect(() => {
+    if (sheetDragging) return;
+    const apply = () => setSheetDragY(sheetCollapsed ? collapsedOffset() : 0);
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, [sheetCollapsed, sheetDragging]);
+
   // ── Early return ──────────────────────────────────────────────────────────
 
   if (!place) {
@@ -1149,6 +1180,39 @@ export function PlaceDetailPage() {
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function showToast(msg: string) { setToastMsg(msg); setToastVisible(true); }
+
+  // ── Bottom-Sheet: Ziehen am Griff ──────────────────────────────────────────
+  function onSheetTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    sheetDrag.current = { startOffset: sheetDragY, startY: t.clientY, lastY: t.clientY, lastT: Date.now(), v: 0, moved: 0 };
+    setSheetDragging(true);
+  }
+  function onSheetTouchMove(e: React.TouchEvent) {
+    const d = sheetDrag.current; if (!d) return;
+    const t = e.touches[0];
+    const now = Date.now();
+    if (now > d.lastT) d.v = (t.clientY - d.lastY) / (now - d.lastT);
+    d.lastY = t.clientY; d.lastT = now;
+    const delta = t.clientY - d.startY;
+    d.moved = Math.max(d.moved, Math.abs(delta));
+    const max = collapsedOffset();
+    let next = d.startOffset + delta;
+    if (next < 0) next = next / 3;                 // Gummiband nach oben
+    else if (next > max) next = max + (next - max) / 3;
+    setSheetDragY(next);
+  }
+  function onSheetTouchEnd() {
+    const d = sheetDrag.current;
+    setSheetDragging(false);
+    if (!d) return;
+    if (d.moved < 6) { setSheetCollapsed(c => !c); return; }   // Tipp = umschalten
+    const max = collapsedOffset();
+    let collapse: boolean;
+    if (d.v > 0.45) collapse = true;
+    else if (d.v < -0.45) collapse = false;
+    else collapse = sheetDragY > max * 0.4;
+    setSheetCollapsed(collapse);
+  }
 
   async function handleLikePhoto(photoUrl: string) {
     if (!user) { showToast('Bitte einloggen, um Fotos zu liken.'); return; }
@@ -1291,6 +1355,104 @@ async function handleVerifyToggle() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <AppShell noHeader>
+
+      {/* ══ Mobil: Vollbildkarte im Hintergrund ══════════════════════════════ */}
+      {isMobile && place.lat && place.lng && (
+        <div className="fixed inset-0 z-0" style={{ background: '#e8e4ee' }}>
+          <MapContainer key={`${place.id}-bg`} center={[place.lat, place.lng]} zoom={14}
+            scrollWheelZoom zoomControl={false} attributionControl={false}
+            style={{ height: '100%', width: '100%' }}>
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <Marker position={[place.lat, place.lng]} icon={brandMarker} />
+          </MapContainer>
+        </div>
+      )}
+
+      {/* ══ Detailseite: mobil ziehbares Bottom-Sheet, ab lg normaler Fluss ══ */}
+      <div
+        className={isMobile
+          ? 'fixed inset-x-0 z-40 flex flex-col overflow-hidden rounded-t-[1.75rem] shadow-[0_-10px_44px_rgba(52,37,76,0.22)]'
+          : 'contents'}
+        style={isMobile ? {
+          top: '6vh', bottom: 0, background: '#FBF9FC',
+          transform: `translateY(${sheetDragY}px)`,
+          transition: sheetDragging ? 'none' : 'transform .34s cubic-bezier(.32,.72,0,1)',
+        } : undefined}
+      >
+        {/* ── Sheet-Kopf: Griff + Karten-Infozeile (nur mobil) ──────────────── */}
+        {isMobile && (
+          <div className="flex-shrink-0">
+            {/* Zieh-Griff — antippen schaltet auf/zu, ziehen bewegt das Sheet */}
+            <div onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd}
+              className="flex justify-center pt-2.5 pb-2 cursor-grab active:cursor-grabbing"
+              style={{ touchAction: 'none' }}>
+              <div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} />
+            </div>
+            {/* Karten-Infozeile: Verkehrsmittel · Reisezeit · Maps/Route */}
+            {place.lat && place.lng && (
+              <div className="px-4 pb-2.5 flex items-center gap-2">
+                <div className="relative flex-shrink-0">
+                  <button onClick={() => setTransportPickerOpen(v => !v)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all hover:brightness-95"
+                    style={{ background: '#F1ECF4', color: '#34254c' }}>
+                    <i className={`fa-solid ${transportIcon(mapTransport)}`} style={{ color: '#F99039' }} />
+                    <i className="fa-solid fa-chevron-down text-[8px]" style={{ color: '#b9a8c4' }} />
+                  </button>
+                  {transportPickerOpen && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setTransportPickerOpen(false)} />
+                      <div className="absolute left-0 top-full mt-1.5 z-30 rounded-2xl p-1.5 flex flex-col gap-0.5"
+                        style={{ background: 'white', boxShadow: '0 8px 24px rgba(52,37,76,0.18)', minWidth: 160 }}>
+                        {([
+                          { id: 'walk'    as Transport, label: 'Zu Fuß',     icon: 'fa-person-walking' },
+                          { id: 'bike'    as Transport, label: 'Fahrrad',    icon: 'fa-bicycle'        },
+                          { id: 'transit' as Transport, label: 'ÖPNV / Zug', icon: 'fa-train-subway'  },
+                          { id: 'auto'    as Transport, label: 'Auto',       icon: 'fa-car'            },
+                        ]).map(opt => (
+                          <button key={opt.id}
+                            onClick={() => { setMapTransport(opt.id); setTransportPickerOpen(false); }}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left hover:bg-[var(--color-bg-soft)]"
+                            style={{ color: mapTransport === opt.id ? '#34254c' : '#71587a', background: mapTransport === opt.id ? '#F1ECF4' : 'transparent' }}>
+                            <i className={`fa-solid ${opt.icon} w-4 text-center`}
+                              style={{ color: mapTransport === opt.id ? '#F99039' : '#b9a8c4' }} />
+                            {opt.label}
+                            {mapTransport === opt.id && <i className="fa-solid fa-check ml-auto text-[10px]" style={{ color: '#F99039' }} />}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs min-w-0 flex-1" style={{ color: '#71587a' }}>
+                  {travelTimeLoading ? (
+                    <><i className="fa-solid fa-circle-notch fa-spin text-[10px]" style={{ color: '#b9a8c4' }} /><span style={{ color: '#b9a8c4' }}>Reisezeit…</span></>
+                  ) : travelTimeInfo ? (
+                    <>
+                      <strong style={{ color: '#34254c' }}>~{formatDuration(computeDisplayDuration(travelTimeInfo.distance, travelTimeInfo.drivingDuration, mapTransport))}</strong>
+                      <span style={{ color: '#b9a8c4' }}>·</span>
+                      <span>{formatDistance(travelTimeInfo.distance)}</span>
+                    </>
+                  ) : !userCoords ? (
+                    <span style={{ color: '#b9a8c4' }}>Standort aus</span>
+                  ) : null}
+                </div>
+                <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" title="In Google Maps speichern"
+                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all hover:brightness-95"
+                  style={{ background: '#F1ECF4', color: '#34254c' }}>
+                  <i className="fa-solid fa-bookmark text-sm" />
+                </a>
+                <a href={navUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 h-9 rounded-xl flex-shrink-0 font-semibold text-xs transition-all hover:brightness-110"
+                  style={{ background: 'var(--color-amber)', color: 'white' }}>
+                  <i className="fa-solid fa-diamond-turn-right" /> Route
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Scrollbarer Sheet-Inhalt */}
+        <div ref={sheetScrollRef} className={isMobile ? 'flex-1 overflow-y-auto overscroll-contain' : 'contents'}>
 
       {/* „In Prüfung"-Banner — nur bei noch nicht freigegebenen Orten */}
       {place.isUserSubmitted && (
@@ -1874,81 +2036,7 @@ async function handleVerifyToggle() {
               </button>
             )}
 
-            {/* Mobile only: Karte — after Auf einen Blick */}
-            {place.lat && place.lng && (
-              <div className="lg:hidden rounded-3xl overflow-hidden" style={{ border: '1px solid #F1ECF4' }}>
-                <div style={{ height: 200, position: 'relative', zIndex: 0 }}>
-                  <MapContainer key={`${place.id}-mob`} center={[place.lat, place.lng]} zoom={13}
-                    scrollWheelZoom={false} zoomControl={false} attributionControl={false}
-                    style={{ height: '100%', width: '100%' }}>
-                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
-                    <Marker position={[place.lat, place.lng]} icon={brandMarker} />
-                    <ZoomControl position="bottomright" />
-                    <MapRecenter lat={place.lat} lng={place.lng} />
-                  </MapContainer>
-                </div>
-                <div className="px-3 pt-3 pb-1 flex items-center gap-2.5">
-                  <div className="relative flex-shrink-0">
-                    <button onClick={() => setTransportPickerOpen(v => !v)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all hover:brightness-95"
-                      style={{ background: '#F1ECF4', color: '#34254c' }}>
-                      <i className={`fa-solid ${transportIcon(mapTransport)}`} style={{ color: '#F99039' }} />
-                      <i className="fa-solid fa-chevron-down text-[8px]" style={{ color: '#b9a8c4' }} />
-                    </button>
-                    {transportPickerOpen && (
-                      <>
-                        <div className="fixed inset-0 z-20" onClick={() => setTransportPickerOpen(false)} />
-                        <div className="absolute left-0 bottom-full mb-1.5 z-30 rounded-2xl p-1.5 flex flex-col gap-0.5"
-                          style={{ background: 'white', boxShadow: '0 8px 24px rgba(52,37,76,0.18)', minWidth: 160 }}>
-                          {([
-                            { id: 'walk'    as Transport, label: 'Zu Fuß',     icon: 'fa-person-walking' },
-                            { id: 'bike'    as Transport, label: 'Fahrrad',    icon: 'fa-bicycle'        },
-                            { id: 'transit' as Transport, label: 'ÖPNV / Zug', icon: 'fa-train-subway'  },
-                            { id: 'auto'    as Transport, label: 'Auto',       icon: 'fa-car'            },
-                          ]).map(opt => (
-                            <button key={opt.id}
-                              onClick={() => { setMapTransport(opt.id); setTransportPickerOpen(false); }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left hover:bg-[var(--color-bg-soft)]"
-                              style={{ color: mapTransport === opt.id ? '#34254c' : '#71587a', background: mapTransport === opt.id ? '#F1ECF4' : 'transparent' }}>
-                              <i className={`fa-solid ${opt.icon} w-4 text-center`}
-                                style={{ color: mapTransport === opt.id ? '#F99039' : '#b9a8c4' }} />
-                              {opt.label}
-                              {mapTransport === opt.id && <i className="fa-solid fa-check ml-auto text-[10px]" style={{ color: '#F99039' }} />}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs min-w-0" style={{ color: '#71587a' }}>
-                    {travelTimeLoading ? (
-                      <><i className="fa-solid fa-circle-notch fa-spin text-[10px]" style={{ color: '#b9a8c4' }} /><span style={{ color: '#b9a8c4' }}>Reisezeit…</span></>
-                    ) : travelTimeInfo ? (
-                      <>
-                        <strong style={{ color: '#34254c' }}>~{formatDuration(computeDisplayDuration(travelTimeInfo.distance, travelTimeInfo.drivingDuration, mapTransport))}</strong>
-                        <span style={{ color: '#b9a8c4' }}>·</span>
-                        <span>{formatDistance(travelTimeInfo.distance)}</span>
-                        {(mapTransport === 'transit' || mapTransport === 'train') && <span style={{ color: '#b9a8c4' }}>(ca.)</span>}
-                      </>
-                    ) : !userCoords ? (
-                      <span style={{ color: '#b9a8c4' }}>Standort nicht verfügbar</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="p-3 flex gap-2">
-                  <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-bg-soft)] text-[var(--color-aubergine)] font-semibold py-2.5 rounded-xl text-xs hover:brightness-95 transition-all">
-                    <i className="fa-solid fa-bookmark" /> In Maps speichern
-                  </a>
-                  <a href={navUrl} target="_blank" rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-bg-soft)] text-[var(--color-aubergine)] font-semibold py-2.5 rounded-xl text-xs hover:brightness-95 transition-all">
-                    <i className="fa-solid fa-diamond-turn-right" /> Route
-                    <i className={`fa-solid ${transportIcon(mapTransport)} text-[var(--color-lavender-lt)]`} />
-                  </a>
-                </div>
-              </div>
-            )}
+            {/* Mobile-Karte entfällt: ersetzt durch Vollbildkarte im Hintergrund + Sheet-Kopf (Reisezeit/Route) */}
 
             {/* Q&A */}
             <section>
@@ -2396,6 +2484,9 @@ async function handleVerifyToggle() {
           </div>
         </div>
       </div>
+
+        </div>{/* Ende scrollbarer Sheet-Inhalt */}
+      </div>{/* Ende mobiles Bottom-Sheet */}
 
 
       {/* ── Photo upload overlay ─────────────────────────────────────────────── */}
