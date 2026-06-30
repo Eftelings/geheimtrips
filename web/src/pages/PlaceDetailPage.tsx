@@ -64,6 +64,21 @@ const brandMarker = L.divIcon({
   html: `<div style="width:14px;height:14px;border-radius:50%;background:#F99039;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(52,37,76,0.35);"></div>`,
   iconSize: [14, 14], iconAnchor: [7, 7], className: '',
 });
+// Aktueller Ort: größerer lila Marker mit Halo, hebt sich von den orangenen ab
+const currentMarker = L.divIcon({
+  html: `<div style="position:relative;width:24px;height:24px;">
+    <div style="position:absolute;inset:0;border-radius:50%;background:rgba(124,58,237,0.22);transform:scale(1.9);"></div>
+    <div style="position:absolute;inset:0;border-radius:50%;background:#7c3aed;border:3px solid #fff;box-shadow:0 3px 9px rgba(52,37,76,0.5);"></div>
+  </div>`,
+  iconSize: [24, 24], iconAnchor: [12, 12], className: '',
+});
+// Luftlinie in km (Haversine) – für „nächstgelegene Orte auf der Karte"
+function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat), dLng = toRad(bLng - aLng);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
 function MapRecenter({ lat, lng }: { lat: number; lng: number }) {
   const map = useMap();
   useEffect(() => { map.setView([lat, lng], 14); }, [lat, lng, map]);
@@ -973,8 +988,12 @@ export function PlaceDetailPage() {
   // ── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    // Always fetch the individual place — list endpoint lacks author data
-    if (id) placesApi.get(id).then(setPlace).catch(() => {});
+    // Sofort aus dem Store anzeigen (Marker-/Such-Wechsel snappy), dann frische Daten nachladen
+    if (id) {
+      const cached = places.find(p => p.id === id);
+      if (cached) setPlace(cached);
+      placesApi.get(id).then(setPlace).catch(() => {});
+    }
     loadTrips();
   }, [id]); // eslint-disable-line
 
@@ -1064,6 +1083,26 @@ export function PlaceDetailPage() {
   const [sheetDragging, setSheetDragging] = useState(false);
   const sheetDrag = useRef<{ startOffset: number; startY: number; lastY: number; lastT: number; v: number; moved: number } | null>(null);
   const collapsedOffset = () => Math.round((typeof window !== 'undefined' ? window.innerHeight : 800) * 0.56);
+  const [mapSearch, setMapSearch] = useState('');
+  // Nächstgelegene andere Orte → orange Marker auf der Hintergrundkarte
+  const mapPlaces = useMemo(() => {
+    if (!place || place.lat == null || place.lng == null) return [] as Place[];
+    const cLat = place.lat, cLng = place.lng, cId = place.id;
+    return places
+      .filter(p => p.id !== cId && p.lat != null && p.lng != null)
+      .map(p => ({ p, d: haversineKm(cLat, cLng, p.lat as number, p.lng as number) }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 60)
+      .map(x => x.p);
+  }, [places, place?.id, place?.lat, place?.lng]); // eslint-disable-line
+  // Suchtreffer im Karten-Header
+  const mapSearchResults = useMemo(() => {
+    const q = mapSearch.trim().toLowerCase();
+    if (!q) return [] as Place[];
+    return places.filter(p =>
+      p.name.toLowerCase().includes(q) || (p.region ?? '').toLowerCase().includes(q),
+    ).slice(0, 8);
+  }, [mapSearch, places]);
   // Sheet-Position bei Statuswechsel / Resize aktuell halten (nicht während des Ziehens)
   useEffect(() => {
     if (sheetDragging) return;
@@ -1072,6 +1111,8 @@ export function PlaceDetailPage() {
     window.addEventListener('resize', apply);
     return () => window.removeEventListener('resize', apply);
   }, [sheetCollapsed, sheetDragging]);
+  // Bei Ortswechsel (Marker/Suche) den Sheet-Inhalt nach oben scrollen
+  useEffect(() => { sheetScrollRef.current?.scrollTo(0, 0); }, [place?.id]);
 
   // ── Early return ──────────────────────────────────────────────────────────
 
@@ -1359,12 +1400,64 @@ async function handleVerifyToggle() {
       {/* ══ Mobil: Vollbildkarte im Hintergrund ══════════════════════════════ */}
       {isMobile && place.lat && place.lng && (
         <div className="fixed inset-0 z-0" style={{ background: '#e8e4ee' }}>
-          <MapContainer key={`${place.id}-bg`} center={[place.lat, place.lng]} zoom={14}
+          <MapContainer center={[place.lat, place.lng]} zoom={14}
             scrollWheelZoom zoomControl={false} attributionControl={false}
             style={{ height: '100%', width: '100%' }}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            <Marker position={[place.lat, place.lng]} icon={brandMarker} />
+            {/* Andere Orte (orange) — Klick wechselt das Sheet auf diesen Ort */}
+            {mapPlaces.map(p => (
+              <Marker key={p.id} position={[p.lat as number, p.lng as number]} icon={brandMarker}
+                eventHandlers={{ click: () => navigate(`/place/${p.id}`) }} />
+            ))}
+            {/* Aktueller Ort (lila) zuletzt → liegt über den anderen */}
+            <Marker position={[place.lat, place.lng]} icon={currentMarker} />
+            <MapRecenter lat={place.lat} lng={place.lng} />
           </MapContainer>
+        </div>
+      )}
+
+      {/* ══ Karten-Header (nur eingeklappt): Zurück + Ortssuche ══════════════ */}
+      {isMobile && sheetCollapsed && (
+        <div className="fixed top-0 left-0 right-0 z-20 px-3 pt-3 pb-6 flex items-start gap-2"
+          style={{ background: 'linear-gradient(to bottom, rgba(232,228,238,0.96), rgba(232,228,238,0))' }}>
+          <button onClick={() => navigate(-1)} aria-label="Zurück"
+            className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0"
+            style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.18)' }}>
+            <i className="fa-solid fa-arrow-left text-[var(--color-aubergine)]" />
+          </button>
+          <div className="flex-1 relative">
+            <div className="flex items-center gap-2 bg-white rounded-full px-4 h-10"
+              style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.18)' }}>
+              <i className="fa-solid fa-magnifying-glass text-[var(--color-lavender)] text-sm" />
+              <input value={mapSearch} onChange={e => setMapSearch(e.target.value)}
+                placeholder="Andere Orte suchen…"
+                className="flex-1 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]" />
+              {mapSearch && (
+                <button onClick={() => setMapSearch('')} aria-label="Leeren">
+                  <i className="fa-solid fa-xmark text-[var(--color-lavender)] text-sm" />
+                </button>
+              )}
+            </div>
+            {mapSearch.trim() && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl overflow-hidden max-h-[55vh] overflow-y-auto"
+                style={{ boxShadow: '0 12px 32px rgba(52,37,76,0.22)' }}>
+                {mapSearchResults.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-[var(--color-lavender)]">Keine Orte gefunden.</p>
+                ) : mapSearchResults.map(p => (
+                  <button key={p.id} onClick={() => { setMapSearch(''); navigate(`/place/${p.id}`); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--color-bg-soft)] transition-colors border-b last:border-b-0"
+                    style={{ borderColor: '#F1ECF4' }}>
+                    <img src={p.hero} alt="" className="w-11 h-11 rounded-xl object-cover flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{p.name}</p>
+                      <p className="text-xs text-[var(--color-lavender)] truncate">{p.region}</p>
+                    </div>
+                    {p.id === place.id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: 'rgba(124,58,237,0.12)', color: '#7c3aed' }}>aktuell</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1388,8 +1481,8 @@ async function handleVerifyToggle() {
               style={{ touchAction: 'none' }}>
               <div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} />
             </div>
-            {/* Karten-Infozeile: Verkehrsmittel · Reisezeit · Maps/Route */}
-            {place.lat && place.lng && (
+            {/* Karten-Infozeile: Verkehrsmittel · Reisezeit · Maps/Route — nur ausgeklappt */}
+            {!sheetCollapsed && place.lat && place.lng && (
               <div className="px-4 pb-2.5 flex items-center gap-2">
                 <div className="relative flex-shrink-0">
                   <button onClick={() => setTransportPickerOpen(v => !v)}
@@ -1448,11 +1541,43 @@ async function handleVerifyToggle() {
                 </a>
               </div>
             )}
+
+            {/* Eingeklappte Vorschau: Bild auf sichtbare Höhe eingepasst + Name + Bewertung */}
+            {sheetCollapsed && (
+              <div className="px-4 pb-3 pt-0.5">
+                <button onClick={() => setSheetCollapsed(false)}
+                  className="block w-full rounded-2xl overflow-hidden mb-2" style={{ height: '20vh' }}>
+                  <img src={place.hero} alt={place.name} className="w-full h-full object-cover" />
+                </button>
+                <div className="flex items-center justify-between gap-3">
+                  <button onClick={() => setSheetCollapsed(false)} className="min-w-0 text-left flex-1">
+                    <h2 className="font-display font-bold text-[var(--color-aubergine)] text-lg leading-tight truncate">{place.name}</h2>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {place.reviews > 0 && (
+                        <span className="flex items-center gap-1 flex-shrink-0">
+                          <i className="fa-solid fa-star text-[var(--color-amber)] text-xs" />
+                          <span className="text-sm font-bold text-[var(--color-aubergine)]">{place.rating}</span>
+                          <span className="text-xs text-[var(--color-lavender)]">({place.reviews})</span>
+                        </span>
+                      )}
+                      <span className="text-xs text-[var(--color-lavender)] truncate">{place.region}</span>
+                    </div>
+                  </button>
+                  {place.lat && place.lng && (
+                    <a href={navUrl} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 h-9 rounded-xl flex-shrink-0 font-semibold text-xs"
+                      style={{ background: 'var(--color-amber)', color: 'white' }}>
+                      <i className="fa-solid fa-diamond-turn-right" /> Route
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Scrollbarer Sheet-Inhalt */}
-        <div ref={sheetScrollRef} className={isMobile ? 'flex-1 overflow-y-auto overscroll-contain' : 'contents'}>
+        {/* Scrollbarer Sheet-Inhalt — eingeklappt ausgeblendet (dann zählt nur die Vorschau) */}
+        <div ref={sheetScrollRef} className={isMobile ? (sheetCollapsed ? 'hidden' : 'flex-1 overflow-y-auto overscroll-contain') : 'contents'}>
 
       {/* „In Prüfung"-Banner — nur bei noch nicht freigegebenen Orten */}
       {place.isUserSubmitted && (
