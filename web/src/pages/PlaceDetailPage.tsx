@@ -1818,7 +1818,7 @@ async function handleVerifyToggle() {
       )}
 
       {/* ── Main layout ──────────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-4 pt-6 pb-2">
+      <div className="max-w-7xl mx-auto px-4 pt-2 lg:pt-6 pb-2">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10">
 
           {/* ═══ LEFT ════════════════════════════════════════════════════════ */}
@@ -1827,7 +1827,8 @@ async function handleVerifyToggle() {
             {/* „Zu Trip hinzufügen" ist mobil jetzt im Header (runder Icon-Button) */}
 
             {/* ── Author card + business claim tile + primary actions ──────────── */}
-            <div className="flex flex-col gap-3">
+            {/* Mobil: „Entdeckt von" wandert unter „Auf einen Blick" + Fragen (order) */}
+            <div className="flex flex-col gap-3 order-1 lg:order-none">
               <div className={`flex gap-3 ${place.approvedClaim ? 'flex-col sm:flex-row' : ''}`}>
 
                 {/* Entdecker card */}
@@ -1954,8 +1955,9 @@ async function handleVerifyToggle() {
             </div>
 
             {/* Das Besondere — der USP-Teaser aus dem Einreichformular (highlight) */}
+            {/* Mobil: direkt unter die Bilder ziehen (order-first) */}
             {highlight && (
-              <section className="rounded-2xl p-4"
+              <section className="rounded-2xl p-4 order-first lg:order-none"
                 style={{ background: 'linear-gradient(135deg, #FFF4EB, #FFEAD6)' }}>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-amber)] mb-1">Das Besondere</p>
                 <p className="text-[15px] text-[var(--color-aubergine)] leading-snug font-medium">{highlight}</p>
@@ -2167,7 +2169,7 @@ async function handleVerifyToggle() {
             </section>
 
             {/* Mobile only: Wetter — after Q&A */}
-            <div className="lg:hidden">
+            <div className="lg:hidden order-2 lg:order-none">
               <WeatherForecast lat={place.lat} lng={place.lng} placeId={place.id} />
             </div>
 
@@ -2175,7 +2177,7 @@ async function handleVerifyToggle() {
             <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple onChange={handlePhotoUpload} className="hidden" />
 
             {/* Verify CTA — mobil über den Header abgebildet, daher erst ab sm */}
-            <div className="hidden sm:block">
+            <div className="hidden sm:block order-3 lg:order-none">
             {!isVisited ? (
               <section className="rounded-3xl p-6" style={{ background: '#34254c' }}>
                 <div className="flex items-start gap-4">
@@ -2233,7 +2235,7 @@ async function handleVerifyToggle() {
             </div>
 
             {/* ── Bildergalerie — mobil durch Slider + Lightbox ersetzt, daher ab sm ── */}
-            <div className="hidden sm:block pt-4 pb-2">
+            <div className="hidden sm:block pt-4 pb-2 order-4 lg:order-none">
               <div className="flex items-center mb-4">
                 <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-lavender)]">
                   Bildergalerie <span className="font-normal ml-1">({allPhotos.length})</span>
