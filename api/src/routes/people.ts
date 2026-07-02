@@ -1,15 +1,46 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
 import { users, friendships } from '../db/schema.js';
-import { sql, eq, and, or, inArray } from 'drizzle-orm';
+import { sql, eq, and, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { isUserLocalHero } from '../lib/ranking.js';
 
 const router = new Hono();
 
-// GET /people/suggestions — Menschen mit denselben gemerkten Orten (Phase C)
+type UserRow = typeof users.$inferSelect;
+
+// Luftlinie in km (Haversine)
+function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat), dLng = toRad(bLng - aLng);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+// POST /people/location — aktuellen GPS-Standort speichern (nur mit Standortfreigabe)
+router.post('/location', requireAuth, async (c) => {
+  const me = c.get('user');
+  const body = await c.req.json().catch(() => ({})) as { lat?: unknown; lng?: unknown };
+  const lat = Number(body.lat), lng = Number(body.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return c.json({ error: 'invalid coords' }, 400);
+  }
+  await db.update(users).set({ lat, lng, locationUpdatedAt: new Date().toISOString() }).where(eq(users.id, me.id));
+  return c.json({ ok: true });
+});
+
+// DELETE /people/location — Standort wieder entfernen (Freigabe zurückziehen)
+router.delete('/location', requireAuth, async (c) => {
+  const me = c.get('user');
+  await db.update(users).set({ lat: null, lng: null, locationUpdatedAt: null }).where(eq(users.id, me.id));
+  return c.json({ ok: true });
+});
+
+// GET /people/suggestions — Menschen in der Nähe / mit denselben gemerkten Orten (Phase C)
 router.get('/suggestions', requireAuth, async (c) => {
   const me = c.get('user');
+  const myLat = me.lat as number | null, myLng = me.lng as number | null;
+  const hasMyLoc = myLat != null && myLng != null;
 
   // Bereits verbundene/angefragte Personen ausschließen
   const rels = await db.select({ a: friendships.requesterId, b: friendships.addresseeId })
@@ -18,7 +49,7 @@ router.get('/suggestions', requireAuth, async (c) => {
   const excluded = new Set<number>([me.id]);
   for (const r of rels) { excluded.add(r.a); excluded.add(r.b); }
 
-  // Kandidat:innen nach Anzahl gemeinsamer gemerkter Orte
+  // Gemeinsame gemerkte Orte je Kandidat:in (Anzahl)
   const shared = await db.all(sql`
     SELECT sp.user_id AS userId, count(*) AS shared
     FROM saved_places sp
@@ -28,7 +59,7 @@ router.get('/suggestions', requireAuth, async (c) => {
   `).catch(() => []) as { userId: number; shared: number }[];
   const sharedMap = new Map(shared.map(s => [s.userId, Number(s.shared)]));
 
-  // Namen der gemeinsamen Orte (eine Abfrage für alle Kandidat:innen)
+  // Namen der gemeinsamen Orte (max. 3 je Kandidat:in)
   const sharedNames = new Map<number, string[]>();
   const candIds = shared.map(s => s.userId).filter(id => !excluded.has(id));
   if (candIds.length) {
@@ -45,34 +76,37 @@ router.get('/suggestions', requireAuth, async (c) => {
     }
   }
 
-  // Userdaten holen (opt-in + sichtbar + nicht gesperrt)
-  let candidates = candIds.length
-    ? (await db.select().from(users).where(inArray(users.id, candIds)).all())
-        .filter(u => u.meetPeopleEnabled && u.profileVisible && !u.isBanned)
-    : [];
+  // Pool: alle Meet-People-Nutzer:innen (opt-in, sichtbar, nicht gesperrt, nicht ausgeschlossen)
+  const meet = await db.select().from(users)
+    .where(and(eq(users.meetPeopleEnabled, true), eq(users.profileVisible, true))).limit(200).all();
+  const pool: UserRow[] = meet.filter(u => !excluded.has(u.id) && !u.isBanned);
 
-  // Auffüllen mit weiteren Meet-People-Nutzer:innen, falls wenige
-  if (candidates.length < 12) {
-    const more = await db.select().from(users)
-      .where(and(eq(users.meetPeopleEnabled, true), eq(users.profileVisible, true))).limit(50).all();
-    for (const u of more) {
-      if (excluded.has(u.id) || u.isBanned || candidates.some(x => x.id === u.id)) continue;
-      candidates.push(u);
-      if (candidates.length >= 30) break;
-    }
-  }
+  // Distanz je Kandidat:in — nur wenn BEIDE Seiten den Standort geteilt haben
+  const distOf = (u: UserRow): number | null =>
+    (hasMyLoc && u.lat != null && u.lng != null)
+      ? haversineKm(myLat as number, myLng as number, u.lat, u.lng) : null;
 
-  const result = await Promise.all(candidates
-    .sort((a, b) => (sharedMap.get(b.id) ?? 0) - (sharedMap.get(a.id) ?? 0))
-    .slice(0, 24)
-    .map(async u => ({
+  // Sortierung: nächste zuerst; ohne Distanz nach gemeinsamen Orten
+  const sorted = pool.sort((a, b) => {
+    const da = distOf(a), dbb = distOf(b);
+    if (da != null && dbb != null) return da - dbb;
+    if (da != null) return -1;
+    if (dbb != null) return 1;
+    return (sharedMap.get(b.id) ?? 0) - (sharedMap.get(a.id) ?? 0);
+  }).slice(0, 24);
+
+  const suggestions = await Promise.all(sorted.map(async u => {
+    const d = distOf(u);
+    return {
       id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl, bio: u.bio ?? '', age: u.age ?? null,
       sharedCount: sharedMap.get(u.id) ?? 0,
       sharedPlaces: sharedNames.get(u.id) ?? [],
+      distanceKm: d != null ? Math.round(d * 10) / 10 : null,
       isLocalHero: await isUserLocalHero(u.id),
-    })));
+    };
+  }));
 
-  return c.json({ meetPeopleEnabled: !!me.meetPeopleEnabled, suggestions: result });
+  return c.json({ meetPeopleEnabled: !!me.meetPeopleEnabled, hasLocation: hasMyLoc, suggestions });
 });
 
 export default router;

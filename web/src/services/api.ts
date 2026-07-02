@@ -352,10 +352,12 @@ export const friendsApi = {
 // ─── Neue Leute kennenlernen (Phase C) ──────────────────────────────────────────
 export interface PersonSuggestion {
   id: number; name: string; handle: string; avatarUrl: string | null; bio: string; age: number | null;
-  sharedCount: number; sharedPlaces: string[]; isLocalHero: boolean;
+  sharedCount: number; sharedPlaces: string[]; isLocalHero: boolean; distanceKm: number | null;
 }
 export const peopleApi = {
-  suggestions: () => get<{ meetPeopleEnabled: boolean; suggestions: PersonSuggestion[] }>('/people/suggestions'),
+  suggestions: () => get<{ meetPeopleEnabled: boolean; hasLocation: boolean; suggestions: PersonSuggestion[] }>('/people/suggestions'),
+  updateLocation: (lat: number, lng: number) => post<{ ok: true }>('/people/location', { lat, lng }),
+  clearLocation: () => del<{ ok: true }>('/people/location'),
 };
 
 // ─── Öffentliche Profile (reale Nutzer:innen) ──────────────────────────────────

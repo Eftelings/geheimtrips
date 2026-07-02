@@ -24,6 +24,10 @@ await db.run(sql`CREATE TABLE IF NOT EXISTS password_reset_tokens (
 
 // Alter-Spalte nachrüsten (für Phase C / Profil)
 await db.run(sql`ALTER TABLE users ADD COLUMN age INTEGER`).catch(() => {});
+// Standort-Spalten nachrüsten (Phase C / „Neue Leute in der Nähe")
+await db.run(sql`ALTER TABLE users ADD COLUMN lat REAL`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN lng REAL`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN location_updated_at TEXT`).catch(() => {});
 
 const APP_URL = (process.env.APP_URL ?? 'https://www.geheimtrips.de').replace(/\/$/, '');
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');

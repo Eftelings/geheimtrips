@@ -25,6 +25,10 @@ export const users = sqliteTable('users', {
   meetPeopleEnabled: integer('meet_people_enabled', { mode: 'boolean' }).default(false),
   // Zeitpunkt, zu dem zuletzt Benachrichtigungen gesehen wurden (für den Punkt im Header)
   notificationsSeenAt: text('notifications_seen_at'),
+  // Letzter GPS-Standort — nur wenn „Neue Leute" aktiv + Standort geteilt (für Nähe-Matching)
+  lat: real('lat'),
+  lng: real('lng'),
+  locationUpdatedAt: text('location_updated_at'),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
 
