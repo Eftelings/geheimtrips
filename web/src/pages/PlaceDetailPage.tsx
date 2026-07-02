@@ -15,6 +15,12 @@ import type { ParkingContributions, PlaceQuestion } from '../services/api.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import type { Place, Transport } from '../types/index.js';
+import { distanceKm, geocodeSuggestions } from '../services/geoService.js';
+import type { Coords, GeoLocation } from '../services/geoService.js';
+import { pointInGeoJSON, EFFECTIVE_SPEED_KMH } from '../utils/geo.js';
+import { ReachControls } from '../components/ui/ReachControls.js';
+import { ReachLayer } from '../components/map/ReachLayer.js';
+import { useTravelReach } from '../hooks/useTravelReach.js';
 
 // ─── Transport helpers ────────────────────────────────────────────────────────
 
@@ -1084,26 +1090,64 @@ export function PlaceDetailPage() {
   const [sheetDragging, setSheetDragging] = useState(false);
   const sheetDrag = useRef<{ startOffset: number; startY: number; lastY: number; lastT: number; v: number; moved: number } | null>(null);
   const collapsedOffset = () => Math.round((typeof window !== 'undefined' ? window.innerHeight : 800) * 0.56);
-  const [mapSearch, setMapSearch] = useState('');
-  // Nächstgelegene andere Orte → orange Marker auf der Hintergrundkarte
+  // ── Reichweiten-Filter für die Karte (Standort + Verkehrsmittel + Reisezeit, wie auf der Startseite) ──
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchCenter, setSearchCenter] = useState<Coords | null>(null);
+  const [searchLabel, setSearchLabel] = useState<string | null>(null);
+  const [geoSug, setGeoSug] = useState<GeoLocation[]>([]);
+  const [showSug, setShowSug] = useState(false);
+  const [radiusKm, setRadiusKm] = useState(80);
+  const geoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Zentrum: eingetippte Adresse überschreibt den GPS-Standort
+  const reachCenter = searchCenter ?? userCoords;
+  const reach = useTravelReach(reachCenter);
+  const travel = { mode: reach.travelMode, minutes: reach.travelMinutes, iso: reach.iso, loading: reach.isoLoading };
+  // Andere Orte als orange Marker — nach Reichweite gefiltert (ohne Zentrum: die 60 nächsten zum aktuellen Ort)
   const mapPlaces = useMemo(() => {
-    if (!place || place.lat == null || place.lng == null) return [] as Place[];
-    const cLat = place.lat, cLng = place.lng, cId = place.id;
-    return places
-      .filter(p => p.id !== cId && p.lat != null && p.lng != null)
-      .map(p => ({ p, d: haversineKm(cLat, cLng, p.lat as number, p.lng as number) }))
-      .sort((a, b) => a.d - b.d)
-      .slice(0, 60)
-      .map(x => x.p);
-  }, [places, place?.id, place?.lat, place?.lng]); // eslint-disable-line
-  // Suchtreffer im Karten-Header
-  const mapSearchResults = useMemo(() => {
-    const q = mapSearch.trim().toLowerCase();
-    if (!q) return [] as Place[];
-    return places.filter(p =>
-      p.name.toLowerCase().includes(q) || (p.region ?? '').toLowerCase().includes(q),
-    ).slice(0, 8);
-  }, [mapSearch, places]);
+    if (!place) return [] as Place[];
+    const others = places.filter(p => p.id !== place.id && p.lat != null && p.lng != null);
+    if (!reachCenter) {
+      if (place.lat == null || place.lng == null) return others.slice(0, 60);
+      const cLat = place.lat, cLng = place.lng;
+      return others
+        .map(p => ({ p, d: haversineKm(cLat, cLng, p.lat as number, p.lng as number) }))
+        .sort((a, b) => a.d - b.d).slice(0, 60).map(x => x.p);
+    }
+    const within = (lat: number, lng: number) =>
+      reach.travelMode === 'radius' ? distanceKm(reachCenter, { lat, lng }) <= radiusKm
+      : reach.iso                   ? pointInGeoJSON(lat, lng, reach.iso.feature.geometry)
+      : distanceKm(reachCenter, { lat, lng }) <= (EFFECTIVE_SPEED_KMH[reach.travelMode as Transport] * reach.travelMinutes) / 60;
+    return others.filter(p => within(p.lat as number, p.lng as number));
+  }, [places, place?.id, place?.lat, place?.lng, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm]); // eslint-disable-line
+  // Adress-Vorschläge (debounced) fürs Standort-Suchfeld
+  function onSearchInput(val: string) {
+    setSearchQuery(val);
+    setShowSug(false);
+    if (geoTimer.current) clearTimeout(geoTimer.current);
+    if (val.trim().length >= 3) {
+      geoTimer.current = setTimeout(async () => {
+        const sug = await geocodeSuggestions(val).catch(() => []);
+        setGeoSug(sug);
+        setShowSug(sug.length > 0);
+      }, 400);
+    } else {
+      setGeoSug([]);
+    }
+  }
+  function pickCenter(s: GeoLocation) {
+    setSearchCenter(s.coords);
+    setSearchLabel(s.displayName);
+    setSearchQuery('');
+    setGeoSug([]);
+    setShowSug(false);
+  }
+  function resetToGps() {
+    setSearchCenter(null);
+    setSearchLabel(null);
+    setSearchQuery('');
+    setGeoSug([]);
+    setShowSug(false);
+  }
   // Sheet-Position bei Statuswechsel / Resize aktuell halten (nicht während des Ziehens)
   useEffect(() => {
     if (sheetDragging) return;
@@ -1405,6 +1449,8 @@ async function handleVerifyToggle() {
             scrollWheelZoom zoomControl={false} attributionControl={false}
             style={{ height: '100%', width: '100%' }}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            {/* Reichweite: Isochrone / Radius-Kreis + Standort-Zentrum */}
+            <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
             {/* Andere Orte (orange) — Klick wechselt das Sheet auf diesen Ort */}
             {mapPlaces.map(p => (
               <Marker key={p.id} position={[p.lat as number, p.lng as number]} icon={brandMarker}
@@ -1417,47 +1463,74 @@ async function handleVerifyToggle() {
         </div>
       )}
 
-      {/* ══ Karten-Header (nur eingeklappt): Zurück + Ortssuche ══════════════ */}
+      {/* ══ Karten-Header (nur eingeklappt): Standort + Verkehrsmittel + Reisezeit (wie Startseite) ══ */}
       {isMobile && sheetCollapsed && (
-        <div className="fixed top-0 left-0 right-0 z-20 px-3 pt-3 pb-6 flex items-start gap-2"
-          style={{ background: 'linear-gradient(to bottom, rgba(232,228,238,0.96), rgba(232,228,238,0))' }}>
-          <button onClick={() => navigate(-1)} aria-label="Zurück"
-            className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0"
-            style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.18)' }}>
-            <i className="fa-solid fa-arrow-left text-[var(--color-aubergine)]" />
-          </button>
-          <div className="flex-1 relative">
-            <div className="flex items-center gap-2 bg-white rounded-full px-4 h-10"
+        <div className="fixed top-0 left-0 right-0 z-20 px-3 pt-3 pb-5 flex flex-col gap-2"
+          style={{ background: 'linear-gradient(to bottom, rgba(232,228,238,0.97) 62%, rgba(232,228,238,0))' }}>
+
+          {/* Zeile 1: Zurück + Standort-Suche (Adresse → Suchzentrum) */}
+          <div className="flex items-start gap-2">
+            <button onClick={() => navigate(-1)} aria-label="Zurück"
+              className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0"
               style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.18)' }}>
-              <i className="fa-solid fa-magnifying-glass text-[var(--color-lavender)] text-sm" />
-              <input value={mapSearch} onChange={e => setMapSearch(e.target.value)}
-                placeholder="Andere Orte suchen…"
-                className="flex-1 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]" />
-              {mapSearch && (
-                <button onClick={() => setMapSearch('')} aria-label="Leeren">
-                  <i className="fa-solid fa-xmark text-[var(--color-lavender)] text-sm" />
+              <i className="fa-solid fa-arrow-left text-[var(--color-aubergine)]" />
+            </button>
+            <div className="flex-1 relative">
+              <div className="flex items-center gap-2 bg-white rounded-full px-4 h-10"
+                style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.18)' }}>
+                <i className="fa-solid fa-location-dot text-[var(--color-amber)] text-sm" />
+                <input value={searchQuery} onChange={e => onSearchInput(e.target.value)}
+                  onFocus={() => geoSug.length > 0 && setShowSug(true)}
+                  onBlur={() => setTimeout(() => setShowSug(false), 150)}
+                  placeholder={searchLabel ?? 'Stadt oder Adresse…'}
+                  className="flex-1 min-w-0 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]" />
+                {(searchQuery || searchCenter) && (
+                  <button onClick={resetToGps} aria-label="Zurücksetzen">
+                    <i className="fa-solid fa-xmark text-[var(--color-lavender)] text-sm" />
+                  </button>
+                )}
+              </div>
+              {/* Adress-Vorschläge (Geocoding) */}
+              {showSug && geoSug.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl overflow-hidden z-10"
+                  style={{ boxShadow: '0 12px 32px rgba(52,37,76,0.22)' }}>
+                  {geoSug.map((s, i) => (
+                    <button key={i} onMouseDown={() => pickCenter(s)}
+                      className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-[var(--color-bg-soft)] transition-colors border-b last:border-b-0"
+                      style={{ borderColor: '#F1ECF4' }}>
+                      <i className="fa-solid fa-location-dot text-[var(--color-amber)] mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{s.displayName}</p>
+                        <p className="text-xs text-[var(--color-lavender)] truncate">{s.fullAddress}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Zeile 2: aktives Zentrum + Reichweiten-Regler (Verkehrsmittel + Reisezeit/Radius) */}
+          <div className="bg-white/95 rounded-2xl px-2.5 py-2 flex flex-col gap-2"
+            style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.14)' }}>
+            <div className="flex items-center gap-1.5 text-[11px] px-1" style={{ color: '#71587a' }}>
+              <i className="fa-solid fa-location-crosshairs text-[var(--color-amber)]" />
+              <span className="truncate flex-1">
+                {searchLabel ?? (userCoords ? 'Mein Standort' : 'Kein Standort — tippe eine Adresse ein')}
+              </span>
+              <span className="font-semibold text-[var(--color-aubergine)] flex-shrink-0">{mapPlaces.length} Orte</span>
+              {searchCenter && (
+                <button onClick={resetToGps} className="flex items-center gap-1 font-semibold flex-shrink-0" style={{ color: '#7c3aed' }}>
+                  <i className="fa-solid fa-location-arrow" /> GPS
                 </button>
               )}
             </div>
-            {mapSearch.trim() && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl overflow-hidden max-h-[55vh] overflow-y-auto"
-                style={{ boxShadow: '0 12px 32px rgba(52,37,76,0.22)' }}>
-                {mapSearchResults.length === 0 ? (
-                  <p className="px-4 py-3 text-sm text-[var(--color-lavender)]">Keine Orte gefunden.</p>
-                ) : mapSearchResults.map(p => (
-                  <button key={p.id} onClick={() => { setMapSearch(''); navigate(`/place/${p.id}`); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--color-bg-soft)] transition-colors border-b last:border-b-0"
-                    style={{ borderColor: '#F1ECF4' }}>
-                    <img src={p.hero} alt="" className="w-11 h-11 rounded-xl object-cover flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{p.name}</p>
-                      <p className="text-xs text-[var(--color-lavender)] truncate">{p.region}</p>
-                    </div>
-                    {p.id === place.id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: 'rgba(124,58,237,0.12)', color: '#7c3aed' }}>aktuell</span>}
-                  </button>
-                ))}
-              </div>
-            )}
+            <ReachControls
+              travelMode={reach.travelMode} setTravelMode={reach.setTravelMode}
+              travelMinutes={reach.travelMinutes} setTravelMinutes={reach.setTravelMinutes}
+              radiusKm={radiusKm} setRadiusKm={setRadiusKm}
+              iso={reach.iso} isoLoading={reach.isoLoading}
+            />
           </div>
         </div>
       )}
