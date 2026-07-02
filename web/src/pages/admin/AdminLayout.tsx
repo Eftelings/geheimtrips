@@ -11,7 +11,7 @@ const NAV = [
   { to: '/admin/change-requests', icon: 'fa-pen-to-square', label: 'Änderungsanfragen' },
   { to: '/admin/takedown',    icon: 'fa-flag',           label: 'Notice & Takedown' },
   { to: '/admin/authors',     icon: 'fa-user-pen',       label: 'Autoren' },
-  { to: '/admin/claims',      icon: 'fa-building',       label: 'Betreiber-Anfragen' },
+  { to: '/admin/claims',      icon: 'fa-building',       label: 'Unternehmen' },
   { to: '/admin/taxonomy',    icon: 'fa-folder-tree',    label: 'Kategorien & Merkmale' },
   { to: '/admin/categories',  icon: 'fa-tags',           label: 'Filter-Kategorien (alt)' },
   { to: '/admin/perks',       icon: 'fa-gift',           label: 'Vorteile' },

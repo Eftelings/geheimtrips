@@ -64,6 +64,14 @@ export interface AdminClaim {
   user?: { id: number; name: string; email: string };
 }
 
+export interface AdminBusinessAccount {
+  id: number; userId: number; companyName: string; companyEmail: string;
+  companyWebsite: string | null; description: string | null;
+  isVerified: boolean; verifiedAt: string | null; createdAt: string;
+  user: { id: number; name: string; email: string; handle: string } | null;
+  places: { id: string; name: string }[];
+}
+
 export interface AdminPerk {
   id: number;
   board: 'orte' | 'quiz' | 'punkte';
@@ -165,4 +173,8 @@ export const adminApi = {
   claims:        ()           => get<AdminClaim[]>('/claims'),
   approveClaim:  (id: number) => patch<{ ok: boolean }>(`/claims/${id}/approve`),
   rejectClaim:   (id: number, d?: { adminNote?: string }) => patch<{ ok: boolean }>(`/claims/${id}/reject`, d ?? {}),
+  // Business-Accounts (Admin legt Unternehmen direkt an)
+  businessAccounts: () => get<AdminBusinessAccount[]>('/business-accounts'),
+  createBusinessAccount: (d: { companyName: string; companyEmail: string; companyWebsite?: string; description?: string; placeIds?: string[] }) =>
+    post<{ ok: boolean; tempPassword: string; email: string; userId: number; profileId: number; assigned: string[] }>('/business-accounts', d),
 };

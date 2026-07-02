@@ -11,6 +11,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
 import { mailStatus, verifyMail, sendMail } from '../lib/mailer.js';
 
 // ── Runtime migration + Seed: Perks-Tabelle mit zwei Dummy-Vorteilen ───────────
@@ -655,6 +656,75 @@ router.patch('/claims/:id/reject', zValidator('json', z.object({
     reviewedAt: new Date().toISOString(),
   }).where(eq(businessClaims.id, id));
   return c.json({ ok: true });
+});
+
+// ─── Business-Accounts (Admin legt Unternehmen direkt an) ─────────────────────
+
+router.get('/business-accounts', async (c) => {
+  const profiles = await db.select().from(businessProfiles).orderBy(desc(businessProfiles.createdAt)).all();
+  const rows = await Promise.all(profiles.map(async (p) => {
+    const user = await db.select({ id: users.id, name: users.name, email: users.email, handle: users.handle })
+      .from(users).where(eq(users.id, p.userId)).get();
+    const claimed = await db.select({ id: places.id, name: places.name })
+      .from(places).where(eq(places.businessProfileId, p.id)).all();
+    return { ...p, user, places: claimed };
+  }));
+  return c.json(rows);
+});
+
+const slugifyHandle = (s: string) =>
+  s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20) || 'unternehmen';
+
+router.post('/business-accounts', zValidator('json', z.object({
+  companyName:    z.string().min(1),
+  companyEmail:   z.string().email(),
+  companyWebsite: z.string().optional(),
+  description:    z.string().optional(),
+  placeIds:       z.array(z.string()).optional(),
+})), async (c) => {
+  const { companyName, companyEmail, companyWebsite, description, placeIds } = c.req.valid('json');
+
+  // E-Mail muss frei sein
+  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, companyEmail)).get();
+  if (existing) return c.json({ error: 'Diese E-Mail ist bereits registriert.' }, 409);
+
+  // Eindeutigen Handle finden
+  const base = slugifyHandle(companyName);
+  let handle = base;
+  for (let i = 0; i < 50; i++) {
+    const taken = await db.select({ id: users.id }).from(users).where(eq(users.handle, handle)).get();
+    if (!taken) break;
+    handle = `${base}_${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+
+  // Temporäres Passwort erzeugen (Unternehmen ändert es nach dem ersten Login)
+  const tempPassword = Math.random().toString(36).slice(2, 10) + Math.floor(10 + Math.random() * 89);
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+  const [user] = await db.insert(users).values({
+    email: companyEmail, passwordHash, name: companyName, handle,
+  }).returning();
+
+  const [profile] = await db.insert(businessProfiles).values({
+    userId: user.id, companyName, companyEmail,
+    companyWebsite: companyWebsite || null, description: description || null,
+    isVerified: true, verifiedAt: new Date().toISOString(),
+  }).returning();
+
+  // Orte zuweisen: offiziell verwaltet + genehmigter Claim (→ Änderungswünsche landen im Postfach)
+  const assigned: string[] = [];
+  for (const pid of placeIds ?? []) {
+    const place = await db.select({ id: places.id, name: places.name }).from(places).where(eq(places.id, pid)).get();
+    if (!place) continue;
+    await db.update(places).set({ businessProfileId: profile.id, isOfficiallyManaged: true }).where(eq(places.id, pid));
+    await db.insert(businessClaims).values({
+      placeId: pid, userId: user.id, businessName: companyName, contactEmail: companyEmail,
+      contactWebsite: companyWebsite || null, status: 'approved', reviewedAt: new Date().toISOString(),
+    });
+    assigned.push(place.name);
+  }
+
+  return c.json({ ok: true, tempPassword, email: companyEmail, userId: user.id, profileId: profile.id, assigned }, 201);
 });
 
 // ─── Authors ──────────────────────────────────────────────────────────────────
