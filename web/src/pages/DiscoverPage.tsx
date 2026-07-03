@@ -407,7 +407,7 @@ const PODIUM_SLOTS = [
   { srcIdx: 2, rank: 3, platformH: 44, delay: 0   },
 ] as const;
 
-function SpotlightCard({ places, onNavigate }: { places: Place[]; onNavigate: (path: string) => void }) {
+export function SpotlightCard({ places, onNavigate }: { places: Place[]; onNavigate: (path: string) => void }) {
   const [activeCat, setActiveCat] = useState('Alle');
   const [activeYear, setActiveYear] = useState(CURRENT_YEAR);
   const [listCount, setListCount] = useState(3);
@@ -573,7 +573,7 @@ function SpotlightCard({ places, onNavigate }: { places: Place[]; onNavigate: (p
 // ─── Ranking-Vorschau ─────────────────────────────────────────────────────────
 type RankBoard = 'orte' | 'published' | 'quiz';
 
-function RankingCard({ onNavigate }: { places: Place[]; onNavigate: (path: string) => void }) {
+export function RankingCard({ onNavigate }: { onNavigate: (path: string) => void }) {
   const [board, setBoard] = useState<RankBoard>('orte');
   const [entriesOrte, setEntriesOrte] = useState<RankingEntry[]>([]);
   const [entriesEingereicht, setEntriesEingereicht] = useState<RankingEntry[]>([]);
@@ -1557,17 +1557,9 @@ export function DiscoverPage() {
               <em className="italic" style={{ color: '#71587a' }}>Abenteurerinnen.</em>
             </h2>
 
-            {/* ── Zeile 1: Spotlight (breit) + Ranking (schmal) ── */}
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-5 mb-5">
+            {/* Awards → eigene Seite (/awards), TripCounting → Profil/Account — hier ausgezogen */}
 
-              {/* Geheimtrips Spotlight */}
-              <SpotlightCard places={places} onNavigate={navigate} />
-
-              {/* Ranking-Vorschau */}
-              <RankingCard places={places} onNavigate={navigate} />
-            </div>
-
-            {/* ── Zeile 2: Mitreisende / Meet People (voll) ────── */}
+            {/* ── Mitreisende / Meet People (voll) ────── */}
             <MeetPeopleCard onNavigate={navigate} />
           </div>
         )}

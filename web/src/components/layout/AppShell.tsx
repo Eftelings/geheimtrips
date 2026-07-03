@@ -51,9 +51,14 @@ export function AppShell({ children, showBack, title, headerRight, noHeader }: P
                 <i className="fa-solid fa-arrow-left text-lg" />
               </button>
             ) : (
-              <button onClick={() => navigate('/submit')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Ort einreichen">
-                <i className="fa-solid fa-feather-pointed text-lg" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => navigate('/submit')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Ort einreichen">
+                  <i className="fa-solid fa-feather-pointed text-lg" />
+                </button>
+                <button onClick={() => navigate('/awards')} className="w-9 h-9 flex items-center justify-center text-[var(--color-amber)]" aria-label="Awards">
+                  <i className="fa-solid fa-trophy text-lg" />
+                </button>
+              </div>
             )}
 
             {/* Mitte: Titel oder Logo */}

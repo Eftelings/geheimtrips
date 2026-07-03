@@ -7,6 +7,7 @@ import { Avatar } from '../components/ui/Avatar.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { authApi, rankingsApi, friendsApi } from '../services/api.js';
+import { RankingCard } from './DiscoverPage.js';
 import type { MyRankStats } from '../services/api.js';
 import type { FriendRequest } from '../types/index.js';
 
@@ -129,6 +130,11 @@ export function ProfilePage() {
               <div className="text-[11px] text-[var(--color-lavender)] uppercase tracking-wider">{s.label}</div>
             </div>
           ))}
+        </div>
+
+        {/* TripCounting — von der Entdecken-Seite ins Profil verlegt */}
+        <div className="mb-6">
+          <RankingCard onNavigate={navigate} />
         </div>
 
         {/* Neue Leute kennenlernen */}

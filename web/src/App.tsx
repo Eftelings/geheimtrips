@@ -34,6 +34,7 @@ import { TripDetailPage }  from './pages/TripDetailPage.js';
 import { VisitedPage }     from './pages/VisitedPage.js';
 import { MapPage }         from './pages/MapPage.js';
 import { RankingPage }     from './pages/RankingPage.js';
+import { AwardsPage }      from './pages/AwardsPage.js';
 import { ProfilePage }     from './pages/ProfilePage.js';
 import { NotificationInboxPage } from './pages/NotificationInboxPage.js';
 import { MeetPeoplePage }   from './pages/MeetPeoplePage.js';
@@ -94,6 +95,7 @@ export function App() {
       <Route path="/trips/:id" element={<RequireAuth><TripDetailPage /></RequireAuth>} />
       <Route path="/map"       element={<RequireAuth><MapPage /></RequireAuth>} />
       <Route path="/ranking"  element={<RequireAuth><RankingPage /></RequireAuth>} />
+      <Route path="/awards"   element={<RequireAuth><AwardsPage /></RequireAuth>} />
       <Route path="/profile"  element={<RequireAuth><ProfilePage /></RequireAuth>} />
       <Route path="/notifications" element={<RequireAuth><NotificationInboxPage /></RequireAuth>} />
       <Route path="/people"    element={<RequireAuth><MeetPeoplePage /></RequireAuth>} />
