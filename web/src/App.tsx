@@ -19,6 +19,7 @@ import { AdminTaxonomy }     from './pages/admin/AdminTaxonomy.js';
 import { AdminChangeRequests } from './pages/admin/AdminChangeRequests.js';
 import { BusinessDashboardPage } from './pages/BusinessDashboardPage.js';
 import { DiscoverPage }      from './pages/DiscoverPage.js';
+import { EntdeckenPage }     from './pages/EntdeckenPage.js';
 import { FunnelPage }      from './pages/FunnelPage.js';
 import { OnboardingPage }  from './pages/OnboardingPage.js';
 import { SwipePage }       from './pages/SwipePage.js';
@@ -78,7 +79,7 @@ export function App() {
       <Route path="/legal"   element={<LegalPage />} />
       <Route path="/reset"   element={<ResetPasswordPage />} />
 
-      <Route path="/" element={<RequireAuth><DiscoverPage /></RequireAuth>} />
+      <Route path="/" element={<RequireAuth><EntdeckenPage /></RequireAuth>} />
       <Route path="/funnel/*" element={<RequireAuth><FunnelPage /></RequireAuth>} />
       <Route path="/onboarding" element={<RequireAuth><OnboardingPage /></RequireAuth>} />
       <Route path="/swipe"      element={<RequireAuth><SwipePage /></RequireAuth>} />
