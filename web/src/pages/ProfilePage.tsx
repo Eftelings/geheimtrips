@@ -118,18 +118,24 @@ export function ProfilePage() {
           </div>
         )}
 
-        {/* Stats */}
+        {/* Stats — Besucht/Gemerkt führen zu den jeweiligen Seiten */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
-            { label: 'Besucht',   value: visitedIds.size  },
-            { label: 'Gemerkt',   value: useAppStore.getState().savedIds.size },
-            { label: 'Ø Sterne',  value: avgStars         },
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl p-3 text-center shadow-[var(--shadow-card)]">
-              <div className="font-display font-bold text-2xl text-[var(--color-aubergine)]">{s.value}</div>
-              <div className="text-[11px] text-[var(--color-lavender)] uppercase tracking-wider">{s.label}</div>
-            </div>
-          ))}
+            { label: 'Besucht',   value: visitedIds.size, to: '/visited' as string | null },
+            { label: 'Gemerkt',   value: useAppStore.getState().savedIds.size, to: '/saved' as string | null },
+            { label: 'Ø Sterne',  value: avgStars, to: null },
+          ].map(s => {
+            const cls = 'bg-white rounded-2xl p-3 text-center shadow-[var(--shadow-card)]';
+            const inner = (
+              <>
+                <div className="font-display font-bold text-2xl text-[var(--color-aubergine)]">{s.value}</div>
+                <div className="text-[11px] text-[var(--color-lavender)] uppercase tracking-wider">{s.label}</div>
+              </>
+            );
+            return s.to
+              ? <button key={s.label} onClick={() => navigate(s.to!)} className={`${cls} active:scale-95 transition-transform`}>{inner}</button>
+              : <div key={s.label} className={cls}>{inner}</div>;
+          })}
         </div>
 
         {/* TripCounting — von der Entdecken-Seite ins Profil verlegt */}

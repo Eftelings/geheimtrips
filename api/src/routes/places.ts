@@ -441,6 +441,10 @@ router.post('/:id/rate', requireAuth,
     const user = c.get('user');
     const placeId = c.req.param('id');
     const data = c.req.valid('json');
+    // Eigene Orte kann man nicht bewerten
+    const own = await db.select({ submittedBy: places.submittedBy }).from(places).where(eq(places.id, placeId)).get();
+    if (!own) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+    if (own.submittedBy === user.id) return c.json({ error: 'Du kannst deinen eigenen Ort nicht bewerten.' }, 403);
     await db.insert(ratings).values({
       userId: user.id,
       placeId,

@@ -79,12 +79,21 @@ router.get('/suggestions', requireAuth, async (c) => {
   // Pool: alle Meet-People-Nutzer:innen (opt-in, sichtbar, nicht gesperrt, nicht ausgeschlossen)
   const meet = await db.select().from(users)
     .where(and(eq(users.meetPeopleEnabled, true), eq(users.profileVisible, true))).limit(200).all();
-  const pool: UserRow[] = meet.filter(u => !excluded.has(u.id) && !u.isBanned);
 
   // Distanz je Kandidat:in — nur wenn BEIDE Seiten den Standort geteilt haben
   const distOf = (u: UserRow): number | null =>
     (hasMyLoc && u.lat != null && u.lng != null)
       ? haversineKm(myLat as number, myLng as number, u.lat, u.lng) : null;
+
+  // Wenn ich meinen Standort geteilt habe: nur Leute in der Nähe (mit Standort, im Umkreis) vorschlagen
+  const MAX_NEARBY_KM = 100;
+  const pool: UserRow[] = meet
+    .filter(u => !excluded.has(u.id) && !u.isBanned)
+    .filter(u => {
+      if (!hasMyLoc) return true;            // ohne eigenen Standort: nach gemeinsamen Orten (kein Nähe-Filter)
+      const d = distOf(u);
+      return d != null && d <= MAX_NEARBY_KM;
+    });
 
   // Sortierung: nächste zuerst; ohne Distanz nach gemeinsamen Orten
   const sorted = pool.sort((a, b) => {
