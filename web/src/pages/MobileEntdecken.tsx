@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -100,13 +100,35 @@ export function MobileEntdecken() {
     return base;
   }, [places, catSel, catActive, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds]);
 
-  const preview = shownPlaces.find(p => p.id === selectedId) ?? shownPlaces[0] ?? null;
+  // Liste nach Entfernung sortiert (nächste zuerst)
+  const listPlaces = useMemo(() => {
+    const arr = shownPlaces.map(p => ({
+      p, dist: reachCenter && p.lat != null && p.lng != null ? distanceKm(reachCenter, { lat: p.lat, lng: p.lng }) : null,
+    }));
+    arr.sort((a, b) => (a.dist ?? Infinity) - (b.dist ?? Infinity));
+    return arr;
+  }, [shownPlaces, reachCenter]);
+
+  const preview = shownPlaces.find(p => p.id === selectedId) ?? listPlaces[0]?.p ?? null;
   const fallbackPts = useMemo<[number, number][]>(
     () => shownPlaces.slice(0, 40).map(p => [p.lat!, p.lng!]), [shownPlaces]);
 
-  const navUrl = preview?.lat && preview?.lng
-    ? `https://www.google.com/maps/dir/?api=1&destination=${preview.lat},${preview.lng}`
-    : '#';
+  // ── Ziehbares Listen-Sheet ────────────────────────────────────────────────
+  const listRef = useRef<HTMLDivElement>(null);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const [sheetDragging, setSheetDragging] = useState(false);
+  const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
+  const listSwipe = useRef<{ x: number; y: number } | null>(null);
+  const justSwiped = useRef(false);
+  const peekOffset = () => Math.round((typeof window !== 'undefined' ? window.innerHeight : 800) * 0.36);
+  useEffect(() => {
+    if (sheetDragging) return;
+    const apply = () => setSheetDragY(sheetExpanded ? 0 : peekOffset());
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, [sheetExpanded, sheetDragging]);
 
   function onSearchInput(val: string) {
     setSearchQuery(val);
@@ -120,6 +142,48 @@ export function MobileEntdecken() {
     setSearchQuery(''); setGeoSug([]); setPanel(null);
   }
   function resetToGps() { setSearchCenter(null); setSearchLabel(null); setSearchQuery(''); setGeoSug([]); }
+
+  function onSheetTouchStart(e: React.TouchEvent) {
+    sheetDrag.current = { startY: e.touches[0].clientY, startOffset: sheetDragY, moved: 0 };
+    setSheetDragging(true);
+  }
+  function onSheetTouchMove(e: React.TouchEvent) {
+    const d = sheetDrag.current; if (!d) return;
+    const delta = e.touches[0].clientY - d.startY;
+    d.moved = Math.max(d.moved, Math.abs(delta));
+    setSheetDragY(Math.min(Math.max(d.startOffset + delta, 0), peekOffset()));
+  }
+  function onSheetTouchEnd() {
+    const d = sheetDrag.current; setSheetDragging(false);
+    if (!d) return;
+    if (d.moved < 6) { setSheetExpanded(v => !v); return; }
+    setSheetExpanded(sheetDragY < peekOffset() / 2);
+  }
+  function selectPlace(id: string) {
+    setSelectedId(id);
+    setSheetExpanded(true);
+    setTimeout(() => listRef.current?.querySelector(`[data-place-id="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+  }
+  // Swipe-Modus mit denselben Filtern (Standort + Verkehrsmittel/Reisezeit)
+  function goSwipe() {
+    const q = new URLSearchParams();
+    if (reachCenter) { q.set('lat', String(reachCenter.lat)); q.set('lng', String(reachCenter.lng)); }
+    if (reach.travelMode !== 'radius') { q.set('mode', reach.travelMode); q.set('minutes', String(reach.travelMinutes)); }
+    const s = q.toString();
+    navigate(`/swipe${s ? `?${s}` : ''}`);
+  }
+  function onListTouchStart(e: React.TouchEvent) { const t = e.touches[0]; listSwipe.current = { x: t.clientX, y: t.clientY }; }
+  function onListTouchEnd(e: React.TouchEvent) {
+    const s = listSwipe.current; listSwipe.current = null; if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (dx > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) {   // nach rechts wischen → Swipe-Modus
+      justSwiped.current = true;
+      setTimeout(() => { justSwiped.current = false; }, 400);
+      goSwipe();
+    }
+  }
+  const fmtDist = (d: number) => d < 1 ? `${Math.round(d * 1000)} m` : `${d < 10 ? d.toFixed(1) : Math.round(d)} km`;
 
   const toolBtn = 'w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0';
   const toolShadow = { boxShadow: '0 2px 10px rgba(52,37,76,0.18)' } as const;
@@ -137,7 +201,7 @@ export function MobileEntdecken() {
             <Marker key={p.id} position={[p.lat!, p.lng!]}
               icon={p.id === preview?.id ? purpleMarker : orangeMarker}
               zIndexOffset={p.id === preview?.id ? 1000 : 0}
-              eventHandlers={{ click: () => setSelectedId(p.id) }} />
+              eventHandlers={{ click: () => selectPlace(p.id) }} />
           ))}
           <FitReach center={reachCenter} travel={travel} radiusKm={radiusKm} fallback={fallbackPts} />
         </MapContainer>
@@ -246,38 +310,64 @@ export function MobileEntdecken() {
         </>
       )}
 
-      {/* Orts-Vorschau unten (aktueller = lila) */}
-      {preview && (
-        <div className="fixed left-3 right-3 z-20" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 84px)' }}>
-          <div className="rounded-3xl px-3 pt-2 pb-3" style={{ background: '#FBF9FC', boxShadow: '0 -8px 24px rgba(52,37,76,0.16)' }}>
-            <div className="w-10 h-1.5 rounded-full mx-auto mb-2.5" style={{ background: '#d9cfe2' }} />
-            <div className="flex items-center gap-3">
-              <button onClick={() => navigate(`/place/${preview.id}`)} className="flex items-center gap-3 flex-1 min-w-0 text-left active:scale-[0.99] transition-transform">
-                <div className="w-14 h-14 rounded-2xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
-                  <img src={preview.hero} alt={preview.name} className="w-full h-full object-cover" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-display font-bold text-[var(--color-aubergine)] leading-tight truncate">{preview.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {preview.reviews > 0 && (
-                      <span className="flex items-center gap-1 flex-shrink-0">
-                        <i className="fa-solid fa-star text-[var(--color-amber)] text-xs" />
-                        <span className="text-sm font-bold text-[var(--color-aubergine)]">{preview.rating}</span>
-                      </span>
-                    )}
-                    <span className="text-xs text-[var(--color-lavender)] truncate">{preview.region}</span>
-                  </div>
-                </div>
-              </button>
-              <a href={navUrl} target="_blank" rel="noopener noreferrer"
-                className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                style={{ background: 'var(--color-amber)', color: 'white' }} aria-label="Route">
-                <i className="fa-solid fa-diamond-turn-right" />
-              </a>
-            </div>
+      {/* Orts-Liste als ziehbares Bottom-Sheet (nach Entfernung sortiert) */}
+      <div className="fixed left-0 right-0 z-20 flex flex-col overflow-hidden rounded-t-[1.75rem]"
+        style={{
+          top: '38vh', bottom: 0, background: '#FBF9FC',
+          boxShadow: '0 -8px 30px rgba(52,37,76,0.18)',
+          transform: `translateY(${sheetDragY}px)`,
+          transition: sheetDragging ? 'none' : 'transform .34s cubic-bezier(.32,.72,0,1)',
+        }}>
+        {/* Griff + Kopf (Zieh-Bereich) */}
+        <div className="flex-shrink-0" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
+          <div className="flex justify-center pt-2.5 pb-1.5"><div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} /></div>
+          <div className="px-4 pb-2.5 flex items-center justify-between gap-2">
+            <p className="font-display font-bold text-[var(--color-aubergine)]">
+              {listPlaces.length} {listPlaces.length === 1 ? 'Ort' : 'Orte'}{reachCenter ? ' in der Nähe' : ''}
+            </p>
+            <button onClick={goSwipe} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold flex-shrink-0"
+              style={{ background: 'var(--color-amber)', color: 'white' }}>
+              <i className="fa-solid fa-layer-group" /> Swipen
+            </button>
           </div>
         </div>
-      )}
+        {/* Scrollbare Liste — nach rechts wischen startet den Swipe-Modus */}
+        <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain px-3"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}
+          onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd}>
+          {listPlaces.length === 0 ? (
+            <div className="text-center py-12 text-[var(--color-lavender)] text-sm">
+              <i className="fa-solid fa-map-location-dot text-3xl mb-3 opacity-40 block" />
+              Keine Orte im Radius. Erhöhe Reisezeit/Radius oder ändere die Kategorie.
+            </div>
+          ) : listPlaces.map(({ p, dist }) => (
+            <button key={p.id} data-place-id={p.id} onClick={() => { if (justSwiped.current) return; navigate(`/place/${p.id}`); }}
+              className="w-full flex items-center gap-3 py-2 px-2 rounded-2xl text-left transition-colors active:scale-[0.99]"
+              style={{ background: p.id === selectedId ? '#F1ECF4' : 'transparent' }}>
+              <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
+                <img src={p.hero} alt={p.name} className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[var(--color-aubergine)] truncate">{p.name}</p>
+                <p className="text-xs text-[var(--color-lavender)] truncate">{p.region} · {p.categoryLabel}</p>
+                <div className="flex items-center gap-2.5 mt-0.5 text-xs">
+                  {p.reviews > 0 && (
+                    <span className="flex items-center gap-1 text-[var(--color-aubergine)] font-semibold">
+                      <i className="fa-solid fa-star text-[var(--color-amber)] text-[10px]" />{p.rating}
+                    </span>
+                  )}
+                  {dist != null && (
+                    <span className="flex items-center gap-1 text-[var(--color-lavender)]">
+                      <i className="fa-solid fa-location-dot text-[10px]" />{fmtDist(dist)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)] flex-shrink-0" />
+            </button>
+          ))}
+        </div>
+      </div>
     </AppShell>
   );
 }
