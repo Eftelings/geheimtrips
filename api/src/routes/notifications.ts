@@ -8,6 +8,17 @@ const router = new Hono();
 
 // Spalte für „zuletzt gesehen" nachrüsten (bestehende DBs)
 db.run(sql`ALTER TABLE users ADD COLUMN notifications_seen_at TEXT`).catch(() => {});
+// Ereignis-Benachrichtigungen (Trip-Einladung, angenommene Anfragen …)
+db.run(sql`CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  link TEXT,
+  actor_id INTEGER,
+  created_at TEXT DEFAULT (datetime('now'))
+)`).catch(() => {});
 
 // GET /notifications/count — Anzahl neuer Ereignisse seit dem letzten Ansehen:
 // neue Bewertungen auf meinen Orten + neue Likes auf meinen Fotos (nicht von mir selbst).
@@ -67,9 +78,15 @@ router.get('/count', requireAuth, async (c) => {
   `).catch(() => [{ n: 0 }]) as { n: number }[];
   const changeCount = Number(crRows[0]?.n ?? 0);
 
+  // Neue Ereignis-Benachrichtigungen (Trip-Einladung, angenommene Anfragen) seit dem letzten Ansehen
+  const nRows = await db.all(sql`
+    SELECT count(*) AS n FROM notifications WHERE user_id = ${me.id} AND created_at > ${seen}
+  `).catch(() => [{ n: 0 }]) as { n: number }[];
+  const notifCount = Number(nRows[0]?.n ?? 0);
+
   return c.json({
-    count: ratingCount + likeCount + requestCount + questionCount + changeCount,
-    ratings: ratingCount, likes: likeCount, requests: requestCount, questions: questionCount, changes: changeCount,
+    count: ratingCount + likeCount + requestCount + questionCount + changeCount + notifCount,
+    ratings: ratingCount, likes: likeCount, requests: requestCount, questions: questionCount, changes: changeCount, events: notifCount,
   });
 });
 
@@ -104,6 +121,12 @@ router.get('/list', requireAuth, async (c) => {
       )
     ORDER BY cr.id DESC LIMIT 50`).catch(() => []) as any[];
   for (const cr of crs) items.push({ type: 'change_request', id: `cr-${cr.id}`, title: `Änderungswunsch zu „${cr.placeName}"`, body: `${cr.userName} (${cr.category}): ${cr.text}`, link: `/place/${cr.placeId}`, createdAt: cr.createdAt ?? '' });
+
+  // 4) Ereignis-Benachrichtigungen (Trip-Einladung erhalten, Anfrage/Einladung angenommen)
+  const evs = await db.all(sql`
+    SELECT id, type, title, body, link, created_at AS createdAt
+    FROM notifications WHERE user_id = ${me.id} ORDER BY id DESC LIMIT 50`).catch(() => []) as any[];
+  for (const e of evs) items.push({ type: e.type, id: `n-${e.id}`, title: e.title, body: e.body, link: e.link ?? '/notifications', createdAt: e.createdAt ?? '' });
 
   items.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
   return c.json(items);

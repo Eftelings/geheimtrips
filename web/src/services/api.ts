@@ -200,12 +200,12 @@ export const rankingsApi = {
 
 // ─── Benachrichtigungen (Punkt im Header) ───────────────────────────────────────
 export interface InboxItem {
-  type: 'friend_request' | 'question' | 'change_request';
+  type: 'friend_request' | 'question' | 'change_request' | 'trip_invite' | 'trip_accept' | 'friend_accept';
   id: string; title: string; body: string; link: string; createdAt: string;
 }
 
 export const notificationsApi = {
-  count: () => get<{ count: number; ratings: number; likes: number; requests: number; questions?: number; changes?: number }>('/notifications/count'),
+  count: () => get<{ count: number; ratings: number; likes: number; requests: number; questions?: number; changes?: number; events?: number }>('/notifications/count'),
   list:  () => get<InboxItem[]>('/notifications/list'),
   seen:  () => post<{ ok: boolean }>('/notifications/seen'),
 };

@@ -240,6 +240,19 @@ export const businessClaims = sqliteTable('business_claims', {
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
 
+// ─── Benachrichtigungen (Ereignisse: Trip-Einladung, angenommene Anfragen …) ───
+
+export const notifications = sqliteTable('notifications', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull().references(() => users.id),  // Empfänger:in
+  type: text('type').notNull(),          // trip_invite | trip_accept | friend_accept
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  link: text('link'),
+  actorId: integer('actor_id'),          // wer die Aktion ausgelöst hat
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+});
+
 // ─── Geheimquiz ───────────────────────────────────────────────────────────────
 
 export const quizGames = sqliteTable('quiz_games', {

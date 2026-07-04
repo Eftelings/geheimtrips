@@ -5,6 +5,7 @@ import { eq, or, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
+import { notify } from '../lib/notify.js';
 
 const router = new Hono();
 
@@ -66,6 +67,11 @@ router.post('/accept/:id', requireAuth, async (c) => {
     .where(and(eq(friendships.id, id), eq(friendships.addresseeId, user.id))).get();
   if (!row) return c.json({ error: 'Anfrage nicht gefunden.' }, 404);
   await db.update(friendships).set({ status: 'accepted' }).where(eq(friendships.id, id));
+  await notify({
+    userId: row.requesterId, type: 'friend_accept', title: 'Freundschaftsanfrage angenommen',
+    body: `${user.name} hat deine Freundschaftsanfrage angenommen.`,
+    link: `/u/${user.id}`, actorId: user.id,
+  });
   return c.json({ ok: true });
 });
 

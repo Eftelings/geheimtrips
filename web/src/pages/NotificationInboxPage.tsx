@@ -7,6 +7,9 @@ const META: Record<InboxItem['type'], { icon: string; color: string; bg: string;
   friend_request: { icon: 'fa-user-plus',      color: '#8A6FB3', bg: '#F1ECF4', label: 'Freundschaft' },
   question:       { icon: 'fa-circle-question', color: '#F99039', bg: '#FFF4EB', label: 'Frage' },
   change_request: { icon: 'fa-pen-to-square',   color: '#5B8F6E', bg: '#EEF6F0', label: 'Änderungswunsch' },
+  trip_invite:    { icon: 'fa-route',           color: '#8A6FB3', bg: '#F1ECF4', label: 'Trip-Einladung' },
+  trip_accept:    { icon: 'fa-user-check',      color: '#5B8F6E', bg: '#EEF6F0', label: 'Trip' },
+  friend_accept:  { icon: 'fa-user-check',      color: '#5B8F6E', bg: '#EEF6F0', label: 'Freundschaft' },
 };
 
 function timeAgo(iso: string): string {

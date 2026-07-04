@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { hydrate } from './places.js';
+import { notify } from '../lib/notify.js';
 
 // ── Runtime schema migrations (idempotent) ────────────────────────────────────
 db.run(sql`ALTER TABLE trips ADD COLUMN intro TEXT DEFAULT ''`).catch(() => {});
@@ -256,6 +257,11 @@ router.post('/:id/invite', requireAuth,
       .where(and(eq(tripParticipants.tripId, id), eq(tripParticipants.userId, invitee.id))).get();
     if (existing) return c.json({ error: 'Bereits eingeladen.' }, 409);
     await db.insert(tripParticipants).values({ tripId: id, userId: invitee.id, status: 'invited' });
+    await notify({
+      userId: invitee.id, type: 'trip_invite', title: 'Trip-Einladung',
+      body: `${user.name} hat dich zum Trip „${trip.title}" eingeladen.`,
+      link: `/trips/${id}`, actorId: user.id,
+    });
     return c.json({ ok: true });
   }
 );
@@ -269,8 +275,16 @@ router.post('/:id/respond', requireAuth,
     const part = await db.select().from(tripParticipants)
       .where(and(eq(tripParticipants.tripId, id), eq(tripParticipants.userId, user.id))).get();
     if (!part) return c.json({ error: 'Keine Einladung gefunden.' }, 404);
-    await db.update(tripParticipants).set({ status: c.req.valid('json').status })
-      .where(eq(tripParticipants.id, part.id));
+    const status = c.req.valid('json').status;
+    await db.update(tripParticipants).set({ status }).where(eq(tripParticipants.id, part.id));
+    if (status === 'accepted') {
+      const trip = await db.select().from(trips).where(eq(trips.id, id)).get();
+      if (trip && trip.userId !== user.id) await notify({
+        userId: trip.userId, type: 'trip_accept', title: 'Trip-Einladung angenommen',
+        body: `${user.name} ist deinem Trip „${trip.title}" beigetreten.`,
+        link: `/trips/${id}`, actorId: user.id,
+      });
+    }
     return c.json({ ok: true });
   }
 );
