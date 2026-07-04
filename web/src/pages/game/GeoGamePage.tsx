@@ -518,10 +518,11 @@ export function GeoGamePage() {
       </header>
 
       {/* ── MAIN: 40% left | 60% right ─────────────────────────────────── */}
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-0 lg:gap-6 lg:px-8 lg:pt-6 lg:pb-2">
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 lg:gap-6 px-3 pt-3 pb-0 lg:px-8 lg:pt-6 lg:pb-2">
 
         {/* ── LEFT COLUMN (photo → results on reveal) ─────────────────── */}
-        <div className="flex flex-col min-h-0 lg:w-[40%]"
+        {/* Mobil: eigene vertikale Fläche (flex-1), sonst kollabiert das Foto auf 0 Höhe */}
+        <div className="flex flex-col min-h-0 flex-1 lg:flex-none lg:w-[40%]"
           style={{ gap: revealed ? '1rem' : '0' }}>
 
           {/* Photo card */}
