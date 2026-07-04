@@ -756,6 +756,14 @@ router.get('/me/visited', requireAuth, async (c) => {
   })));
 });
 
+// GET /places/me/created — eigene eingereichte Orte (inkl. „in Prüfung")
+router.get('/me/created', requireAuth, async (c) => {
+  const user = c.get('user');
+  const all = await db.select().from(places).where(eq(places.submittedBy, user.id)).all();
+  all.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  return c.json(all.map(p => hydrate(p)));
+});
+
 // GET /places/me/favorites — gespeicherte Lieblings-Reihenfolge (placeId[])
 router.get('/me/favorites', requireAuth, async (c) => {
   const user = c.get('user');

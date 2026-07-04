@@ -6,10 +6,10 @@ import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
-import { authApi, rankingsApi, friendsApi } from '../services/api.js';
+import { authApi, rankingsApi, friendsApi, placesApi } from '../services/api.js';
 import { RankingCard } from './DiscoverPage.js';
 import type { MyRankStats } from '../services/api.js';
-import type { FriendRequest } from '../types/index.js';
+import type { FriendRequest, Friend, Place } from '../types/index.js';
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -23,10 +23,14 @@ export function ProfilePage() {
   const [saving, setSaving]             = useState(false);
   const [rankInfo, setRankInfo]         = useState<MyRankStats | null>(null);
   const [requests, setRequests]         = useState<FriendRequest[]>([]);
+  const [friends, setFriends]           = useState<Friend[]>([]);
+  const [myPlaces, setMyPlaces]         = useState<Place[]>([]);
 
   useEffect(() => {
     rankingsApi.me().then(setRankInfo).catch(() => {});
     friendsApi.requests().then(setRequests).catch(() => {});
+    friendsApi.list().then(setFriends).catch(() => {});
+    placesApi.myCreated().then(setMyPlaces).catch(() => {});
   }, []);
 
   async function respondRequest(friendshipId: number, accept: boolean) {
@@ -170,6 +174,46 @@ export function ProfilePage() {
                     <span className="text-white text-[9px] font-bold leading-tight">{p.name}</span>
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Meine erstellten Orte (inkl. „in Prüfung") */}
+        {myPlaces.length > 0 && (
+          <div className="mb-6">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Meine Orte ({myPlaces.length})</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {myPlaces.map(p => (
+                <button key={p.id} onClick={() => navigate(`/place/${p.id}`)} className="aspect-square rounded-xl overflow-hidden relative active:scale-95 transition-transform">
+                  <img src={p.hero} alt={p.name} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent flex items-end p-1.5">
+                    <span className="text-white text-[9px] font-bold leading-tight text-left">{p.name}</span>
+                  </div>
+                  {p.isUserSubmitted && (
+                    <span className="absolute top-1 left-1 text-[8px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-amber)', color: 'white' }}>In Prüfung</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Meine Freunde */}
+        {friends.length > 0 && (
+          <div className="mb-6">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Meine Freunde ({friends.length})</p>
+            <div className="flex flex-col gap-2">
+              {friends.map(f => (
+                <button key={f.id} onClick={() => navigate(`/u/${f.id}`)}
+                  className="flex items-center gap-3 bg-white rounded-2xl p-2.5 shadow-[var(--shadow-card)] active:scale-[0.99] transition-transform text-left">
+                  <Avatar name={f.name} src={f.avatarUrl} size={40} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{f.name}</p>
+                    <p className="text-xs text-[var(--color-lavender)] truncate">@{f.handle}</p>
+                  </div>
+                  <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)] text-sm" />
+                </button>
               ))}
             </div>
           </div>

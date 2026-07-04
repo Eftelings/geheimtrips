@@ -87,6 +87,7 @@ export interface SubmitPlacePayload {
 
 export const placesApi = {
   list:           ()                 => get<Place[]>('/places'),
+  myCreated:      ()                 => get<Place[]>('/places/me/created'),
   get:            (id: string)       => get<Place>(`/places/${id}`),
   save:           (id: string)       => post<{ saved: boolean }>(`/places/${id}/save`),
   unsave:         (id: string)       => del<{ saved: boolean }>(`/places/${id}/save`),
