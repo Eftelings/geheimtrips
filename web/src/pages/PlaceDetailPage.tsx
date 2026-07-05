@@ -2106,8 +2106,8 @@ async function handleVerifyToggle() {
                     <div className="flex-1" />
                   )}
 
-                  {/* Actions (only in author card, no business claim) — kompakter Icon-Button */}
-                  {!place.approvedClaim && (
+                  {/* Änderungen vorschlagen — nur für Personen, die den Ort besucht haben */}
+                  {!place.approvedClaim && isVisited && (
                     <div className="flex gap-2 flex-shrink-0">
                       <button onClick={() => { setSuggestOpen(true); setSuggestCategory(null); setSuggestText(''); setSuggestSent(false); }}
                         title="Änderungen vorschlagen"
@@ -2154,8 +2154,8 @@ async function handleVerifyToggle() {
                 )}
               </div>
 
-              {/* Actions row when business claim is visible */}
-              {place.approvedClaim && (
+              {/* Änderungen vorschlagen (bei Business-Ort) — nur für Besucher:innen */}
+              {place.approvedClaim && isVisited && (
                 <div className="flex justify-end">
                   <button onClick={() => { setSuggestOpen(true); setSuggestCategory(null); setSuggestText(''); setSuggestSent(false); }}
                     title="Änderungen vorschlagen"
