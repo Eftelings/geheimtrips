@@ -28,6 +28,7 @@ import notificationsRouter from './routes/notifications.js';
 import usersRouter from './routes/users.js';
 import aiRouter from './routes/ai.js';
 import peopleRouter from './routes/people.js';
+import taxonomyRouter from './routes/taxonomy.js';
 
 const app = new Hono();
 
@@ -59,6 +60,7 @@ api.route('/notifications', notificationsRouter);
 api.route('/users', usersRouter);
 api.route('/ai', aiRouter);
 api.route('/people', peopleRouter);
+api.route('/taxonomy', taxonomyRouter);
 app.route('/api', api);
 
 api.notFound((c) => c.json({ error: 'Route nicht gefunden.' }, 404));
