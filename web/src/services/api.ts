@@ -204,7 +204,7 @@ export const rankingsApi = {
 
 // ─── Benachrichtigungen (Punkt im Header) ───────────────────────────────────────
 export interface InboxItem {
-  type: 'friend_request' | 'question' | 'change_request' | 'trip_invite' | 'trip_accept' | 'friend_accept' | 'review_reminder';
+  type: 'friend_request' | 'question' | 'change_request' | 'trip_invite' | 'trip_accept' | 'friend_accept' | 'review_reminder' | 'tax_moderation';
   id: string; title: string; body: string; link: string; createdAt: string;
 }
 
@@ -362,6 +362,18 @@ export const peopleApi = {
   suggestions: () => get<{ meetPeopleEnabled: boolean; hasLocation: boolean; suggestions: PersonSuggestion[] }>('/people/suggestions'),
   updateLocation: (lat: number, lng: number) => post<{ ok: true }>('/people/location', { lat, lng }),
   clearLocation: () => del<{ ok: true }>('/people/location'),
+};
+
+// ─── Neue Taxonomie (Tags · Merkmale · Vibes) ────────────────────────────────────
+export interface TaxGroup { slug: string; label: string; icon: string; color: string }
+export interface TaxTag { slug: string; label: string; groups: string[] }
+export interface TaxTerm { slug: string; label: string }
+export interface TaxVocab { groups: TaxGroup[]; tags: TaxTag[]; merkmale: TaxTerm[]; vibes: TaxTerm[] }
+export const taxonomyApi = {
+  vocab:       ()               => get<TaxVocab>('/taxonomy'),
+  suggestions: (tagSlug: string) => get<{ merkmale: TaxTerm[]; vibes: TaxTerm[] }>(`/taxonomy/tag/${tagSlug}/suggestions`),
+  resolve:     (tag: string, merkmale: string[], vibes: string[]) =>
+                 post<{ tag: string; merkmale: string[]; vibes: string[] }>('/taxonomy/resolve', { tag, merkmale, vibes }),
 };
 
 // ─── Öffentliche Profile (reale Nutzer:innen) ──────────────────────────────────

@@ -11,6 +11,7 @@ const META: Record<InboxItem['type'], { icon: string; color: string; bg: string;
   trip_accept:    { icon: 'fa-user-check',      color: '#5B8F6E', bg: '#EEF6F0', label: 'Trip' },
   friend_accept:  { icon: 'fa-user-check',      color: '#5B8F6E', bg: '#EEF6F0', label: 'Freundschaft' },
   review_reminder:{ icon: 'fa-clipboard-check', color: '#F99039', bg: '#FFF4EB', label: 'Review' },
+  tax_moderation: { icon: 'fa-tags',            color: '#8A6FB3', bg: '#F1ECF4', label: 'Taxonomie' },
 };
 
 function timeAgo(iso: string): string {
