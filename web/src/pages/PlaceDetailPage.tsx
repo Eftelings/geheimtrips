@@ -17,7 +17,8 @@ import { Avatar } from '../components/ui/Avatar.js';
 import type { Place, Transport } from '../types/index.js';
 import { distanceKm, geocodeSuggestions } from '../services/geoService.js';
 import type { Coords, GeoLocation } from '../services/geoService.js';
-import { pointInGeoJSON, EFFECTIVE_SPEED_KMH } from '../utils/geo.js';
+import { pointInGeoJSON, EFFECTIVE_SPEED_KMH, reachBBoxPoints } from '../utils/geo.js';
+import type { IsochroneResponse } from '../utils/geo.js';
 import { ReachControls } from '../components/ui/ReachControls.js';
 import { ReachLayer } from '../components/map/ReachLayer.js';
 import { useTravelReach } from '../hooks/useTravelReach.js';
@@ -88,6 +89,27 @@ function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number) {
 function MapRecenter({ lat, lng }: { lat: number; lng: number }) {
   const map = useMap();
   useEffect(() => { map.setView([lat, lng], 14); }, [lat, lng, map]);
+  return null;
+}
+
+// Bei Änderung von Radius/Verkehrsmittel die Karte auf die Reichweite (+ aktuellen Ort) einpassen,
+// damit der gewählte Radius sichtbar wird. Erstansicht bleibt auf den Ort zentriert.
+function FitReachOnChange({ center, travel, radiusKm, place }: {
+  center: Coords | null;
+  travel: { mode: 'radius' | Transport; minutes: number; iso: IsochroneResponse | null };
+  radiusKm: number;
+  place: [number, number];
+}) {
+  const map = useMap();
+  const first = useRef(true);
+  const key = `${center?.lat?.toFixed(3)},${center?.lng?.toFixed(3)}|${travel.mode}|${travel.minutes}|${radiusKm}`;
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (!center) return;
+    const pts = [...reachBBoxPoints(center, travel, radiusKm), place];
+    if (pts.length < 2) return;
+    try { map.fitBounds(pts as [number, number][], { padding: [50, 50], maxZoom: 13, animate: true }); } catch { /* ignore */ }
+  }, [key]); // eslint-disable-line
   return null;
 }
 
@@ -1451,6 +1473,8 @@ async function handleVerifyToggle() {
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {/* Reichweite: Isochrone / Radius-Kreis + Standort-Zentrum */}
             <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
+            {/* Bei Radius-/Verkehrsmittel-Änderung auf die Reichweite einpassen (Radius wird sichtbar) */}
+            <FitReachOnChange center={reachCenter} travel={travel} radiusKm={radiusKm} place={[place.lat, place.lng]} />
             {/* Andere Orte (orange) — Klick wechselt das Sheet auf diesen Ort */}
             {mapPlaces.map(p => (
               <Marker key={p.id} position={[p.lat as number, p.lng as number]} icon={brandMarker}
