@@ -73,6 +73,23 @@ uploadRouter.post('/upload', requireAuth, async (c) => {
       }
     }
 
+    // Bilder optimieren: EXIF-Drehung anwenden, auf max. 1600px begrenzen, als WebP komprimieren.
+    // Spart oft 80–95 % Größe (schnellere Ladezeiten). Videos + GIFs bleiben unangetastet;
+    // bei Fehler wird das Original behalten.
+    if (!isVideo && outExt !== 'gif') {
+      try {
+        const sharp = (await import('sharp')).default;
+        buffer = await sharp(buffer)
+          .rotate()
+          .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 80 })
+          .toBuffer();
+        outExt = 'webp';
+      } catch (e) {
+        console.error('Bild-Optimierung fehlgeschlagen, nutze Original:', e);
+      }
+    }
+
     const filename = `${crypto.randomBytes(16).toString('hex')}.${outExt}`;
     fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
 

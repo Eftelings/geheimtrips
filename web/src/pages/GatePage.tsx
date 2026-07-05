@@ -73,7 +73,7 @@ export function GatePage() {
 
         {/* ── Gründer-Karte: Foto + Geschichte ── */}
         <div className="bg-white/8 backdrop-blur-sm rounded-3xl overflow-hidden border border-white/10 mb-6">
-          <img src="/images/founder.jpg" alt="David & Lea" width={600} height={800} className="w-full h-auto"
+          <img src="/images/founder.webp" alt="David & Lea" width={600} height={800} className="w-full h-auto" loading="lazy" decoding="async"
             onError={e => { e.currentTarget.style.display = 'none'; }} />
           <div className="p-5">
             <p className="text-[var(--color-amber)] font-bold text-sm mb-2">Hi, wir sind David &amp; Lea 👋</p>

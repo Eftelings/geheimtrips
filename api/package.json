@@ -26,6 +26,7 @@
     "nodemailer": "^9.0.1",
     "polygon-clipping": "^0.15.7",
     "sanitize-html": "^2.17.5",
+    "sharp": "^0.35.3",
     "ws": "^8.21.0",
     "zod": "^3.25.51"
   },
