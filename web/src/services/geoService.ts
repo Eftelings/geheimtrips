@@ -56,7 +56,7 @@ export async function reverseGeocode(coords: Coords): Promise<GeoLocation> {
 
 /** Adresse / Suchbegriff → Koordinaten via Nominatim (1 Treffer) */
 export async function geocodeAddress(query: string): Promise<GeoLocation | null> {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=de,at,ch&accept-language=de`;
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&accept-language=de`;
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Geheimtrips.de/1.0 (info@geheimtrips.de)' },
   });
@@ -74,7 +74,7 @@ export async function geocodeAddress(query: string): Promise<GeoLocation | null>
 /** Adresse / Stadt → bis zu 5 Vorschläge (für Dropdown-Suche) */
 export async function geocodeSuggestions(query: string): Promise<GeoLocation[]> {
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=de,at,ch&accept-language=de`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&accept-language=de`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Geheimtrips.de/1.0 (info@geheimtrips.de)' },
       signal: AbortSignal.timeout(4000),

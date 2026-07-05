@@ -22,9 +22,9 @@ export interface TravelReach {
  * Polygon sofort ausgeblendet — sonst überschreibt eine verspätete Antwort
  * des vorherigen Modus die Anzeige des neuen.
  */
-export function useTravelReach(center: Coords | null): TravelReach {
-  const [travelMode, setTravelModeRaw] = useState<'radius' | Transport>('radius');
-  const [travelMinutes, setTravelMinutes] = useState(45);
+export function useTravelReach(center: Coords | null, initial?: { mode?: 'radius' | Transport; minutes?: number }): TravelReach {
+  const [travelMode, setTravelModeRaw] = useState<'radius' | Transport>(initial?.mode ?? 'radius');
+  const [travelMinutes, setTravelMinutes] = useState(initial?.minutes ?? 45);
   const [iso, setIso] = useState<IsochroneResponse | null>(null);
   const [isoLoading, setIsoLoading] = useState(false);
   const cacheRef = useRef(new Map<string, IsochroneResponse>());

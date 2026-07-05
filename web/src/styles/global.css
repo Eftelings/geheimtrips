@@ -103,3 +103,13 @@ input[type="range"].map-radius::-moz-range-thumb {
   border: 2.5px solid #fff;
   box-shadow: 0 1px 5px rgba(0,0,0,0.22);
 }
+
+/* iOS: Text-Eingaben mind. 16px, sonst zoomt Safari beim Fokus in die Seite rein
+   (dadurch wirkt die Breite verändert / Popover „verrutscht"). */
+@media (max-width: 640px) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

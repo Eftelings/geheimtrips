@@ -55,17 +55,32 @@ function FitReach({ center, travel, radiusKm, fallback }: {
   return null;
 }
 
+// Merkt sich die Entdecken-Einstellungen für die Session, damit „Zurück" vom Ort
+// die vorherige Liste + Reichweite wiederherstellt (statt frisch zu starten).
+const entdeckenCache = {
+  searchCenter: null as Coords | null,
+  searchLabel: null as string | null,
+  radiusKm: 80,
+  mode: 'newest' as Mode,
+  catSel: EMPTY_CATEGORY as CategorySelection,
+  travelMode: 'radius' as 'radius' | Transport,
+  travelMinutes: 45,
+  selectedId: null as string | null,
+  sheetExpanded: false,
+  scrollTop: 0,
+};
+
 export function MobileEntdecken() {
   const navigate = useNavigate();
   const { places, loadPlaces, savedIds, funnelAnswers } = useAppStore();
 
   const [userCoords, setUserCoords] = useState<Coords | null>(() => funnelAnswers?.coords ?? null);
-  const [searchCenter, setSearchCenter] = useState<Coords | null>(null);
-  const [searchLabel, setSearchLabel] = useState<string | null>(null);
-  const [radiusKm, setRadiusKm] = useState(80);
-  const [mode, setMode] = useState<Mode>('newest');
-  const [catSel, setCatSel] = useState<CategorySelection>(EMPTY_CATEGORY);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchCenter, setSearchCenter] = useState<Coords | null>(entdeckenCache.searchCenter);
+  const [searchLabel, setSearchLabel] = useState<string | null>(entdeckenCache.searchLabel);
+  const [radiusKm, setRadiusKm] = useState(entdeckenCache.radiusKm);
+  const [mode, setMode] = useState<Mode>(entdeckenCache.mode);
+  const [catSel, setCatSel] = useState<CategorySelection>(entdeckenCache.catSel);
+  const [selectedId, setSelectedId] = useState<string | null>(entdeckenCache.selectedId);
   const [panel, setPanel] = useState<null | 'loc' | 'cat' | 'transport'>(null);
 
   // Standort-Suche (Adresse → Suchzentrum)
@@ -74,7 +89,7 @@ export function MobileEntdecken() {
   const geoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reachCenter = searchCenter ?? userCoords;
-  const reach = useTravelReach(reachCenter);
+  const reach = useTravelReach(reachCenter, { mode: entdeckenCache.travelMode, minutes: entdeckenCache.travelMinutes });
   const travel = { mode: reach.travelMode, minutes: reach.travelMinutes, iso: reach.iso, loading: reach.isoLoading };
   const catActive = catSel.cat !== null || catSel.l1 !== null;
 
@@ -115,7 +130,7 @@ export function MobileEntdecken() {
 
   // ── Ziehbares Listen-Sheet ────────────────────────────────────────────────
   const listRef = useRef<HTMLDivElement>(null);
-  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [sheetExpanded, setSheetExpanded] = useState(entdeckenCache.sheetExpanded);
   const [sheetDragY, setSheetDragY] = useState(0);
   const [sheetDragging, setSheetDragging] = useState(false);
   const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
@@ -129,6 +144,19 @@ export function MobileEntdecken() {
     window.addEventListener('resize', apply);
     return () => window.removeEventListener('resize', apply);
   }, [sheetExpanded, sheetDragging]);
+
+  // Einstellungen für „Zurück" merken — jeder Render hält den Cache aktuell
+  useEffect(() => {
+    Object.assign(entdeckenCache, {
+      searchCenter, searchLabel, radiusKm, mode, catSel,
+      travelMode: reach.travelMode, travelMinutes: reach.travelMinutes,
+      selectedId, sheetExpanded, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
+    });
+  });
+  // Beim Öffnen zuletzt gemerkte Scroll-Position der Liste wiederherstellen
+  useEffect(() => {
+    if (entdeckenCache.scrollTop && listRef.current) listRef.current.scrollTop = entdeckenCache.scrollTop;
+  }, []); // eslint-disable-line
 
   function onSearchInput(val: string) {
     setSearchQuery(val);
