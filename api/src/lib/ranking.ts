@@ -7,6 +7,7 @@ import { eq, sql, isNotNull, and, or, gte } from 'drizzle-orm';
 export const W_ORT = 10;
 export const W_EINREICHUNG = 20;
 export const W_QUIZ = 15;
+export const W_REVIEW = 12;   // Ort reviewt (Beschreibung bestätigt/aktualisiert)
 
 export type Board = 'gesamt' | 'orte' | 'eingereicht' | 'quiz';
 
@@ -32,9 +33,9 @@ export function tierFor(percentile: number, score: number): string {
 export interface RankStat {
   id: number; name: string; handle: string; avatarUrl: string | null;
   // All-time
-  orte: number; eingereicht: number; quizWins: number; quizPlayed: number; winRate: number; punkte: number;
+  orte: number; eingereicht: number; reviewed: number; quizWins: number; quizPlayed: number; winRate: number; punkte: number;
   // Dieser Monat
-  mOrte: number; mEingereicht: number; mQuizWins: number; mScore: number;
+  mOrte: number; mEingereicht: number; mReviewed: number; mQuizWins: number; mScore: number;
   // Monats-Status (abgeleitet)
   percentile: number; tierKey: string; isLocalHero: boolean;
 }
@@ -83,6 +84,12 @@ export async function computeRankingStats(): Promise<{ stats: RankStat[]; total:
   const qMon = await db.select({ userId: quizGames.userId, won: sql<number>`sum(${quizGames.won})`.as('won') })
     .from(quizGames).where(and(isNotNull(quizGames.userId), gte(quizGames.playedAt, since))).groupBy(quizGames.userId).all();
 
+  // Reviews (all-time + Monat) — raw SQL, tolerant falls Tabelle (noch) fehlt
+  const rvAll = await db.all<{ userId: number; c: number }>(sql`SELECT user_id AS userId, count(*) AS c FROM place_reviews GROUP BY user_id`).catch(() => []);
+  const rvMon = await db.all<{ userId: number; c: number }>(sql`SELECT user_id AS userId, count(*) AS c FROM place_reviews WHERE created_at >= ${since} GROUP BY user_id`).catch(() => []);
+  const rvAllMap = Object.fromEntries(rvAll.map(r => [r.userId, Number(r.c)]));
+  const rvMonMap = Object.fromEntries(rvMon.map(r => [r.userId, Number(r.c)]));
+
   const vAllMap = Object.fromEntries(vAll.map(r => [r.userId, Number(r.c)]));
   const vMonMap = Object.fromEntries(vMon.map(r => [r.userId, Number(r.c)]));
   const sAllMap = Object.fromEntries(sAll.map(r => [r.userId, Number(r.c)]));
@@ -98,17 +105,19 @@ export async function computeRankingStats(): Promise<{ stats: RankStat[]; total:
   const stats: RankStat[] = allUsers.filter(u => u.profileVisible).map(u => {
     const orte        = vAllMap[u.id] ?? 0;
     const eingereicht = sAllMap[u.id] ?? 0;
+    const reviewed    = rvAllMap[u.id] ?? 0;
     const q           = qAllMap[u.id] ?? { played: 0, won: 0 };
     const mOrte        = vMonMap[u.id] ?? 0;
     const mEingereicht = sMonMap[u.id] ?? 0;
+    const mReviewed    = rvMonMap[u.id] ?? 0;
     const mQuizWins    = qMonMap[u.id] ?? 0;
-    const punkte = orte * W_ORT + eingereicht * W_EINREICHUNG + q.won * W_QUIZ;
-    const mScore = mOrte * W_ORT + mEingereicht * W_EINREICHUNG + mQuizWins * W_QUIZ;
+    const punkte = orte * W_ORT + eingereicht * W_EINREICHUNG + reviewed * W_REVIEW + q.won * W_QUIZ;
+    const mScore = mOrte * W_ORT + mEingereicht * W_EINREICHUNG + mReviewed * W_REVIEW + mQuizWins * W_QUIZ;
     return {
       id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl,
-      orte, eingereicht, quizWins: q.won, quizPlayed: q.played,
+      orte, eingereicht, reviewed, quizWins: q.won, quizPlayed: q.played,
       winRate: q.played > 0 ? Math.round((q.won / q.played) * 100) : 0,
-      punkte, mOrte, mEingereicht, mQuizWins, mScore,
+      punkte, mOrte, mEingereicht, mReviewed, mQuizWins, mScore,
       percentile: 1, tierKey: 'rookie', isLocalHero: false,
     };
   });

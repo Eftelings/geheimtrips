@@ -595,8 +595,8 @@ export function RankingCard({ onNavigate }: { onNavigate: (path: string) => void
     board === 'quiz'
       ? quizEntries.map(q => ({
           id: q.userId, name: q.name, handle: '', avatarUrl: q.avatarUrl,
-          orte: 0, eingereicht: 0, quizWins: q.gamesWon, quizPlayed: q.gamesPlayed, winRate: q.winRate, punkte: 0,
-          mOrte: 0, mEingereicht: 0, mQuizWins: 0, mScore: 0, percentile: 1, tierKey: 'rookie', isLocalHero: false,
+          orte: 0, eingereicht: 0, reviewed: 0, quizWins: q.gamesWon, quizPlayed: q.gamesPlayed, winRate: q.winRate, punkte: 0,
+          mOrte: 0, mEingereicht: 0, mReviewed: 0, mQuizWins: 0, mScore: 0, percentile: 1, tierKey: 'rookie', isLocalHero: false,
         }))
       : board === 'published' ? entriesEingereicht
       : entriesOrte;
@@ -620,7 +620,7 @@ export function RankingCard({ onNavigate }: { onNavigate: (path: string) => void
           {(['orte', 'published', 'quiz'] as RankBoard[]).map(b => (
             <button key={b} onClick={() => setBoard(b)}
               className={`flex-1 text-[11px] font-semibold py-2.5 border-b-2 transition-colors ${board === b ? 'text-[var(--color-amber)] border-[var(--color-amber)]' : 'text-white/45 border-transparent hover:text-white/70'}`}>
-              {b === 'orte' ? 'Besuchte Orte' : b === 'published' ? 'Veröffentlicht' : 'Geheimquiz'}
+              {b === 'orte' ? 'Besuchte Orte' : b === 'published' ? 'Eingereicht | Reviewed' : 'Geheimquiz'}
             </button>
           ))}
         </div>
@@ -650,12 +650,33 @@ export function RankingCard({ onNavigate }: { onNavigate: (path: string) => void
               <span className="flex-1 text-xs font-semibold text-[var(--color-aubergine)] truncate">{e.name}</span>
               <span className="text-[10px] font-bold text-[var(--color-amber)] flex-shrink-0">
                 {board === 'quiz' ? `${e.quizWins} Siege · ${e.winRate} %`
-                  : board === 'published' ? `${e.eingereicht} Orte`
+                  : board === 'published' ? `${e.eingereicht} eingereicht · ${e.reviewed} reviewed`
                   : `${e.orte} Orte`}
               </span>
             </div>
           ))
         )}
+      </div>
+
+      {/* Punkte-Übersicht: wofür es wie viele Punkte gibt */}
+      <div className="px-5 pb-3">
+        <div className="rounded-2xl px-4 py-3" style={{ background: 'var(--color-bg-soft)' }}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-2">So sammelst du Punkte</p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-[var(--color-aubergine)]">
+            {[
+              { i: 'fa-flag-checkered', t: 'Ort besucht', p: 10 },
+              { i: 'fa-feather-pointed', t: 'Ort eingereicht', p: 20 },
+              { i: 'fa-clipboard-check', t: 'Ort reviewt', p: 12 },
+              { i: 'fa-earth-europe', t: 'Quiz-Sieg', p: 15 },
+            ].map(x => (
+              <div key={x.t} className="flex items-center gap-1.5">
+                <i className={`fa-solid ${x.i} text-[var(--color-amber)] text-[11px] w-4 text-center`} />
+                <span className="flex-1">{x.t}</span>
+                <span className="font-bold text-[var(--color-amber)]">+{x.p}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="px-5 pb-5">

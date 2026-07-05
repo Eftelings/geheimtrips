@@ -14,6 +14,8 @@ import { placesApi, businessApi, mediaApi } from '../services/api.js';
 import type { ParkingContributions, PlaceQuestion } from '../services/api.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { Avatar } from '../components/ui/Avatar.js';
+import { ReviewFlow } from '../components/ui/ReviewFlow.js';
+import type { ReviewSection } from '../components/ui/ReviewFlow.js';
 import type { Place, Transport } from '../types/index.js';
 import { distanceKm, geocodeSuggestions } from '../services/geoService.js';
 import type { Coords, GeoLocation } from '../services/geoService.js';
@@ -918,6 +920,10 @@ export function PlaceDetailPage() {
   const [lightboxIdx, setLightboxIdx]  = useState<number | null>(null);
   const [claimSent, setClaimSent]      = useState(false);
   const [suggestOpen, setSuggestOpen]     = useState(false);
+  // Review-Prozess
+  const [reviewStatus, setReviewStatus]   = useState<{ canReview: boolean; needsReview: boolean; reviewCount: number; points: number } | null>(null);
+  const [reviewPopup, setReviewPopup]     = useState(false);
+  const [reviewFlowOpen, setReviewFlowOpen] = useState(false);
   const [suggestCategory, setSuggestCategory] = useState<string | null>(null);
   const [suggestText, setSuggestText]     = useState('');
   const [suggestSent, setSuggestSent]     = useState(false);
@@ -1021,6 +1027,11 @@ export function PlaceDetailPage() {
       const cached = places.find(p => p.id === id);
       if (cached) setPlace(cached);
       placesApi.get(id).then(setPlace).catch(() => {});
+      // Review-Prozess: braucht der Ort ein Review + darf ich? → Pop-up
+      placesApi.reviewStatus(id).then(rs => {
+        setReviewStatus(rs);
+        if (rs.canReview && rs.needsReview) setReviewPopup(true);
+      }).catch(() => setReviewStatus(null));
     }
     loadTrips();
     loadPlaces();   // andere Orte für die Karten-Marker / Suche (im Store 30s gecacht)
@@ -1284,6 +1295,18 @@ export function PlaceDetailPage() {
   const appleMapsUrl = place.lat && place.lng
     ? `https://maps.apple.com/?daddr=${place.lat},${place.lng}&dirflg=${toAppleTravelMode(transport)}&q=${encodeURIComponent(place.name)}`
     : `https://maps.apple.com/?q=${encodeURIComponent(place.name)}`;
+
+  // Abschnitte für den geführten Review-Durchlauf (nur Abschnitte mit Inhalt)
+  const parkingLabel = derivedParking === 'free' ? 'Kostenlos' : derivedParking === 'paid' ? 'Kostenpflichtig' : derivedParking === 'limited' ? 'Begrenzt' : '';
+  const reviewSections: ReviewSection[] = [
+    { key: 'Name',           label: 'Name des Orts',   value: place.name },
+    { key: 'Das Besondere',  label: 'Das Besondere',   value: highlight },
+    { key: 'Beschreibung',   label: 'Beschreibung',    value: place.long ? stripHtml(place.long) : '' },
+    { key: 'Tipps',          label: 'Tipps',           value: place.tips.map(t => stripHtml(t)).join(' · ') },
+    { key: 'Öffnungszeiten', label: 'Öffnungszeiten',  value: openingHours ?? '' },
+    { key: 'Preise',         label: 'Preise',          value: (prices ?? []).map(p => `${p.label}: ${p.amount}`).join(', ') },
+    { key: 'Parken',         label: 'Parken',          value: parkingLabel },
+  ].filter(s => s.value && s.value.trim());
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -3028,6 +3051,42 @@ async function handleVerifyToggle() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Review-Prozess: Einstiegs-Pop-up (motivierend) ─────────────────────── */}
+      {reviewPopup && reviewStatus && (
+        <div className="fixed inset-0 z-[290] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }}>
+          <div className="w-full sm:max-w-md bg-[#FBF9FC] rounded-t-3xl sm:rounded-3xl p-6 text-center">
+            <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'rgba(249,144,57,0.15)' }}>
+              <i className="fa-solid fa-hand-sparkles text-3xl text-[var(--color-amber)]" />
+            </div>
+            <h2 className="font-display font-bold text-xl text-[var(--color-aubergine)] mb-2">Cool, dass du hier warst! 🎉</h2>
+            <p className="text-sm text-[var(--color-body)] leading-relaxed mb-5">
+              {reviewStatus.reviewCount === 0
+                ? <>Du kannst <strong>die erste Person</strong> sein, die diesen Geheimtrip für uns prüft. </>
+                : reviewStatus.reviewCount === 1
+                  ? <>Du bist erst die <strong>zweite Person</strong>, die diesen Ort für uns prüft. </>
+                  : <>Dieser Ort wurde länger nicht mehr geprüft. </>}
+              Wir sammeln hier wirklich nur <strong>echte</strong> Geheimtrips — dafür brauchen wir dich: Stimmt die Beschreibung noch, oder hat sich etwas geändert? Dauert nur eine Minute und bringt dir <strong className="text-[var(--color-amber)]">+{reviewStatus.points} Punkte</strong>.
+            </p>
+            <button onClick={() => { setReviewPopup(false); setReviewFlowOpen(true); }}
+              className="w-full bg-[var(--color-amber)] text-white font-bold py-3.5 rounded-2xl mb-2 active:scale-[0.98] transition-transform">
+              <i className="fa-solid fa-clipboard-check mr-2" />Los geht's
+            </button>
+            <button onClick={() => { setReviewPopup(false); placesApi.dismissReview(place.id).catch(() => {}); }}
+              className="w-full text-[var(--color-lavender)] font-semibold py-2 text-sm">
+              Später — erinnere mich im Postfach
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Review-Prozess: geführter Durchlauf ─────────────────────────────────── */}
+      {reviewFlowOpen && (
+        <ReviewFlow placeId={place.id} placeName={place.name} sections={reviewSections}
+          onClose={() => setReviewFlowOpen(false)}
+          onReviewed={() => { showToast('Danke fürs Reviewen! ✓'); setReviewStatus(s => s ? { ...s, canReview: false } : s); }} />
       )}
 
       {/* ── Änderungen vorschlagen modal ──────────────────────────────────────── */}

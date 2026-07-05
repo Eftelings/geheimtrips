@@ -265,6 +265,7 @@ export interface RankingEntry {
   // All-time
   orte: number;
   eingereicht: number;
+  reviewed: number;
   quizWins: number;
   quizPlayed: number;
   winRate: number;
@@ -272,6 +273,7 @@ export interface RankingEntry {
   // Dieser Monat
   mOrte: number;
   mEingereicht: number;
+  mReviewed: number;
   mQuizWins: number;
   mScore: number;
   // Monats-Status (abgeleitet)

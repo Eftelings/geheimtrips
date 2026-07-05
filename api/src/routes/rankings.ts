@@ -48,8 +48,8 @@ router.get('/me', requireAuth, async (c) => {
   const { stats, total } = await computeRankingStats();
   const base: RankStat = stats.find(s => s.id === user.id) ?? {
     id: user.id, name: user.name, handle: user.handle, avatarUrl: user.avatarUrl,
-    orte: 0, eingereicht: 0, quizWins: 0, quizPlayed: 0, winRate: 0, punkte: 0,
-    mOrte: 0, mEingereicht: 0, mQuizWins: 0, mScore: 0,
+    orte: 0, eingereicht: 0, reviewed: 0, quizWins: 0, quizPlayed: 0, winRate: 0, punkte: 0,
+    mOrte: 0, mEingereicht: 0, mReviewed: 0, mQuizWins: 0, mScore: 0,
     percentile: 1, tierKey: 'rookie', isLocalHero: false,
   };
   const rankIn = (board: Board) => {

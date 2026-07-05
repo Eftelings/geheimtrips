@@ -117,6 +117,9 @@ export const placesApi = {
   deleteQuestion: (id: string, qid: number) => del<{ ok: boolean }>(`/places/${id}/questions/${qid}`),
   suggestChange:  (id: string, category: string, text: string) =>
                     post<{ ok: boolean }>(`/places/${id}/change-request`, { category, text }),
+  reviewStatus:   (id: string) => get<{ canReview: boolean; needsReview: boolean; reviewCount: number; alreadyReviewed: boolean; points: number }>(`/places/${id}/review-status`),
+  submitReview:   (id: string) => post<{ ok: boolean; points: number }>(`/places/${id}/review`),
+  dismissReview:  (id: string) => post<{ ok: boolean }>(`/places/${id}/review-dismiss`),
 };
 
 export interface PlaceQuestion {
@@ -183,8 +186,8 @@ import type { RankBoardId, PerkEntry } from '../types/index.js';
 
 export interface MyRankStats {
   id: number; name: string; handle: string; avatarUrl: string | null;
-  orte: number; eingereicht: number; quizWins: number; quizPlayed: number; winRate: number; punkte: number;
-  mOrte: number; mEingereicht: number; mQuizWins: number; mScore: number;
+  orte: number; eingereicht: number; reviewed: number; quizWins: number; quizPlayed: number; winRate: number; punkte: number;
+  mOrte: number; mEingereicht: number; mReviewed: number; mQuizWins: number; mScore: number;
   percentile: number; tierKey: string; isLocalHero: boolean;
   total: number;
   ranks: { gesamt: number | null; orte: number | null; eingereicht: number | null; quiz: number | null };
@@ -201,7 +204,7 @@ export const rankingsApi = {
 
 // ─── Benachrichtigungen (Punkt im Header) ───────────────────────────────────────
 export interface InboxItem {
-  type: 'friend_request' | 'question' | 'change_request' | 'trip_invite' | 'trip_accept' | 'friend_accept';
+  type: 'friend_request' | 'question' | 'change_request' | 'trip_invite' | 'trip_accept' | 'friend_accept' | 'review_reminder';
   id: string; title: string; body: string; link: string; createdAt: string;
 }
 

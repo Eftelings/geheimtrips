@@ -1,13 +1,14 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
 import { places, savedPlaces, visitedPlaces, ratings, placeMedia, authors, businessClaims, placeContributions, users, photoLikes, favoritePlaces } from '../db/schema.js';
-import { isUserLocalHero } from '../lib/ranking.js';
+import { isUserLocalHero, W_REVIEW } from '../lib/ranking.js';
 import { eq, and, inArray, sql, count, asc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { cleanRichText, cleanPlainText } from '../lib/sanitize.js';
 import { sendMail } from '../lib/mailer.js';
+import { notify } from '../lib/notify.js';
 
 // ── Runtime schema migrations (idempotent) ────────────────────────────────────
 // Add parking column to places if it doesn't exist yet
@@ -35,6 +36,16 @@ db.run(sql`
     resolved_by TEXT,
     resolved_at TEXT,
     created_at  TEXT    DEFAULT (datetime('now'))
+  )
+`).catch(console.error);
+
+// Reviews zu Orten — Besucher:innen bestätigen/aktualisieren die Beschreibung (Review-Prozess).
+db.run(sql`
+  CREATE TABLE IF NOT EXISTS place_reviews (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    place_id   TEXT    NOT NULL,
+    user_id    INTEGER NOT NULL,
+    created_at TEXT    DEFAULT (datetime('now'))
   )
 `).catch(console.error);
 
@@ -754,6 +765,59 @@ router.get('/me/visited', requireAuth, async (c) => {
     visitedAt: visitedAtMap[p.id] ?? null,
     favoritePosition: favMap[p.id] ?? null,
   })));
+});
+
+// ── Review-Prozess: Besucher:innen bestätigen/aktualisieren die Beschreibung ──
+
+// GET /places/:id/review-status — braucht der Ort ein Review + darf ich reviewen?
+router.get('/:id/review-status', requireAuth, async (c) => {
+  const user = c.get('user');
+  const placeId = c.req.param('id');
+  const place = await db.select({ submittedBy: places.submittedBy }).from(places).where(eq(places.id, placeId)).get();
+  if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+
+  const agg = await db.all<{ n: number; mineRecent: number; stale: number }>(sql`
+    SELECT count(*) AS n,
+      COALESCE(max(CASE WHEN user_id = ${user.id} AND created_at > datetime('now','-3 months') THEN 1 ELSE 0 END), 0) AS mineRecent,
+      CASE WHEN max(created_at) IS NULL OR max(created_at) < datetime('now','-3 months') THEN 1 ELSE 0 END AS stale
+    FROM place_reviews WHERE place_id = ${placeId}
+  `).catch(() => [{ n: 0, mineRecent: 0, stale: 1 }]);
+  const a = agg[0] ?? { n: 0, mineRecent: 0, stale: 1 };
+  const reviewCount = Number(a.n);
+
+  const visited = await db.select({ id: visitedPlaces.placeId }).from(visitedPlaces)
+    .where(and(eq(visitedPlaces.userId, user.id), eq(visitedPlaces.placeId, placeId))).get();
+
+  const alreadyReviewed = Number(a.mineRecent) === 1;
+  const needsReview     = reviewCount < 2 || Number(a.stale) === 1;
+  const canReview       = !!visited && place.submittedBy !== user.id && !alreadyReviewed;
+  return c.json({ canReview, needsReview, reviewCount, alreadyReviewed, points: W_REVIEW });
+});
+
+// POST /places/:id/review — Review abschließen → Punkte
+router.post('/:id/review', requireAuth, async (c) => {
+  const user = c.get('user');
+  const placeId = c.req.param('id');
+  const place = await db.select({ submittedBy: places.submittedBy }).from(places).where(eq(places.id, placeId)).get();
+  if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+  const visited = await db.select({ id: visitedPlaces.placeId }).from(visitedPlaces)
+    .where(and(eq(visitedPlaces.userId, user.id), eq(visitedPlaces.placeId, placeId))).get();
+  if (!visited) return c.json({ error: 'Nur Besucher:innen können reviewen.' }, 403);
+  await db.run(sql`INSERT INTO place_reviews (place_id, user_id) VALUES (${placeId}, ${user.id})`).catch(() => {});
+  return c.json({ ok: true, points: W_REVIEW });
+});
+
+// POST /places/:id/review-dismiss — später erinnern (Postfach-Notiz)
+router.post('/:id/review-dismiss', requireAuth, async (c) => {
+  const user = c.get('user');
+  const placeId = c.req.param('id');
+  const place = await db.select({ name: places.name }).from(places).where(eq(places.id, placeId)).get();
+  if (place) await notify({
+    userId: user.id, type: 'review_reminder', title: 'Review noch offen',
+    body: `Magst du später kurz prüfen, ob bei „${place.name}" noch alles stimmt? Dafür gibt's Punkte.`,
+    link: `/place/${placeId}`,
+  });
+  return c.json({ ok: true });
 });
 
 // GET /places/me/created — eigene eingereichte Orte (inkl. „in Prüfung")
