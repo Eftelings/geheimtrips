@@ -1,0 +1,7 @@
+# Geheimtrips.de
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://www.geheimtrips.de/sitemap.xml

@@ -45,7 +45,7 @@ export function GatePage() {
       className="min-h-dvh flex flex-col px-6 py-8"
       style={{ background: 'radial-gradient(120% 80% at 50% 0%, #4a3268, #34254c 48%, #251539)' }}
     >
-      <div className="w-full max-w-md mx-auto flex flex-col">
+      <main className="w-full max-w-md mx-auto flex flex-col">
 
         {/* Logo */}
         <div className="flex items-center gap-3 mb-7">
@@ -73,7 +73,7 @@ export function GatePage() {
 
         {/* ── Gründer-Karte: Foto + Geschichte ── */}
         <div className="bg-white/8 backdrop-blur-sm rounded-3xl overflow-hidden border border-white/10 mb-6">
-          <img src="/images/founder.jpg" alt="David & Lea" className="w-full h-auto"
+          <img src="/images/founder.jpg" alt="David & Lea" width={600} height={800} className="w-full h-auto"
             onError={e => { e.currentTarget.style.display = 'none'; }} />
           <div className="p-5">
             <p className="text-[var(--color-amber)] font-bold text-sm mb-2">Hi, wir sind David &amp; Lea 👋</p>
@@ -237,7 +237,7 @@ export function GatePage() {
             Impressum &amp; Datenschutz
           </Link>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

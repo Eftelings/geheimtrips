@@ -1,0 +1,12 @@
+# Geheimtrips.de
+
+> Entdecke geheime Ausflugsziele und Geheimtipps abseits der Touristenpfade — echte Geheimtrips, von Entdecker:innen für Abenteurer:innen, mit Community-Reviews und personalisierten Vorschlägen in deiner Nähe.
+
+## Wichtige Seiten
+
+- [Startseite](https://www.geheimtrips.de/): Geheimtipps in der Nähe auf einer interaktiven Karte entdecken
+- [Rechtliches & Datenschutz](https://www.geheimtrips.de/legal): Impressum und Datenschutzerklärung
+
+## Über Geheimtrips
+
+Geheimtrips.de ist eine deutschsprachige Community-Plattform, auf der Menschen echte Geheimtipps für Ausflüge und Reisen teilen, bewerten und gemeinsam aktuell halten. Orte werden von der Community eingereicht, besucht, bewertet und regelmäßig auf Richtigkeit überprüft (Review-Prozess). Nutzer:innen finden passende Ziele über Standort, Verkehrsmittel, Reisezeit und persönliche Vorlieben.

@@ -72,6 +72,11 @@ app.onError((err, c) => {
 // Nicht gesetzt (lokale Entwicklung) → Vite liefert das Frontend separat aus.
 const STATIC_DIR = process.env.STATIC_DIR;
 if (STATIC_DIR) {
+  // Gehashte Assets (Vite: /assets/index-XXXX.js|css) sind unveränderlich → sehr lange cachen
+  app.use('/assets/*', async (c, next) => {
+    await next();
+    c.header('Cache-Control', 'public, max-age=31536000, immutable');
+  });
   app.use('/*', serveStatic({ root: STATIC_DIR }));
   // SPA-Fallback: alle übrigen Pfade auf index.html (React-Router übernimmt)
   const indexHtml = readFileSync(resolve(process.cwd(), STATIC_DIR, 'index.html'), 'utf8');
