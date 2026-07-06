@@ -11,12 +11,16 @@ import {
   MapContainer, TileLayer, Marker, Polyline,
   useMapEvents, useMap,
 } from 'react-leaflet';
-import L, { type LatLngExpression, type LatLngBoundsExpression } from 'leaflet';
+import L, { type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useAppStore } from '../../store/useAppStore.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { AppShell } from '../../components/layout/AppShell.js';
 import { BrandLogo } from '../../components/ui/BrandLogo.js';
+import { TagBadge } from '../../components/ui/TagBadge.js';
+
+// Rundendauer (Sekunden) — Server steuert den echten Countdown, hier für Ring-Mathe/Anzeige.
+const ROUND_SECONDS = 7;
 
 const WS_URL = import.meta.env.VITE_WS_URL
   ?? `${location.protocol.replace('http', 'ws')}//${location.host}/api/game/ws`;
@@ -41,7 +45,7 @@ interface GuessResult {
 }
 interface PlaceResult {
   id: string; name: string; region: string;
-  categoryLabel: string; short: string;
+  categoryLabel: string; tagSlug?: string | null; short: string;
   photos: string[]; lat: number; lng: number; rating: number;
 }
 interface PhotoStat { playerId: string; name: string; count: number; }
@@ -50,8 +54,7 @@ type Phase = 'hub' | 'searching' | 'playing' | 'gameover';
 
 // ── Map helpers ───────────────────────────────────────────────────────────────
 
-const GERMANY: LatLngExpression              = [51.1, 10.4];
-const GERMANY_BOUNDS: LatLngBoundsExpression = [[46.0, 4.5], [56.0, 17.0]];
+const GERMANY: LatLngExpression = [51.1, 10.4];
 
 function pin(color: string, size = 22) {
   // iconAnchor centres the icon on the coordinate — no CSS translate needed.
@@ -109,7 +112,7 @@ export function GeoGamePage() {
   const [opponentGuessed, setOpponentGuessed] = useState(false);
 
   const [timerActive, setTimerActive] = useState(false);
-  const [timeLeft,    setTimeLeft]    = useState(5);
+  const [timeLeft,    setTimeLeft]    = useState(ROUND_SECONDS);
 
   const [revealed,       setRevealed]       = useState(false);
   const [revealPlace,    setRevealPlace]    = useState<PlaceResult | null>(null);
@@ -152,7 +155,7 @@ export function GeoGamePage() {
       setCurRound(d.round); setTotalRounds(d.total);
       setPhotos(d.photos); setPhotoIndex(0); setPhotosViewedThisRound(1);
       setPendingGuess(null); setHasGuessed(false); setOpponentGuessed(false);
-      setTimerActive(false); setTimeLeft(5);
+      setTimerActive(false); setTimeLeft(ROUND_SECONDS);
       setRevealed(false); setRevealPlace(null); setRevealResults([]); setRevealWinnerId(null);
       setMyReady(false); setOpponentReady(false);
       setPhase('playing');
@@ -237,8 +240,8 @@ export function GeoGamePage() {
   // ── Timer math ───────────────────────────────────────────────────────────────
   const TIMER_R    = 18;
   const timerCirc  = 2 * Math.PI * TIMER_R;
-  const timerDash  = timerCirc * Math.max(0, timeLeft / 5);
-  const timerColor = timeLeft > 2 ? C.amber : '#ef4444';
+  const timerDash  = timerCirc * Math.max(0, timeLeft / ROUND_SECONDS);
+  const timerColor = timeLeft > 3 ? C.amber : '#ef4444';
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const opponent  = players.find(p => p.id !== myId);
@@ -590,9 +593,7 @@ export function GeoGamePage() {
             <div className="absolute bottom-0 left-0 right-0 p-5 z-10">
               {revealed && revealPlace ? (
                 <>
-                  <span className="block text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: C.amber }}>
-                    {revealPlace.categoryLabel}
-                  </span>
+                  <TagBadge slug={revealPlace.tagSlug} fallback={revealPlace.categoryLabel} icon variant="dark" className="mb-1" />
                   <h2 className="font-display text-2xl lg:text-3xl font-bold text-white leading-tight drop-shadow-md">
                     {revealPlace.name}
                   </h2>
@@ -683,7 +684,7 @@ export function GeoGamePage() {
         </div>
 
         {/* ── RIGHT COLUMN: Map ───────────────────────────────────────── */}
-        <div className="flex-1 min-h-0"
+        <div className="flex-1 min-h-0 relative"
           style={{
             minHeight: '30%',
             borderRadius: '1.5rem',
@@ -692,8 +693,22 @@ export function GeoGamePage() {
             border: `1px solid ${C.lavender}33`,
           }}>
 
-          <MapContainer center={GERMANY} zoom={5}
-            maxBounds={GERMANY_BOUNDS} maxBoundsViscosity={0.9}
+          {/* Auffälliger Countdown, während geraten wird */}
+          {timerActive && !revealed && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full text-white font-extrabold"
+                style={{
+                  background: timerColor,
+                  boxShadow: `0 6px 22px ${timerColor}88`,
+                  animation: `gtCountPulse ${timeLeft <= 3 ? '0.5s' : '1.1s'} ease-in-out infinite`,
+                }}>
+                <i className="fa-solid fa-stopwatch text-sm" />
+                <span className="text-lg leading-none tabular-nums">{timeLeft}s</span>
+              </div>
+            </div>
+          )}
+
+          <MapContainer center={GERMANY} zoom={5} minZoom={2} scrollWheelZoom worldCopyJump
             style={{ width: '100%', height: '100%' }}
             zoomControl={false}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="" />

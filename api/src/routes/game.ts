@@ -1,7 +1,7 @@
 /**
  * Geheimquiz — real-time multiplayer location-guessing game.
  *
- * Timer starts only after the first player pins a guess (5 s countdown).
+ * Timer starts only after the first player pins a guess (7 s countdown).
  * Round advances only when BOTH players click "Weiter" (ready message).
  * Photos: hero + galleryJson sent per round; views tracked for end-of-game stats.
  * Results are persisted to quiz_games for logged-in players.
@@ -42,6 +42,7 @@ interface PlaceForGame {
   name: string;
   region: string;
   categoryLabel: string;
+  tagSlug: string | null;
   short: string;
   photos: string[];          // [hero, ...gallery]
   lat: number;
@@ -114,6 +115,7 @@ async function loadGamePlaces(): Promise<PlaceForGame[]> {
     return {
       id: p.id, name: p.name, region: p.region,
       categoryLabel: p.categoryLabel,
+      tagSlug: p.tagSlug ?? null,
       short: p.short,
       photos,
       lat: p.lat as number, lng: p.lng as number, rating: p.rating,
@@ -168,7 +170,7 @@ function endRound(room: GameRoom): void {
     round: room.round + 1,
     place: {
       id: place.id, name: place.name, region: place.region,
-      categoryLabel: place.categoryLabel, short: place.short,
+      categoryLabel: place.categoryLabel, tagSlug: place.tagSlug, short: place.short,
       photos: place.photos,
       lat: place.lat, lng: place.lng, rating: place.rating,
     },
@@ -241,7 +243,7 @@ export function handleGameConnection(ws: WebSocket): void {
           const code = genCode();
           const room: GameRoom = {
             code, players: new Map(), state: 'playing',
-            round: 0, places: [], timer: null, ticksLeft: 5,
+            round: 0, places: [], timer: null, ticksLeft: 7,
             guessedCount: 0, timerStarted: false, readyCount: 0,
             photosSeen: new Map(),
           };
@@ -302,11 +304,11 @@ export function handleGameConnection(ws: WebSocket): void {
           if (p2id !== pid) send(p2.ws, { type: 'player_guessed', playerId: pid });
         }
 
-        // Start 5-second timer on FIRST guess
+        // Start 7-second timer on FIRST guess
         if (!room.timerStarted) {
           room.timerStarted = true;
-          room.ticksLeft    = 5;
-          broadcast(room, { type: 'timer_start', remaining: 5 });
+          room.ticksLeft    = 7;
+          broadcast(room, { type: 'timer_start', remaining: 7 });
           room.timer = setInterval(() => {
             room.ticksLeft--;
             broadcast(room, { type: 'timer', remaining: room.ticksLeft });
