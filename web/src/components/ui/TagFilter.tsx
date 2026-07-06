@@ -37,15 +37,15 @@ export function TagFilter({ value, onChange }: { value: TagSelection; onChange: 
 
   return (
     <div>
-      {/* Oberkategorien (Gruppen) */}
-      <div className="flex flex-wrap gap-2">
+      {/* Oberkategorien (Gruppen) — alle vier nebeneinander in einer Reihe */}
+      <div className="flex gap-1.5">
         {groups.map(g => {
           const on = value.group === g.slug;
           return (
             <button key={g.slug} type="button" onClick={() => onChange(on ? EMPTY_TAG_SEL : { group: g.slug, tag: null })}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95"
+              className="flex-1 min-w-0 flex items-center justify-center gap-1 px-1.5 py-2 rounded-full text-[11px] font-semibold border transition-all active:scale-95"
               style={on ? { background: g.color, color: 'white', borderColor: g.color } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
-              <i className={`fa-solid ${g.icon} text-[10px]`} />{shortGroupLabel(g.label)}
+              <i className={`fa-solid ${g.icon} text-[10px] flex-shrink-0`} /><span className="truncate">{shortGroupLabel(g.label)}</span>
             </button>
           );
         })}

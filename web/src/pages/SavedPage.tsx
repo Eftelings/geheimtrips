@@ -109,7 +109,7 @@ function placeMatchesText(p: Place, s: string): boolean {
 // ─── Seite ────────────────────────────────────────────────────────────────────
 export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   const navigate = useNavigate();
-  const [tab, setTab]             = useState<Tab>(initialTab);
+  const tab: Tab = initialTab;   // Orte vs. Trips wird über die Route bestimmt (Bottom-Nav)
   // Trips-Ansicht: Alle anzeigen · nach Anreisezeit filtern · nach Datum sortieren
   const [tripView, setTripView]  = useState<'alle' | 'anreise' | 'datum'>('alle');
   const [q, setQ]                 = useState('');
@@ -272,20 +272,10 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
     <AppShell>
       <div className="px-6 pt-5 max-w-2xl mx-auto md:max-w-none md:px-8">
         <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] mb-5" style={{ letterSpacing: '-0.02em' }}>
-          Deine <em className="italic text-[var(--color-amber)]">Sammlung</em>
+          {tab === 'trips'
+            ? <>Meine <em className="italic text-[var(--color-amber)]">Trips</em></>
+            : <>Meine <em className="italic text-[var(--color-amber)]">Orte</em></>}
         </h1>
-
-        {/* Tabs */}
-        <div className="flex gap-2 mb-4">
-          {(['orte', 'trips'] as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`flex-1 py-2.5 rounded-full font-semibold text-sm transition-colors ${
-                tab === t ? 'bg-[var(--color-aubergine)] text-white' : 'bg-[var(--color-bg-soft)] text-[var(--color-lavender)]'
-              }`}>
-              {t === 'orte' ? `Orte (${savedPlaces.length})` : `Trips (${trips.length})`}
-            </button>
-          ))}
-        </div>
 
         {/* Trips-Ansicht: Alle · nach Anreisezeit · nach Datum */}
         {tab === 'trips' && (

@@ -138,7 +138,12 @@ export function MobileEntdecken() {
   const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
   const listSwipe = useRef<{ x: number; y: number } | null>(null);
   const justSwiped = useRef(false);
-  const peekOffset = () => Math.round((typeof window !== 'undefined' ? window.innerHeight : 800) * 0.36);
+  // Peek-Höhe so wählen, dass Griff + Kopf + der erste Ort ÜBER der Bottom-Nav sichtbar sind.
+  // Sheet-Oberkante (eingeklappt) = 0.38·H (top:38vh) + Offset; sichtbar = H − Offset − 0.38·H.
+  const peekOffset = () => {
+    const H = typeof window !== 'undefined' ? window.innerHeight : 800;
+    return Math.max(120, Math.round(H * 0.62 - 238)); // 238 = Nav(76) + Griff/Kopf(70) + erster Eintrag(92)
+  };
   useEffect(() => {
     if (sheetDragging) return;
     const apply = () => setSheetDragY(sheetExpanded ? 0 : peekOffset());
@@ -219,7 +224,7 @@ export function MobileEntdecken() {
   const toolShadow = { boxShadow: '0 2px 10px rgba(52,37,76,0.18)' } as const;
 
   return (
-    <AppShell noHeader>
+    <AppShell>
       {/* Vollbildkarte */}
       <div className="fixed inset-0 z-0" style={{ background: '#e8e4ee' }}>
         <MapContainer center={reachCenter ? [reachCenter.lat, reachCenter.lng] : [51.1657, 10.4515]}
@@ -237,34 +242,16 @@ export function MobileEntdecken() {
         </MapContainer>
       </div>
 
-      {/* Funnel-Sheet oben — antippen startet den Funnel */}
-      <div className="fixed top-0 left-0 right-0 z-20" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <button onClick={() => navigate('/funnel')} className="block w-full"
-          style={{ background: 'var(--color-amber)', borderBottomLeftRadius: 20, borderBottomRightRadius: 20, boxShadow: '0 8px 22px rgba(249,144,57,0.28)' }}>
-          <div className="px-4 pt-3 pb-2">
-            <div className="flex items-center justify-center gap-2.5">
-              <i className="fa-solid fa-wand-magic-sparkles text-white text-sm" />
-              <span className="text-white font-semibold text-sm">Neue Geheimtrips finden</span>
-              <i className="fa-solid fa-chevron-down text-white text-xs opacity-80" />
-            </div>
-            <div className="w-9 h-1 rounded-full bg-white/60 mx-auto mt-2" />
-          </div>
-        </button>
-      </div>
-
-      {/* Toolbar */}
-      <div className="fixed left-0 right-0 z-20 px-3 flex flex-col gap-2" style={{ top: 'calc(env(safe-area-inset-top) + 60px)' }}>
+      {/* Toolbar — direkt unter dem Standard-Header (56px), gleiche Koordinaten wie der Header */}
+      <div className="fixed left-0 right-0 z-20 px-3 flex flex-col gap-2" style={{ top: '60px' }}>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => navigate(-1)} className={toolBtn} style={toolShadow} aria-label="Zurück">
-            <i className="fa-solid fa-arrow-left text-[var(--color-aubergine)]" />
-          </button>
           <button onClick={() => setPanel(panel === 'loc' ? null : 'loc')} className={toolBtn}
             style={{ ...toolShadow, color: searchCenter ? '#F99039' : '#34254c' }} aria-label="Standort">
             <i className="fa-solid fa-location-dot" />
           </button>
           <button onClick={() => setPanel(panel === 'cat' ? null : 'cat')} className={toolBtn}
-            style={{ ...toolShadow, color: catActive ? '#F99039' : '#34254c' }} aria-label="Kategorien">
-            <i className="fa-solid fa-layer-group" />
+            style={{ ...toolShadow, color: catActive ? '#F99039' : '#34254c' }} aria-label="Filter">
+            <i className="fa-solid fa-filter" />
           </button>
           <button onClick={() => setPanel(panel === 'transport' ? null : 'transport')}
             className="flex-1 flex items-center gap-2 bg-white rounded-xl h-10 px-3" style={toolShadow}>
@@ -295,7 +282,7 @@ export function MobileEntdecken() {
         <>
           <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
           <div className="fixed left-3 right-3 z-40 bg-white rounded-2xl p-3.5"
-            style={{ top: 'calc(env(safe-area-inset-top) + 116px)', boxShadow: '0 14px 40px rgba(52,37,76,0.25)', maxHeight: '58vh', overflowY: 'auto' }}>
+            style={{ top: '116px', boxShadow: '0 14px 40px rgba(52,37,76,0.25)', maxHeight: '58vh', overflowY: 'auto' }}>
             {panel === 'loc' && (
               <div>
                 <div className="flex items-center gap-2 bg-[var(--color-bg-soft)] rounded-xl px-3 h-10 mb-2">
