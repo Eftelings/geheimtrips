@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { cleanRichText, cleanPlainText } from '../lib/sanitize.js';
+import { deriveTag } from '../data/taxMigration.js';
 import { sendMail } from '../lib/mailer.js';
 import { notify } from '../lib/notify.js';
 
@@ -22,6 +23,20 @@ db.run(sql`
 `).catch(() => {});
 // Eigene Tags je gemerktem Ort (pro Nutzer:in)
 db.run(sql`ALTER TABLE saved_places ADD COLUMN tags TEXT DEFAULT '[]'`).catch(() => {});
+
+// ── Taxonomie-Cutover: bestehende Orte auf Typ-Tag (neues Modell) heben ────────
+db.run(sql`ALTER TABLE places ADD COLUMN tag_slug TEXT`).catch(() => {});
+(async () => {
+  const rows = await db.all<{ id: string; name: string; category: string; attributes_json: string | null }>(
+    sql`SELECT id, name, category, attributes_json FROM places WHERE tag_slug IS NULL OR tag_slug = ''`
+  ).catch(() => [] as { id: string; name: string; category: string; attributes_json: string | null }[]);
+  for (const r of rows) {
+    let l3: string | undefined;
+    try { l3 = (JSON.parse(r.attributes_json ?? '{}') as { l3Slug?: string }).l3Slug; } catch { /* ignore */ }
+    const tag = deriveTag(l3, r.name, r.category);
+    await db.run(sql`UPDATE places SET tag_slug = ${tag} WHERE id = ${r.id}`).catch(() => {});
+  }
+})().catch(() => {});
 
 // Änderungsanfragen zu Orten — gehen an Admins, Ersteller:in und (falls vorhanden) Business.
 db.run(sql`
@@ -170,6 +185,10 @@ router.post('/submit', requireAuth,
     l2Slug:       z.string().optional(),
     l3Slug:       z.string().optional(),
     l4Features:   z.array(z.string()).optional().default([]),
+    // Neues Taxonomie-Modell (löst l1–l4 nach und nach ab)
+    tagSlug:      z.string().optional(),
+    merkmale:     z.array(z.string()).optional().default([]),
+    vibes:        z.array(z.string()).optional().default([]),
     answers:      z.record(z.unknown()).optional().default({}),
     tips:         z.array(z.string()).optional().default([]),
     mediaItems:   z.array(z.object({
@@ -213,6 +232,8 @@ router.post('/submit', requireAuth,
       l2Slug:       body.l2Slug,
       l3Slug:       body.l3Slug,
       l4Features:   body.l4Features,
+      merkmale:     body.merkmale,
+      vibes:        body.vibes,
       answers:      safeAnswers,
       locationText: body.locationText,
       heroCropX:    body.heroCropX ?? 0.5,
@@ -225,6 +246,7 @@ router.post('/submit', requireAuth,
       region:        body.region || (body.locationText ?? ''),
       category:      cat.category,
       categoryLabel: cat.categoryLabel,
+      tagSlug:       body.tagSlug || deriveTag(body.l3Slug, body.name, cat.category),
       short:         finalShort,
       long:          cleanRichText(body.long),
       // Kein Stock-Foto erfinden: ohne Upload bleibt das Titelbild leer
@@ -274,6 +296,10 @@ router.patch('/:id', requireAuth,
     l2Slug:       z.string().optional(),
     l3Slug:       z.string().optional(),
     l4Features:   z.array(z.string()).optional().default([]),
+    // Neues Taxonomie-Modell (löst l1–l4 nach und nach ab)
+    tagSlug:      z.string().optional(),
+    merkmale:     z.array(z.string()).optional().default([]),
+    vibes:        z.array(z.string()).optional().default([]),
     answers:      z.record(z.unknown()).optional().default({}),
     tips:         z.array(z.string()).optional().default([]),
     mediaItems:   z.array(z.object({
@@ -314,6 +340,8 @@ router.patch('/:id', requireAuth,
       l2Slug:       body.l2Slug,
       l3Slug:       body.l3Slug,
       l4Features:   body.l4Features,
+      merkmale:     body.merkmale,
+      vibes:        body.vibes,
       answers:      safeAnswers,
       locationText: body.locationText,
       heroCropX:    body.heroCropX ?? 0.5,
@@ -325,6 +353,7 @@ router.patch('/:id', requireAuth,
       region:        body.region || (body.locationText ?? '') || place.region,
       category:      cat.category,
       categoryLabel: cat.categoryLabel,
+      tagSlug:       body.tagSlug ?? place.tagSlug ?? deriveTag(body.l3Slug, body.name, cat.category),
       short:         finalShort,
       long:          cleanRichText(body.long),
       hero:          body.hero || body.mediaItems?.[0]?.url || place.hero,

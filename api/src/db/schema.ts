@@ -66,6 +66,7 @@ export const places = sqliteTable('places', {
   isOfficiallyManaged: integer('is_officially_managed', { mode: 'boolean' }).default(false),
   // Community-editable fields
   parking: text('parking'), // null | 'free' | 'paid' | 'limited'
+  tagSlug: text('tag_slug'), // neues Taxonomie-Modell: Typ-Tag (löst category/categoryLabel ab)
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
 
