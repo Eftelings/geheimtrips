@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { AppShell } from '../components/layout/AppShell.js';
@@ -32,10 +32,10 @@ const T_ICON: Record<string, string> = {
   radius: 'fa-circle-dot', walk: 'fa-person-walking', bike: 'fa-bicycle',
   transit: 'fa-train-subway', train: 'fa-train', auto: 'fa-car',
 };
-type Mode = 'newest' | 'all' | 'top5' | 'saved';
+type Mode = 'all' | 'saved' | 'new' | 'foryou';
 const MODES: { id: Mode; label: string }[] = [
-  { id: 'newest', label: 'Neueste' }, { id: 'all', label: 'Alle' },
-  { id: 'top5', label: 'Top 5' }, { id: 'saved', label: 'Gemerkt' },
+  { id: 'all', label: 'Alle' }, { id: 'saved', label: 'Nur gemerkte' },
+  { id: 'new', label: 'Nur neue' }, { id: 'foryou', label: 'Für dich' },
 ];
 
 // Karte auf die Reichweite (Radius/Isochrone) einpassen — sonst liegt der Kreis außerhalb des Sichtfelds
@@ -62,7 +62,7 @@ const entdeckenCache = {
   searchCenter: null as Coords | null,
   searchLabel: null as string | null,
   radiusKm: 80,
-  mode: 'newest' as Mode,
+  mode: 'all' as Mode,
   tagSel: EMPTY_TAG_SEL as TagSelection,
   travelMode: 'radius' as 'radius' | Transport,
   travelMinutes: 45,
@@ -71,14 +71,22 @@ const entdeckenCache = {
   scrollTop: 0,
 };
 
+// Langes Drücken (mobil) bzw. Rechtsklick (Desktop) auf die Karte → Startpunkt für den Radius
+function LongPressPick({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({ contextmenu: e => { e.originalEvent?.preventDefault?.(); onPick(e.latlng.lat, e.latlng.lng); } });
+  return null;
+}
+
 export function MobileEntdecken() {
   const navigate = useNavigate();
-  const { places, loadPlaces, savedIds, funnelAnswers } = useAppStore();
+  const { places, loadPlaces, savedIds, visitedIds, funnelAnswers } = useAppStore();
   const vocab = useTaxVocab();
 
   const [userCoords, setUserCoords] = useState<Coords | null>(() => funnelAnswers?.coords ?? null);
   const [searchCenter, setSearchCenter] = useState<Coords | null>(entdeckenCache.searchCenter);
   const [searchLabel, setSearchLabel] = useState<string | null>(entdeckenCache.searchLabel);
+  const [pickToast, setPickToast] = useState(false);
+  const pickToastTimer = useRef<number>(0);
   const [radiusKm, setRadiusKm] = useState(entdeckenCache.radiusKm);
   const [mode, setMode] = useState<Mode>(entdeckenCache.mode);
   const [tagSel, setTagSel] = useState<TagSelection>(entdeckenCache.tagSel);
@@ -112,10 +120,20 @@ export function MobileEntdecken() {
       base = base.filter(within);
     }
     if (mode === 'saved') return base.filter(p => savedIds.has(p.id));
-    if (mode === 'top5')  return [...base].sort((a, b) => (b.match - a.match) || (b.rating - a.rating)).slice(0, 5);
-    if (mode === 'newest') return [...base].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return base;
-  }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds]);
+    if (mode === 'new')   return base.filter(p => !visitedIds.has(p.id) && !savedIds.has(p.id));
+    if (mode === 'foryou') {
+      // „Für dich": Orte in den Gruppen, die die Person schon gemerkt hat (echtes Signal);
+      // ohne gemerkte Orte fällt es auf die beste Übereinstimmung (match) zurück.
+      const likedGroups = new Set(
+        places.filter(p => savedIds.has(p.id)).map(p => tagInfoFrom(vocab, p.tagSlug)?.groupSlug).filter(Boolean),
+      );
+      const pool = base.filter(p => !savedIds.has(p.id));
+      return likedGroups.size
+        ? pool.filter(p => likedGroups.has(tagInfoFrom(vocab, p.tagSlug)?.groupSlug ?? ''))
+        : [...pool].sort((a, b) => (b.match - a.match) || (b.rating - a.rating));
+    }
+    return base; // 'all'
+  }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds, visitedIds]);
 
   // Liste nach Entfernung sortiert (nächste zuerst)
   const listPlaces = useMemo(() => {
@@ -177,6 +195,13 @@ export function MobileEntdecken() {
     setSearchQuery(''); setGeoSug([]); setPanel(null);
   }
   function resetToGps() { setSearchCenter(null); setSearchLabel(null); setSearchQuery(''); setGeoSug([]); }
+  // Langes Drücken auf die Karte → diesen Punkt als Radius-Startpunkt setzen
+  function pickMapPoint(lat: number, lng: number) {
+    setSearchCenter({ lat, lng });
+    setSearchLabel('Auf der Karte gewählt');
+    setPanel(null);
+    setPickToast(true); window.clearTimeout(pickToastTimer.current); pickToastTimer.current = window.setTimeout(() => setPickToast(false), 1900);
+  }
 
   function onSheetTouchStart(e: React.TouchEvent) {
     sheetDrag.current = { startY: e.touches[0].clientY, startOffset: sheetDragY, moved: 0 };
@@ -204,6 +229,7 @@ export function MobileEntdecken() {
     const q = new URLSearchParams();
     if (reachCenter) { q.set('lat', String(reachCenter.lat)); q.set('lng', String(reachCenter.lng)); }
     if (reach.travelMode !== 'radius') { q.set('mode', reach.travelMode); q.set('minutes', String(reach.travelMinutes)); }
+    if (mode !== 'new') q.set('known', '1');   // „Nur neue" auf der Karte → auch im Swipe nur neue Orte
     const s = q.toString();
     navigate(`/swipe${s ? `?${s}` : ''}`);
   }
@@ -231,6 +257,7 @@ export function MobileEntdecken() {
           zoom={reachCenter ? 9 : 6} scrollWheelZoom zoomControl={false} attributionControl={false}
           style={{ height: '100%', width: '100%' }}>
           <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+          <LongPressPick onPick={pickMapPoint} />
           <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
           {shownPlaces.map(p => (
             <Marker key={p.id} position={[p.lat!, p.lng!]}
@@ -241,6 +268,22 @@ export function MobileEntdecken() {
           <FitReach center={reachCenter} travel={travel} radiusKm={radiusKm} fallback={fallbackPts} />
         </MapContainer>
       </div>
+
+      {/* Hinweis + Bestätigung zum Langdrücken (Radius-Startpunkt) */}
+      {!searchCenter && !pickToast && (
+        <div className="fixed left-1/2 -translate-x-1/2 z-10 pointer-events-none" style={{ top: '31%' }}>
+          <span className="text-[11px] font-semibold text-[var(--color-aubergine)]/80 bg-white/85 backdrop-blur px-3 py-1.5 rounded-full shadow-sm">
+            <i className="fa-solid fa-hand-pointer text-[var(--color-amber)] mr-1.5" />Lange drücken für einen Startpunkt
+          </span>
+        </div>
+      )}
+      {pickToast && (
+        <div className="fixed left-1/2 -translate-x-1/2 z-40 pointer-events-none" style={{ top: '31%' }}>
+          <span className="text-xs font-bold text-white bg-[var(--color-aubergine)] px-3.5 py-2 rounded-full shadow-lg">
+            <i className="fa-solid fa-location-crosshairs text-[var(--color-amber)] mr-1.5" />Startpunkt gesetzt
+          </span>
+        </div>
+      )}
 
       {/* Toolbar — direkt unter dem Standard-Header (56px), gleiche Koordinaten wie der Header */}
       <div className="fixed left-0 right-0 z-20 px-3 flex flex-col gap-2" style={{ top: '60px' }}>

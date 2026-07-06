@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { AppShell } from '../components/layout/AppShell.js';
-import { discoverApi } from '../services/api.js';
+import { discoverApi, placesApi } from '../services/api.js';
 import type { DeckPlace } from '../services/api.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { requestGpsPosition, getLocationByIp } from '../services/geoService.js';
@@ -47,7 +47,8 @@ export function SwipePage() {
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const shownAt = useRef(Date.now());
   const [userPos, setUserPos] = useState<Coords | null>(null);
-  const [includeKnown, setIncludeKnown] = useState(false);
+  const includeKnown = params.get('known') === '1';   // von der Karte gesteuert
+  const [likedPhotos, setLikedPhotos] = useState<Set<string>>(new Set());
 
   const qLat = params.get('lat'), qLng = params.get('lng');
   const qMode = params.get('mode') ?? undefined;
@@ -67,15 +68,18 @@ export function SwipePage() {
 
   useEffect(() => {
     (async () => {
-      if (!qLat) {
-        try { setUserPos(await requestGpsPosition()); }
-        catch { const ip = await getLocationByIp(); if (ip) setUserPos({ lat: ip.lat, lng: ip.lng }); }
+      if (qLat) return; // Position aus URL → der Lade-Effect unten greift
+      try { setUserPos(await requestGpsPosition()); }
+      catch {
+        const ip = await getLocationByIp();
+        if (ip) setUserPos({ lat: ip.lat, lng: ip.lng });
+        else loadDeck(); // keine Position ermittelbar → trotzdem laden
       }
     })();
   }, []); // eslint-disable-line
 
-  useEffect(() => { loadDeck(); }, [includeKnown]); // eslint-disable-line
-  useEffect(() => { loadDeck(); }, [userPos?.lat, qLat]); // eslint-disable-line
+  // Genau einmal laden, sobald eine Position feststeht (kein mehrfaches Nachladen → schneller)
+  useEffect(() => { if (qLat || userPos) loadDeck(); }, [userPos?.lat, qLat]); // eslint-disable-line
 
   const card = deck[idx];
   const next = deck[idx + 1];
@@ -124,6 +128,16 @@ export function SwipePage() {
     if (!card) return;
     toggleSave(card.id);
     showToast(savedIds.has(card.id) ? 'Entfernt' : 'Gemerkt');
+  }
+
+  // Herz = dieses konkrete Foto/Video liken (nicht den ganzen Ort)
+  function likeCurrentPhoto() {
+    if (!card || !cur) return;
+    const url = cur.url;
+    const wasLiked = likedPhotos.has(url);
+    setLikedPhotos(s => { const n = new Set(s); if (wasLiked) n.delete(url); else n.add(url); return n; });
+    showToast(wasLiked ? 'Gefällt-mir entfernt' : 'Schönes Foto! ❤');
+    placesApi.likePhoto(card.id, url).catch(() => {});
   }
 
   function nextImage() { if (media.length > 1) setImgIdx(i => (i + 1) % media.length); }
@@ -213,11 +227,11 @@ export function SwipePage() {
           </div>
         ) : card ? (
           <>
-            {/* nächste Karte (Reels-Vorschau darunter) */}
+            {/* nächste Karte (Reels-Vorschau darunter) — nur ganz leicht abgedunkelt */}
             {next && (
               <div className="absolute inset-0">
-                <img src={next.hero} alt="" className="w-full h-full object-cover opacity-40" />
-                <div className="absolute inset-0 bg-black/50" />
+                <img src={next.hero} alt="" className="w-full h-full object-cover opacity-70" />
+                <div className="absolute inset-0 bg-black/15" />
               </div>
             )}
 
@@ -234,8 +248,8 @@ export function SwipePage() {
               {cur?.video
                 ? <video src={cur.url} autoPlay muted loop playsInline className="w-full h-full object-cover pointer-events-none" />
                 : <img src={cur?.url} alt={card.name} className="w-full h-full object-cover pointer-events-none" />}
-              {/* Lesbarkeits-Verläufe oben & unten */}
-              <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/45 via-transparent to-black/80" />
+              {/* Lesbarkeits-Verlauf nur unten (Bild bleibt hell, kein dunkles Overlay) */}
+              <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/5 via-transparent to-black/65" />
 
               {/* Wisch-Feedback */}
               <div className="absolute top-24 left-6 px-3.5 py-1.5 rounded-xl border-[3px] border-white text-white font-black text-xl rotate-[-15deg] pointer-events-none"
@@ -272,29 +286,23 @@ export function SwipePage() {
               </div>
             </div>
 
-            {/* ── Kopfzeile: zurück + „Nur neue" (weiß, Reels-Stil) ── */}
+            {/* ── Kopfzeile: nur Zurück (Filter „Nur neue" liegt jetzt auf der Karte) ── */}
             <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-3 z-20 pointer-events-none">
               <button onClick={() => navigate(calibrate ? '/' : -1 as never)}
                 className="w-10 h-10 rounded-full bg-black/35 backdrop-blur flex items-center justify-center text-white active:scale-95 transition-transform pointer-events-auto">
                 <i className="fa-solid fa-arrow-left" />
               </button>
-              {calibrate ? (
-                progress && <span className="text-white/90 text-xs font-semibold bg-black/35 backdrop-blur px-3 py-1.5 rounded-full pointer-events-none">Karte {progress}</span>
-              ) : (
-                <button onClick={() => setIncludeKnown(v => !v)}
-                  className="text-xs font-bold px-3.5 py-1.5 rounded-full transition-colors pointer-events-auto"
-                  style={includeKnown
-                    ? { background: 'rgba(0,0,0,0.35)', color: 'white', backdropFilter: 'blur(6px)' }
-                    : { background: 'white', color: '#34254C' }}>
-                  {includeKnown ? 'Inkl. bekannter' : 'Nur neue'}
-                </button>
+              {calibrate && progress && (
+                <span className="text-white/90 text-xs font-semibold bg-black/35 backdrop-blur px-3 py-1.5 rounded-full pointer-events-none">Karte {progress}</span>
               )}
             </div>
 
             {/* ── Rechte Aktionsleiste (TikTok-Stil) ── */}
             <div className="absolute right-3 bottom-6 flex flex-col items-center gap-5 z-20">
-              <ActionBtn icon={savedIds.has(card.id) ? 'fa-solid fa-heart' : 'fa-regular fa-heart'}
+              <ActionBtn icon={savedIds.has(card.id) ? 'fa-solid fa-bookmark' : 'fa-regular fa-bookmark'}
                 label="Merken" active={savedIds.has(card.id)} onClick={toggleSaveNow} />
+              <ActionBtn icon={likedPhotos.has(cur?.url ?? '') ? 'fa-solid fa-heart' : 'fa-regular fa-heart'}
+                label="Schönes Foto" active={likedPhotos.has(cur?.url ?? '')} onClick={likeCurrentPhoto} />
               <ActionBtn icon="fa-solid fa-paper-plane" label="Senden" onClick={share} />
               {media.length > 1 && (
                 <button onClick={nextImage} aria-label="Weitere Bilder"
