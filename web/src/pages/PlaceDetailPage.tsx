@@ -8,6 +8,7 @@ import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { Toast } from '../components/ui/Toast.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { PlaceImage } from '../components/ui/PlaceImage.js';
+import { TagBadge } from '../components/ui/TagBadge.js';
 import { WeatherForecast } from '../components/ui/WeatherForecast.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { placesApi, businessApi, mediaApi } from '../services/api.js';
@@ -203,11 +204,6 @@ const PHOTO_CATS = [
 type PhotoCat = typeof PHOTO_CATS[number]['id'];
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
-
-function categoryIcon(cat: string) {
-  const m: Record<string, string> = { natur: 'fa-leaf', kultur: 'fa-landmark', genuss: 'fa-mug-hot', aktiv: 'fa-person-hiking', mystisch: 'fa-user-secret', wasser: 'fa-water' };
-  return m[cat] ?? 'fa-map-pin';
-}
 
 function StarDisplay({ rating, size = 'sm' }: { rating: number; size?: 'xs' | 'sm' | 'lg' }) {
   const cls = size === 'xs' ? 'text-[10px]' : size === 'lg' ? 'text-lg' : 'text-xs';
@@ -568,10 +564,8 @@ function MobileHero({ place, photos, onOpen, onReviews }: {
 
         <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-white/90 flex items-center gap-1"
-              style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }}>
-              <i className={`fa-solid ${categoryIcon(place.category)}`} /> {place.categoryLabel}
-            </span>
+            <TagBadge slug={place.tagSlug} fallback={place.categoryLabel} icon variant="dark"
+              className="text-[9px] px-2 py-0.5" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }} />
             {place.isUserSubmitted && (
               <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-white flex items-center gap-1"
                 style={{ background: 'rgba(249,144,57,0.92)' }}>
@@ -1822,10 +1816,8 @@ async function handleVerifyToggle() {
               {/* Place name + rating overlay */}
               <div className="absolute bottom-0 left-0 right-0 p-4 md:p-5">
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-white/90 flex items-center gap-1"
-                    style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }}>
-                    <i className={`fa-solid ${categoryIcon(place.category)}`} /> {place.categoryLabel}
-                  </span>
+                  <TagBadge slug={place.tagSlug} fallback={place.categoryLabel} icon variant="dark"
+                    className="text-[9px] px-2 py-0.5" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }} />
                   {place.match > 0 && (
                     <span className="text-[9px] font-bold px-2 py-0.5 rounded-full text-white"
                       style={{ background: 'var(--color-amber)' }}>{place.match}% Match</span>

@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { PlaceCard } from '../components/ui/PlaceCard.js';
+import { TagBadge } from '../components/ui/TagBadge.js';
 import { SectionHead } from '../components/ui/SectionHead.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { useAuthStore } from '../store/useAuthStore.js';
@@ -324,9 +325,7 @@ function DesktopHero({ places, cityLabel, onCta }: { places: Place[]; cityLabel:
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
         <div className="absolute top-4 left-4">
-          <span className="bg-black/40 backdrop-blur-sm text-white text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-            {place.categoryLabel}
-          </span>
+          <TagBadge slug={place.tagSlug} fallback={place.categoryLabel} icon variant="dark" className="backdrop-blur-sm text-[11px] px-2.5 py-1" />
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-6">
           <p className="text-white/60 text-xs font-medium mb-1 flex items-center gap-1.5">
@@ -1234,9 +1233,7 @@ export function DiscoverPage() {
               <img src={tippDesTages.hero} alt={tippDesTages.name} className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
               <div className="absolute bottom-0 left-0 right-0 p-4">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-1">
-                  {tippDesTages.categoryLabel}
-                </div>
+                <TagBadge slug={tippDesTages.tagSlug} fallback={tippDesTages.categoryLabel} icon variant="dark" className="mb-1" />
                 <h2 className="font-display font-bold text-white text-xl leading-tight mb-1">
                   {tippDesTages.name}
                 </h2>

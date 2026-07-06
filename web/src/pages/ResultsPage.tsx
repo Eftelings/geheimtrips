@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore.js';
 import { matchPlaces } from '../services/matchService.js';
 import type { Place } from '../types/index.js';
 import { PlaceCard } from '../components/ui/PlaceCard.js';
+import { TagBadge } from '../components/ui/TagBadge.js';
 import { TripMap } from '../components/map/TripMap.js';
 
 type View = 'swipe' | 'liste' | 'karte';
@@ -160,7 +161,7 @@ function SwipeDeck({ places, onSave, savedIds, onOpen }: {
 
         {/* Labels */}
         <div className="absolute top-3 left-3 flex gap-2">
-          <span className="bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">{place.categoryLabel}</span>
+          <TagBadge slug={place.tagSlug} fallback={place.categoryLabel} icon variant="dark" className="text-xs px-2.5 py-1" />
         </div>
         <div className="absolute top-3 right-3">
           <span className="bg-[var(--color-amber)] text-white text-xs font-bold px-2.5 py-1 rounded-full">{place.match}% Match</span>

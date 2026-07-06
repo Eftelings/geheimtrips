@@ -28,6 +28,7 @@ export interface Place {
   region: string;
   category: PlaceCategory;
   categoryLabel: string;
+  tagSlug?: string | null;   // neues Taxonomie-Modell: Typ-Tag
   vibe: string[];
   distanceMin: number;
   distanceLabel: string;

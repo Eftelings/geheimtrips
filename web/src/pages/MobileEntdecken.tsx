@@ -13,6 +13,7 @@ import { ReachControls } from '../components/ui/ReachControls.js';
 import { ReachLayer } from '../components/map/ReachLayer.js';
 import { CategoryFilter, placeMatchesCategory, EMPTY_CATEGORY } from '../components/ui/CategoryFilter.js';
 import type { CategorySelection } from '../components/ui/CategoryFilter.js';
+import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place, Transport } from '../types/index.js';
 
 const orangeMarker = L.divIcon({
@@ -73,6 +74,7 @@ const entdeckenCache = {
 export function MobileEntdecken() {
   const navigate = useNavigate();
   const { places, loadPlaces, savedIds, funnelAnswers } = useAppStore();
+  const vocab = useTaxVocab();
 
   const [userCoords, setUserCoords] = useState<Coords | null>(() => funnelAnswers?.coords ?? null);
   const [searchCenter, setSearchCenter] = useState<Coords | null>(entdeckenCache.searchCenter);
@@ -377,7 +379,7 @@ export function MobileEntdecken() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-[var(--color-aubergine)] truncate">{p.name}</p>
-                <p className="text-xs text-[var(--color-lavender)] truncate">{p.region} · {p.categoryLabel}</p>
+                <p className="text-xs text-[var(--color-lavender)] truncate">{p.region} · {tagInfoFrom(vocab, p.tagSlug)?.label ?? p.categoryLabel}</p>
                 <div className="flex items-center gap-2.5 mt-0.5 text-xs">
                   {p.reviews > 0 && (
                     <span className="flex items-center gap-1 text-[var(--color-aubergine)] font-semibold">

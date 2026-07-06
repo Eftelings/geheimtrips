@@ -4,6 +4,7 @@ import { useAppStore } from '../../store/useAppStore.js';
 import { WeatherBadge } from './WeatherBadge.js';
 import { PlaceImage } from './PlaceImage.js';
 import { Avatar } from './Avatar.js';
+import { TagBadge } from './TagBadge.js';
 
 interface Props {
   place: Place;
@@ -36,9 +37,7 @@ export function PlaceCard({ place, showMatch, className = '' }: Props) {
         </button>
       </div>
       <div className="p-3">
-        <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-0.5">
-          {place.categoryLabel}
-        </div>
+        <TagBadge slug={place.tagSlug} fallback={place.categoryLabel} className="mb-1" />
         <div className="font-display font-semibold text-[var(--color-aubergine)] text-sm leading-tight">{place.name}</div>
         <div className="text-[var(--color-lavender)] text-xs mt-0.5 flex items-center gap-1">
           <i className="fa-solid fa-location-dot text-[10px]" />
