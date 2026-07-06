@@ -17,8 +17,9 @@ import { GT_LEVELS } from '../types/index.js';
 import type { Coords, GeoLocation } from '../services/geoService.js';
 import { pointInGeoJSON, EFFECTIVE_SPEED_KMH, reachBBoxPoints } from '../utils/geo.js';
 import type { IsochroneResponse } from '../utils/geo.js';
-import { CategoryFilter, placeMatchesCategory, EMPTY_CATEGORY } from '../components/ui/CategoryFilter.js';
-import type { CategorySelection } from '../components/ui/CategoryFilter.js';
+import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL, shortGroupLabel } from '../components/ui/TagFilter.js';
+import type { TagSelection } from '../components/ui/TagFilter.js';
+import { useTaxVocab } from '../data/taxVocab.js';
 import { ReachControls } from '../components/ui/ReachControls.js';
 import { ReachLayer, MapComputeOverlay } from '../components/map/ReachLayer.js';
 import { useTravelReach } from '../hooks/useTravelReach.js';
@@ -385,16 +386,6 @@ function DesktopHero({ places, cityLabel, onCta }: { places: Place[]; cityLabel:
 }
 
 // ─── Geheimtrips Awards ───────────────────────────────────────────────────────
-const SPOTLIGHT_CATS: { label: string; icon: string; filter: (p: Place) => boolean }[] = [
-  { label: 'Alle',     icon: 'fa-star',            filter: () => true                    },
-  { label: 'Natur',    icon: 'fa-leaf',             filter: p => p.category === 'natur'   },
-  { label: 'Wasser',   icon: 'fa-water',            filter: p => p.category === 'wasser'  },
-  { label: 'Kultur',   icon: 'fa-landmark',         filter: p => p.category === 'kultur'  },
-  { label: 'Aktiv',    icon: 'fa-person-hiking',    filter: p => p.category === 'aktiv'   },
-  { label: 'Genuss',   icon: 'fa-mug-hot',          filter: p => p.category === 'genuss'  },
-  { label: 'Mystisch', icon: 'fa-moon',             filter: p => p.category === 'mystisch'},
-];
-
 const CURRENT_YEAR = new Date().getFullYear();
 // Jahres-Array wächst automatisch (Backend muss rating.year mitschicken)
 const AWARD_YEARS = Array.from({ length: Math.max(1, CURRENT_YEAR - 2025) }, (_, i) => CURRENT_YEAR - i);
@@ -407,9 +398,17 @@ const PODIUM_SLOTS = [
 ] as const;
 
 export function SpotlightCard({ places, onNavigate }: { places: Place[]; onNavigate: (path: string) => void }) {
-  const [activeCat, setActiveCat] = useState('Alle');
+  const vocab = useTaxVocab();
+  const [activeGroup, setActiveGroup] = useState<string | null>(null); // null = Alle
   const [activeYear, setActiveYear] = useState(CURRENT_YEAR);
   const [listCount, setListCount] = useState(3);
+
+  // Chips: „Alle" + die 4 Gruppen (aus dem Vokabular)
+  const chips = useMemo(() => [
+    { slug: null as string | null, label: 'Alle', icon: 'fa-star' },
+    ...(vocab?.groups ?? []).map(g => ({ slug: g.slug as string | null, label: shortGroupLabel(g.label), icon: g.icon })),
+  ], [vocab]);
+  const tagGroup = useMemo(() => new Map((vocab?.tags ?? []).map(t => [t.slug, t.groups])), [vocab]);
 
   // Scroll-Trigger: Podest fährt aus, wenn Section sichtbar wird
   const podiumRef = useRef<HTMLDivElement>(null);
@@ -426,11 +425,11 @@ export function SpotlightCard({ places, onNavigate }: { places: Place[]; onNavig
   }, []);
 
   const sorted = useMemo(() => {
-    const cat = SPOTLIGHT_CATS.find(c => c.label === activeCat)!;
     // TODO backend: wenn place.ratings nach Jahr gefiltert werden können,
-    // hier activeYear übergeben → GET /places/awards?year=activeYear&cat=cat
-    return places.filter(cat.filter).sort((a, b) => b.rating - a.rating);
-  }, [places, activeCat, activeYear]);
+    // hier activeYear übergeben → GET /places/awards?year=activeYear&group=activeGroup
+    const inGroup = (p: Place) => !activeGroup || (!!p.tagSlug && (tagGroup.get(p.tagSlug)?.includes(activeGroup) ?? false));
+    return places.filter(inGroup).sort((a, b) => b.rating - a.rating);
+  }, [places, activeGroup, activeYear, tagGroup]);
 
   const top3 = sorted.slice(0, 3);
   const restAll = sorted.slice(3);
@@ -462,10 +461,10 @@ export function SpotlightCard({ places, onNavigate }: { places: Place[]; onNavig
         </div>
         {/* Kategorie-Chips — auf hellem Hintergrund */}
         <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-          {SPOTLIGHT_CATS.map(cat => (
-            <button key={cat.label} onClick={() => { setActiveCat(cat.label); setListCount(3); }}
-              className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${activeCat === cat.label ? 'bg-[var(--color-amber)] text-white border-[var(--color-amber)]' : 'text-[var(--color-lavender)] border-[var(--color-bg-soft)] hover:border-[var(--color-amber)] hover:text-[var(--color-amber)]'}`}>
-              <i className={`fa-solid ${cat.icon} text-[9px]`} />{cat.label}
+          {chips.map(chip => (
+            <button key={chip.label} onClick={() => { setActiveGroup(chip.slug); setListCount(3); }}
+              className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${activeGroup === chip.slug ? 'bg-[var(--color-amber)] text-white border-[var(--color-amber)]' : 'text-[var(--color-lavender)] border-[var(--color-bg-soft)] hover:border-[var(--color-amber)] hover:text-[var(--color-amber)]'}`}>
+              <i className={`fa-solid ${chip.icon} text-[9px]`} />{chip.label}
             </button>
           ))}
         </div>
@@ -1058,9 +1057,10 @@ export function DiscoverPage() {
   const [userCoords, setUserCoords] = useState<Coords | null>(null);
   const [cityLabel, setCityLabel]   = useState<string | null>(null);
   const [searchQuery, setSearchQuery]         = useState('');
-  // Kategorie-Auswahl (Hauptkategorie + Taxonomie-Drilldown) — geteilte Komponente
-  const [catSel, setCatSel] = useState<CategorySelection>(EMPTY_CATEGORY);
-  const catActive = catSel.cat !== null || catSel.l1 !== null;
+  // Typ-Filter (Gruppe + Tag) — neues Taxonomie-Modell
+  const vocab = useTaxVocab();
+  const [tagSel, setTagSel] = useState<TagSelection>(EMPTY_TAG_SEL);
+  const tagActive = tagSel.group !== null || tagSel.tag !== null;
   const [mainMode, setMainMode]               = useState<'places' | 'trips'>('places');
   const [placeMode, setPlaceMode]             = useState<MapMode>('newest');
   const [tripMode,  setTripMode]              = useState<TripViewMode>('newest');
@@ -1110,29 +1110,29 @@ export function DiscoverPage() {
 
   // Gefilterte Orte für Suche + Kartenansicht
   const filteredPlaces = useMemo(() => {
-    if (!searchQuery && !catActive) return places;
+    if (!searchQuery && !tagActive) return places;
     return places.filter(p => {
-      if (catActive && !placeMatchesCategory(p, catSel)) return false;
+      if (tagActive && !placeMatchesTag(p, tagSel, vocab)) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!p.name.toLowerCase().includes(q) && !p.region.toLowerCase().includes(q) && !p.vibe.some(v => v.toLowerCase().includes(q))) return false;
       }
       return true;
     });
-  }, [places, searchQuery, catSel, catActive]);
+  }, [places, searchQuery, tagSel, tagActive, vocab]);
 
   const filteredTrips = useMemo(() => {
     const curated = curatedTrips;
-    if (!searchQuery && !catActive) return curated;
+    if (!searchQuery && !tagActive) return curated;
     return curated.filter(t => {
-      if (catActive && !t.places.some(tp => tp.place && placeMatchesCategory(tp.place, catSel))) return false;
+      if (tagActive && !t.places.some(tp => tp.place && placeMatchesTag(tp.place, tagSel, vocab))) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!t.title.toLowerCase().includes(q) && !(t.subtitle?.toLowerCase().includes(q) ?? false)) return false;
       }
       return true;
     });
-  }, [curatedTrips, searchQuery, catSel, catActive]);
+  }, [curatedTrips, searchQuery, tagSel, tagActive, vocab]);
 
   // Trips zusätzlich nach Reichweite filtern (mind. ein Ort im Radius / in der Isochrone)
   const reachTrips = useMemo(() => {
@@ -1330,8 +1330,8 @@ export function DiscoverPage() {
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                     className="flex-1 min-w-0 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]"
                   />
-                  {(searchQuery || catActive || searchCenter) && (
-                    <button onClick={() => { setSearchQuery(''); setCatSel(EMPTY_CATEGORY); setSearchCenter(null); setSearchCenterLabel(null); setGeoSuggestions([]); setShowSuggestions(false); }}
+                  {(searchQuery || tagActive || searchCenter) && (
+                    <button onClick={() => { setSearchQuery(''); setTagSel(EMPTY_TAG_SEL); setSearchCenter(null); setSearchCenterLabel(null); setGeoSuggestions([]); setShowSuggestions(false); }}
                       className="text-[var(--color-lavender)] hover:text-[var(--color-aubergine)] transition-colors">
                       <i className="fa-solid fa-xmark text-sm" />
                     </button>
@@ -1365,7 +1365,7 @@ export function DiscoverPage() {
 
               {/* Kategorien — Hauptkategorien (nach Profil sortiert) + Drilldown */}
               <div className="mt-5">
-                <CategoryFilter value={catSel} onChange={setCatSel} />
+                <TagFilter value={tagSel} onChange={setTagSel} />
               </div>
             </div>
 
@@ -1429,7 +1429,7 @@ export function DiscoverPage() {
               )}
 
               {/* Trefferzahl */}
-              {(searchQuery || catActive || searchCenter) && !showSuggestions && (
+              {(searchQuery || tagActive || searchCenter) && !showSuggestions && (
                 <p className="text-xs text-[var(--color-lavender)]">
                   <span className="font-semibold text-[var(--color-aubergine)]">
                     {mainMode === 'places' ? filteredPlaces.length : reachTrips.length}

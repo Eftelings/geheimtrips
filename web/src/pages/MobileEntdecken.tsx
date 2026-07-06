@@ -11,8 +11,8 @@ import { EFFECTIVE_SPEED_KMH, pointInGeoJSON, reachBBoxPoints } from '../utils/g
 import { useTravelReach } from '../hooks/useTravelReach.js';
 import { ReachControls } from '../components/ui/ReachControls.js';
 import { ReachLayer } from '../components/map/ReachLayer.js';
-import { CategoryFilter, placeMatchesCategory, EMPTY_CATEGORY } from '../components/ui/CategoryFilter.js';
-import type { CategorySelection } from '../components/ui/CategoryFilter.js';
+import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagFilter.js';
+import type { TagSelection } from '../components/ui/TagFilter.js';
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place, Transport } from '../types/index.js';
 
@@ -63,7 +63,7 @@ const entdeckenCache = {
   searchLabel: null as string | null,
   radiusKm: 80,
   mode: 'newest' as Mode,
-  catSel: EMPTY_CATEGORY as CategorySelection,
+  tagSel: EMPTY_TAG_SEL as TagSelection,
   travelMode: 'radius' as 'radius' | Transport,
   travelMinutes: 45,
   selectedId: null as string | null,
@@ -81,7 +81,7 @@ export function MobileEntdecken() {
   const [searchLabel, setSearchLabel] = useState<string | null>(entdeckenCache.searchLabel);
   const [radiusKm, setRadiusKm] = useState(entdeckenCache.radiusKm);
   const [mode, setMode] = useState<Mode>(entdeckenCache.mode);
-  const [catSel, setCatSel] = useState<CategorySelection>(entdeckenCache.catSel);
+  const [tagSel, setTagSel] = useState<TagSelection>(entdeckenCache.tagSel);
   const [selectedId, setSelectedId] = useState<string | null>(entdeckenCache.selectedId);
   const [panel, setPanel] = useState<null | 'loc' | 'cat' | 'transport'>(null);
 
@@ -93,7 +93,7 @@ export function MobileEntdecken() {
   const reachCenter = searchCenter ?? userCoords;
   const reach = useTravelReach(reachCenter, { mode: entdeckenCache.travelMode, minutes: entdeckenCache.travelMinutes });
   const travel = { mode: reach.travelMode, minutes: reach.travelMinutes, iso: reach.iso, loading: reach.isoLoading };
-  const catActive = catSel.cat !== null || catSel.l1 !== null;
+  const catActive = tagSel.group !== null || tagSel.tag !== null;
 
   useEffect(() => {
     loadPlaces();
@@ -103,7 +103,7 @@ export function MobileEntdecken() {
   // Orte filtern: Kategorie + Reichweite + Modus
   const shownPlaces = useMemo(() => {
     let base = places.filter(p => p.lat != null && p.lng != null);
-    if (catActive) base = base.filter(p => placeMatchesCategory(p, catSel));
+    if (catActive) base = base.filter(p => placeMatchesTag(p, tagSel, vocab));
     if (reachCenter) {
       const within = (p: Place) =>
         reach.travelMode === 'radius' ? distanceKm(reachCenter, { lat: p.lat!, lng: p.lng! }) <= radiusKm
@@ -115,7 +115,7 @@ export function MobileEntdecken() {
     if (mode === 'top5')  return [...base].sort((a, b) => (b.match - a.match) || (b.rating - a.rating)).slice(0, 5);
     if (mode === 'newest') return [...base].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return base;
-  }, [places, catSel, catActive, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds]);
+  }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds]);
 
   // Liste nach Entfernung sortiert (nächste zuerst)
   const listPlaces = useMemo(() => {
@@ -150,7 +150,7 @@ export function MobileEntdecken() {
   // Einstellungen für „Zurück" merken — jeder Render hält den Cache aktuell
   useEffect(() => {
     Object.assign(entdeckenCache, {
-      searchCenter, searchLabel, radiusKm, mode, catSel,
+      searchCenter, searchLabel, radiusKm, mode, tagSel,
       travelMode: reach.travelMode, travelMinutes: reach.travelMinutes,
       selectedId, sheetExpanded, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
     });
@@ -328,7 +328,7 @@ export function MobileEntdecken() {
                 )}
               </div>
             )}
-            {panel === 'cat' && <CategoryFilter value={catSel} onChange={setCatSel} />}
+            {panel === 'cat' && <TagFilter value={tagSel} onChange={setTagSel} />}
             {panel === 'transport' && (
               <ReachControls
                 travelMode={reach.travelMode} setTravelMode={reach.setTravelMode}

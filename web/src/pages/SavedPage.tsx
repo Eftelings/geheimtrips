@@ -8,8 +8,9 @@ import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { PlaceCard } from '../components/ui/PlaceCard.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { useAppStore } from '../store/useAppStore.js';
-import { CategoryFilter, placeMatchesCategory, EMPTY_CATEGORY } from '../components/ui/CategoryFilter.js';
-import type { CategorySelection } from '../components/ui/CategoryFilter.js';
+import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagFilter.js';
+import type { TagSelection } from '../components/ui/TagFilter.js';
+import { useTaxVocab } from '../data/taxVocab.js';
 import { ReachControls } from '../components/ui/ReachControls.js';
 import { ReachLayer, MapComputeOverlay } from '../components/map/ReachLayer.js';
 import type { TravelView } from '../components/map/ReachLayer.js';
@@ -112,8 +113,9 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   // Trips-Ansicht: Alle anzeigen · nach Anreisezeit filtern · nach Datum sortieren
   const [tripView, setTripView]  = useState<'alle' | 'anreise' | 'datum'>('alle');
   const [q, setQ]                 = useState('');
-  const [catSel, setCatSel] = useState<CategorySelection>(EMPTY_CATEGORY);
-  const catActive = catSel.cat !== null || catSel.l1 !== null;
+  const vocab = useTaxVocab();
+  const [tagSel, setTagSel] = useState<TagSelection>(EMPTY_TAG_SEL);
+  const catActive = tagSel.group !== null || tagSel.tag !== null;
   const [showMap, setShowMap]     = useState(true);
   const [mapReady, setMapReady]   = useState(false);
   // Standort-Suche (wie Startseite): Stadt wählen → Reichweiten-Filter
@@ -172,7 +174,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   // ── Gefilterte Orte: Reichweite + Freitext + Kategorie + eigene Tags ──────
   const filteredPlaces = useMemo(() => {
     let list: (Place & { _dist?: number })[] = savedPlaces;
-    if (catActive) list = list.filter(p => placeMatchesCategory(p, catSel));
+    if (catActive) list = list.filter(p => placeMatchesTag(p, tagSel, vocab));
     if (tagFilter) list = list.filter(p => (savedTags[p.id] ?? []).includes(tagFilter));
     const s = q.trim().toLowerCase();
     if (s) list = list.filter(p => placeMatchesText(p, s));
@@ -184,12 +186,12 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
     }
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedPlaces, q, catSel, catActive, tagFilter, savedTags, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
+  }, [savedPlaces, q, tagSel, catActive, vocab, tagFilter, savedTags, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
 
   // ── Gefilterte Trips: Kategorie-Tag + Freitext + Reichweite ──────────────
   const filteredTrips = useMemo(() => {
     let list: Trip[] = trips;
-    if (catActive) list = list.filter(t => t.places.some(tp => tp.place && placeMatchesCategory(tp.place, catSel)));
+    if (catActive) list = list.filter(t => t.places.some(tp => tp.place && placeMatchesTag(tp.place, tagSel, vocab)));
     const s = q.trim().toLowerCase();
     if (s) {
       list = list.filter(t =>
@@ -215,7 +217,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
     }
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trips, q, catSel, catActive, tripView, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
+  }, [trips, q, tagSel, catActive, vocab, tripView, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
 
   // Orte aller gefilterten Trips (dedupliziert) für die Trip-Karte
   const tripMapPlaces = useMemo(() => {
@@ -260,7 +262,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   }
 
   function clearAll() {
-    setQ(''); setCatSel(EMPTY_CATEGORY); setTagFilter(null);
+    setQ(''); setTagSel(EMPTY_TAG_SEL); setTagFilter(null);
     setSearchCenter(null); setCenterLabel(null);
     setGeoSugs([]); setShowSugs(false);
     setTravelMode('radius'); setTripView('alle');
@@ -397,7 +399,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
           <>
             {/* Kategorien — Hauptkategorien (nach Profil sortiert) + Drilldown */}
             <div className="mb-4">
-              <CategoryFilter value={catSel} onChange={setCatSel} />
+              <TagFilter value={tagSel} onChange={setTagSel} />
             </div>
 
             {/* Eigene Tags — Filterleiste */}
@@ -493,7 +495,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
         {tab === 'trips' && (
           <div className="flex flex-col gap-3">
             {/* Kategorien — filtern Trips über ihre enthaltenen Orte */}
-            <CategoryFilter value={catSel} onChange={setCatSel} />
+            <TagFilter value={tagSel} onChange={setTagSel} />
 
             {/* Trefferzahl / Sortier-Hinweis */}
             {(q.trim() || catActive || tripView !== 'alle') && trips.length > 0 && (
