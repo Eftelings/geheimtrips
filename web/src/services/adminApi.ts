@@ -177,4 +177,20 @@ export const adminApi = {
   businessAccounts: () => get<AdminBusinessAccount[]>('/business-accounts'),
   createBusinessAccount: (d: { companyName: string; companyEmail: string; companyWebsite?: string; description?: string; placeIds?: string[] }) =>
     post<{ ok: boolean; tempPassword: string; email: string; userId: number; profileId: number; assigned: string[] }>('/business-accounts', d),
+  // Taxonomie-Moderation (neues Modell)
+  taxPending:        () => get<TaxPending>('/tax/pending'),
+  taxApproveMerkmal: (slug: string) => post<{ ok: boolean }>(`/tax/merkmal/${encodeURIComponent(slug)}/approve`),
+  taxDeleteMerkmal:  (slug: string) => del<{ ok: boolean }>(`/tax/merkmal/${encodeURIComponent(slug)}`),
+  taxApproveVibe:    (slug: string) => post<{ ok: boolean }>(`/tax/vibe/${encodeURIComponent(slug)}/approve`),
+  taxDeleteVibe:     (slug: string) => del<{ ok: boolean }>(`/tax/vibe/${encodeURIComponent(slug)}`),
+  taxLink:           (tagSlug: string, merkmalSlug: string, approve: boolean) => post<{ ok: boolean }>('/tax/link', { tagSlug, merkmalSlug, approve }),
+  taxMerge:          (aliasSlug: string, canonicalSlug: string, kind: 'merkmal' | 'vibe') => post<{ ok: boolean }>('/tax/merge', { aliasSlug, canonicalSlug, kind }),
 };
+
+export interface TaxPending {
+  merkmale: { slug: string; label: string; createdAt: string; byName: string | null }[];
+  vibes: { slug: string; label: string; createdAt: string; byName: string | null }[];
+  links: { tagSlug: string; tagLabel: string; merkmalSlug: string; merkmalLabel: string; byName: string | null }[];
+  allMerkmale: { slug: string; label: string }[];
+  allVibes: { slug: string; label: string }[];
+}

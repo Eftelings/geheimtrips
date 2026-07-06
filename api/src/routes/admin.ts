@@ -727,6 +727,76 @@ router.post('/business-accounts', zValidator('json', z.object({
   return c.json({ ok: true, tempPassword, email: companyEmail, userId: user.id, profileId: profile.id, assigned }, 201);
 });
 
+// ─── Taxonomie-Moderation (neues Modell: Tags · Merkmale · Vibes) ─────────────
+
+// GET /admin/tax/pending — zu prüfende Merkmale, Vibes und ungewöhnliche Verknüpfungen
+router.get('/tax/pending', async (c) => {
+  const merkmale = await db.all(sql`
+    SELECT m.slug, m.label, m.created_at AS createdAt, u.name AS byName
+    FROM tax_merkmale m LEFT JOIN users u ON u.id = m.created_by
+    WHERE m.is_approved = 0 ORDER BY m.created_at DESC`).catch(() => []);
+  const vibes = await db.all(sql`
+    SELECT v.slug, v.label, v.created_at AS createdAt, u.name AS byName
+    FROM tax_vibes v LEFT JOIN users u ON u.id = v.created_by
+    WHERE v.is_approved = 0 ORDER BY v.created_at DESC`).catch(() => []);
+  const links = await db.all(sql`
+    SELECT tm.tag_slug AS tagSlug, t.label AS tagLabel, tm.merkmal_slug AS merkmalSlug, m.label AS merkmalLabel, u.name AS byName
+    FROM tax_tag_merkmal tm JOIN tax_tags t ON t.slug = tm.tag_slug JOIN tax_merkmale m ON m.slug = tm.merkmal_slug
+    LEFT JOIN users u ON u.id = tm.created_by
+    WHERE tm.is_approved = 0 AND m.is_approved = 1 ORDER BY tm.created_at DESC`).catch(() => []);
+  // Für Alias-Merging: alle freigegebenen Merkmale/Vibes als Ziel-Vorschläge
+  const allMerkmale = await db.all(sql`SELECT slug, label FROM tax_merkmale WHERE is_approved = 1 ORDER BY label`).catch(() => []);
+  const allVibes = await db.all(sql`SELECT slug, label FROM tax_vibes WHERE is_approved = 1 ORDER BY label`).catch(() => []);
+  return c.json({ merkmale, vibes, links, allMerkmale, allVibes });
+});
+
+router.post('/tax/merkmal/:slug/approve', async (c) => {
+  const s = c.req.param('slug');
+  await db.run(sql`UPDATE tax_merkmale SET is_approved = 1 WHERE slug = ${s}`);
+  await db.run(sql`UPDATE tax_tag_merkmal SET is_approved = 1 WHERE merkmal_slug = ${s}`);
+  return c.json({ ok: true });
+});
+router.delete('/tax/merkmal/:slug', async (c) => {
+  const s = c.req.param('slug');
+  await db.run(sql`DELETE FROM tax_tag_merkmal WHERE merkmal_slug = ${s}`);
+  await db.run(sql`DELETE FROM tax_merkmale WHERE slug = ${s}`);
+  return c.json({ ok: true });
+});
+router.post('/tax/vibe/:slug/approve', async (c) => {
+  const s = c.req.param('slug');
+  await db.run(sql`UPDATE tax_vibes SET is_approved = 1 WHERE slug = ${s}`);
+  await db.run(sql`UPDATE tax_tag_vibe SET is_approved = 1 WHERE vibe_slug = ${s}`);
+  return c.json({ ok: true });
+});
+router.delete('/tax/vibe/:slug', async (c) => {
+  const s = c.req.param('slug');
+  await db.run(sql`DELETE FROM tax_tag_vibe WHERE vibe_slug = ${s}`);
+  await db.run(sql`DELETE FROM tax_vibes WHERE slug = ${s}`);
+  return c.json({ ok: true });
+});
+router.post('/tax/link', zValidator('json', z.object({ tagSlug: z.string(), merkmalSlug: z.string(), approve: z.boolean() })), async (c) => {
+  const { tagSlug, merkmalSlug, approve } = c.req.valid('json');
+  if (approve) await db.run(sql`UPDATE tax_tag_merkmal SET is_approved = 1 WHERE tag_slug = ${tagSlug} AND merkmal_slug = ${merkmalSlug}`);
+  else await db.run(sql`DELETE FROM tax_tag_merkmal WHERE tag_slug = ${tagSlug} AND merkmal_slug = ${merkmalSlug}`);
+  return c.json({ ok: true });
+});
+// Alias-Merging: aliasSlug wird zu canonicalSlug zusammengeführt (Synonym)
+router.post('/tax/merge', zValidator('json', z.object({ aliasSlug: z.string(), canonicalSlug: z.string(), kind: z.enum(['merkmal', 'vibe']) })), async (c) => {
+  const { aliasSlug, canonicalSlug, kind } = c.req.valid('json');
+  if (aliasSlug === canonicalSlug) return c.json({ error: 'Gleiche Slugs.' }, 400);
+  if (kind === 'merkmal') {
+    await db.run(sql`INSERT OR IGNORE INTO tax_tag_merkmal (tag_slug, merkmal_slug, is_approved) SELECT tag_slug, ${canonicalSlug}, 1 FROM tax_tag_merkmal WHERE merkmal_slug = ${aliasSlug}`);
+    await db.run(sql`DELETE FROM tax_tag_merkmal WHERE merkmal_slug = ${aliasSlug}`);
+    await db.run(sql`DELETE FROM tax_merkmale WHERE slug = ${aliasSlug}`);
+  } else {
+    await db.run(sql`INSERT OR IGNORE INTO tax_tag_vibe (tag_slug, vibe_slug, is_approved) SELECT tag_slug, ${canonicalSlug}, 1 FROM tax_tag_vibe WHERE vibe_slug = ${aliasSlug}`);
+    await db.run(sql`DELETE FROM tax_tag_vibe WHERE vibe_slug = ${aliasSlug}`);
+    await db.run(sql`DELETE FROM tax_vibes WHERE slug = ${aliasSlug}`);
+  }
+  await db.run(sql`INSERT OR REPLACE INTO tax_aliases (alias_slug, canonical_slug, kind) VALUES (${aliasSlug}, ${canonicalSlug}, ${kind})`);
+  return c.json({ ok: true });
+});
+
 // ─── Authors ──────────────────────────────────────────────────────────────────
 
 router.get('/authors', async (c) => {
