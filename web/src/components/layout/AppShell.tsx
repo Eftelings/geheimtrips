@@ -76,16 +76,11 @@ export function AppShell({ children, showBack, title, headerRight, noHeader }: P
                     <button onClick={openInbox} className="relative w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Postfach">
                       <i className="fa-regular fa-bell text-lg" />
                       {notif > 0 && (
-                        <span className="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-[var(--color-amber)] text-white text-[9px] font-bold flex items-center justify-center border border-[var(--color-bg)]">
-                          {notif > 9 ? '9+' : notif}
-                        </span>
+                        <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-[var(--color-amber)] border-2 border-[var(--color-bg)]" />
                       )}
                     </button>
-                    <button onClick={() => navigate('/profile')} aria-label="Profil" className="relative">
+                    <button onClick={() => navigate('/profile')} aria-label="Profil">
                       <Avatar name={user.name} src={user.avatarUrl} size={32} />
-                      {notif > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--color-amber)] border-2 border-[var(--color-bg)]" />
-                      )}
                     </button>
                   </>
                 )

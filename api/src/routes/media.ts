@@ -40,6 +40,16 @@ const SERVE_MIME: Record<string, string> = {
   mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
 };
 
+// Fallback: Typ aus dem Dateinamen ableiten, wenn der Browser keinen (oder einen leeren)
+// MIME-Type schickt — passiert v.a. bei iPhone-HEIC-Fotos. Sonst würde der Upload fälschlich
+// als „Dateityp nicht erlaubt" abgelehnt (der eigentliche Bild-Upload-Bug).
+const ALLOWED_EXT = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'mp4', 'webm', 'mov']);
+function extFromName(name: string): string | undefined {
+  const raw = /\.([a-z0-9]+)$/i.exec(name ?? '')?.[1]?.toLowerCase();
+  if (!raw || !ALLOWED_EXT.has(raw)) return undefined;
+  return raw === 'jpeg' ? 'jpg' : raw;
+}
+
 // ── Upload router (mounted at /media) ─────────────────────────────────────────
 export const uploadRouter = new Hono();
 
@@ -49,10 +59,11 @@ uploadRouter.post('/upload', requireAuth, async (c) => {
     const file = form.get('file') as File | null;
 
     if (!file)                          return c.json({ error: 'Keine Datei angegeben.' }, 400);
-    const ext = ALLOWED_MIME[file.type];
+    // Typ per MIME, sonst per Dateiendung (leerer MIME-Type z.B. bei iPhone-HEIC)
+    const ext = ALLOWED_MIME[file.type] || extFromName(file.name);
     if (!ext)                           return c.json({ error: 'Dateityp nicht erlaubt.' }, 400);
     // Videos: 80 MB — Images/HEIC: 30 MB
-    const isVideo = file.type.startsWith('video/');
+    const isVideo = file.type.startsWith('video/') || ext === 'mp4' || ext === 'webm' || ext === 'mov';
     const maxSize = isVideo ? 80 * 1024 * 1024 : 30 * 1024 * 1024;
     if (file.size > maxSize) return c.json({ error: `Maximale Dateigröße: ${isVideo ? '80' : '30'} MB.` }, 400);
 

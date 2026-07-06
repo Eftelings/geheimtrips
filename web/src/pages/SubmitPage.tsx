@@ -1735,8 +1735,8 @@ export function SubmitPage() {
   async function addMediaFiles(files: File[]) {
     const filtered  = files.filter(f =>
       f.type.startsWith('image/') || f.type.startsWith('video/') ||
-      // HEIC/HEIF files may have empty type on some browsers — detect by extension
-      /\.(heic|heif)$/i.test(f.name)
+      // Manche Browser (v.a. iPhone-HEIC) schicken einen leeren MIME-Type → per Endung erkennen
+      /\.(heic|heif|jpe?g|png|webp|gif|mp4|webm|mov)$/i.test(f.name)
     );
     const available = MAX_MEDIA - state.media.length;
     const toAdd     = filtered.slice(0, Math.max(0, available));
@@ -1758,7 +1758,7 @@ export function SubmitPage() {
       caption:  '',
       cropX:    0.5,
       cropY:    0.5,
-      type:     f.type.startsWith('video/') ? 'video' : 'image',
+      type:     (f.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(f.name)) ? 'video' : 'image',
       uploading: true,
       muted:    true,  // videos muted by default
     }));
