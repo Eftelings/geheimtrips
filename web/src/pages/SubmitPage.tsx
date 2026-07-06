@@ -3,12 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
-import { buildEffectiveTaxonomy } from '../data/effectiveTaxonomy.js';
-import type { TaxonomyNode } from '../data/effectiveTaxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
 import type { Place } from '../types/index.js';
-import { placesApi, mediaApi, aiApi, categoriesApi } from '../services/api.js';
-import type { MerkmalOverride } from '../services/api.js';
+import { placesApi, mediaApi, aiApi, taxonomyApi } from '../services/api.js';
+import { TaxonomyPicker } from '../components/ui/TaxonomyPicker.js';
+import type { TaxonomyValue } from '../components/ui/TaxonomyPicker.js';
 import { geocodeSuggestions, reverseGeocode, requestGpsPosition, distanceKm } from '../services/geoService.js';
 import exifr from 'exifr';
 import type { GeoLocation } from '../services/geoService.js';
@@ -44,6 +43,11 @@ interface WizardState {
   l2:           TaxonomyL2 | null;
   l3:           TaxonomyL3 | null;
   l4Features:   string[];
+  // Neues Taxonomie-Modell
+  tag:          string | null;
+  tagLabel:     string | null;
+  merkmale:     string[];
+  vibes:        string[];
   answers:      Record<string, unknown>;
   long:         string;     // HTML from rich-text editor
   tips:         string[];
@@ -55,6 +59,7 @@ interface WizardState {
 const EMPTY: WizardState = {
   name: '', short: '', locationText: '', lat: null, lng: null,
   l1: null, l2: null, l3: null, l4Features: [],
+  tag: null, tagLabel: null, merkmale: [], vibes: [],
   answers: {}, long: '', tips: [''], media: [], heroIndex: 0,
   exifSuggestion: null,
 };
@@ -95,6 +100,10 @@ function placeToWizardState(place: Place): WizardState {
     lng:          place.lng ?? null,
     l1, l2, l3,
     l4Features:   Array.isArray(attrs.l4Features) ? (attrs.l4Features as string[]) : [],
+    tag:          place.tagSlug ?? null,
+    tagLabel:     (attrs.tagLabel as string) ?? null,
+    merkmale:     Array.isArray(attrs.merkmale) ? (attrs.merkmale as string[]) : [],
+    vibes:        Array.isArray(attrs.vibes) ? (attrs.vibes as string[]) : [],
     answers:      (attrs.answers as Record<string, unknown>) ?? {},
     long:         place.long ?? '',
     tips:         place.tips?.length ? place.tips : [''],
@@ -1245,149 +1254,18 @@ function StepCategory({ state, setState }: {
   state: WizardState;
   setState: React.Dispatch<React.SetStateAction<WizardState>>;
 }) {
-  function selectL1(l1: TaxonomyL1) {
-    if (state.l1?.slug === l1.slug) return;
-    setState(prev => ({ ...prev, l1, l2: null, l3: null, l4Features: [], answers: {} }));
-  }
-  function selectL2(l2: TaxonomyL2) {
-    if (state.l2?.slug === l2.slug) return;
-    setState(prev => ({ ...prev, l2, l3: null, l4Features: [], answers: {} }));
-  }
-  function selectL3(l3: TaxonomyL3) {
-    if (state.l3?.slug === l3.slug) return;
-    // ✅ BUG FIX: clear answers when L3 changes (different questions!)
-    setState(prev => ({ ...prev, l3, l4Features: [], answers: {} }));
-  }
-  function toggleL4(key: string) {
-    setState(prev => ({
-      ...prev,
-      l4Features: prev.l4Features.includes(key)
-        ? prev.l4Features.filter(k => k !== key)
-        : [...prev.l4Features, key],
-    }));
-  }
-
-  // Admin-Overrides der Kategorien laden → effektiver Baum (Code + DB-Ergänzungen)
-  const [taxNodes, setTaxNodes] = useState<TaxonomyNode[]>([]);
-  useEffect(() => { categoriesApi.taxonomyNodes().then(setTaxNodes).catch(() => {}); }, []);
-  const tree   = useMemo(() => buildEffectiveTaxonomy(taxNodes), [taxNodes]);
-  const l1eff  = tree.find(x => x.slug === state.l1?.slug) ?? null;
-  const l2list = l1eff?.children ?? [];
-  const l2eff  = l2list.find(x => x.slug === state.l2?.slug) ?? null;
-  const l3list = l2eff?.children ?? [];
-
-  // Admin-Overrides der Merkmale laden und mit der Code-Taxonomie mischen
-  const [overrides, setOverrides] = useState<MerkmalOverride[]>([]);
-  useEffect(() => { categoriesApi.merkmale().then(setOverrides).catch(() => {}); }, []);
-  const effFeatures = useMemo(() => {
-    if (!state.l3) return [] as { key: string; label: string }[];
-    const forL3    = overrides.filter(o => o.l3Slug === state.l3!.slug);
-    const hidden   = new Set(forL3.filter(o => o.hidden).map(o => o.key));
-    const codeKeys = new Set(state.l3.features.map(f => f.key));
-    const code     = state.l3.features.filter(f => !hidden.has(f.key)).map(f => ({ key: f.key, label: f.label }));
-    const custom   = forL3.filter(o => !o.hidden && !codeKeys.has(o.key)).map(o => ({ key: o.key, label: o.label }));
-    return [...code, ...custom];
-  }, [state.l3, overrides]);
+  const value: TaxonomyValue = { tag: state.tag, tagLabel: state.tagLabel, merkmale: state.merkmale, vibes: state.vibes };
+  const onChange = (v: TaxonomyValue) =>
+    setState(prev => ({ ...prev, tag: v.tag, tagLabel: v.tagLabel, merkmale: v.merkmale, vibes: v.vibes }));
 
   return (
     <div className="space-y-7">
       <div>
         <StepHeading>Was ist das für ein Ort?</StepHeading>
-        <StepSub>Wähle eine Kategorie – das hilft anderen Entdeckern, den Ort zu finden.</StepSub>
+        <StepSub>Wähle den Typ und beschreibe kurz, was es dort gibt und wie es sich anfühlt.</StepSub>
       </div>
 
-      {/* L1 cards */}
-      <div>
-        <SectionLabel>Hauptkategorie</SectionLabel>
-        <div className="grid grid-cols-2 gap-3">
-          {tree.map(l1 => (
-            <button key={l1.slug} type="button" onClick={() => selectL1(l1)}
-              className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 text-left transition-all"
-              style={{
-                borderColor: state.l1?.slug === l1.slug ? l1.color : '#E4DCF0',
-                background:  state.l1?.slug === l1.slug ? l1.bg : 'white',
-              }}
-            >
-              <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white text-sm"
-                style={{ background: l1.color }}>
-                <i className={`fa-solid ${l1.icon}`} />
-              </span>
-              <span className="text-xs font-semibold leading-tight" style={{ color: l1.color }}>
-                {l1.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* L2 list */}
-      {state.l1 && (
-        <div>
-          <SectionLabel>Unterkategorie</SectionLabel>
-          <div className="space-y-1.5">
-            {l2list.map(l2 => (
-              <button key={l2.slug} type="button" onClick={() => selectL2(l2)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 text-left transition-all"
-                style={{
-                  borderColor: state.l2?.slug === l2.slug ? state.l1!.color : '#E4DCF0',
-                  background:  state.l2?.slug === l2.slug ? state.l1!.bg : 'white',
-                  color:       state.l2?.slug === l2.slug ? state.l1!.color : C.lavender,
-                }}
-              >
-                <i className={`fa-solid ${l2.icon} text-sm w-4 text-center flex-shrink-0`} />
-                <span className="text-sm font-medium">{l2.label}</span>
-                {state.l2?.slug === l2.slug && <i className="fa-solid fa-check ml-auto text-xs" />}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* L3 list */}
-      {state.l2 && (
-        <div>
-          <SectionLabel>Typ</SectionLabel>
-          <div className="space-y-1.5">
-            {l3list.map(l3 => (
-              <button key={l3.slug} type="button" onClick={() => selectL3(l3)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 text-left transition-all"
-                style={{
-                  borderColor: state.l3?.slug === l3.slug ? state.l1!.color : '#E4DCF0',
-                  background:  state.l3?.slug === l3.slug ? state.l1!.bg : 'white',
-                  color:       state.l3?.slug === l3.slug ? state.l1!.color : C.lavender,
-                }}
-              >
-                <span className="text-sm font-medium">{l3.label}</span>
-                {state.l3?.slug === l3.slug && <i className="fa-solid fa-check ml-auto text-xs" />}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* L4 feature chips (Code-Merkmale + Admin-Ergänzungen) */}
-      {state.l3 && effFeatures.length > 0 && (
-        <div>
-          <SectionLabel>Merkmale</SectionLabel>
-          <div className="flex flex-wrap gap-2">
-            {effFeatures.map(f => {
-              const on = state.l4Features.includes(f.key);
-              return (
-                <button key={f.key} type="button" onClick={() => toggleL4(f.key)}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all"
-                  style={{
-                    borderColor: on ? state.l1!.color : '#D8CEEA',
-                    background:  on ? state.l1!.bg : 'white',
-                    color:       on ? state.l1!.color : C.lavender,
-                  }}
-                >
-                  {on && '✓ '}{f.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <TaxonomyPicker value={value} onChange={onChange} />
     </div>
   );
 }
@@ -1398,23 +1276,20 @@ function StepDetails({
   state: WizardState;
   set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
 }) {
-  if (!state.l3) {
+  if (!state.tag) {
     return (
       <div className="py-16 text-center">
         <i className="fa-solid fa-arrow-left text-3xl mb-4" style={{ color: '#D8CEEA' }} />
         <p className="text-sm" style={{ color: '#9A8FAA' }}>
-          Bitte wähle zuerst eine Kategorie im vorherigen Schritt.
+          Bitte wähle zuerst einen Typ im vorherigen Schritt.
         </p>
       </div>
     );
   }
 
   // Trivia + „Besonderheit" werden bereits auf der Beschreibungs-Seite abgefragt → hier ausblenden.
-  const HIDDEN         = new Set(['trivia_type', 'trivia_text', 'highlight']);
-  const l3Questions    = state.l3.questions.filter(q => !HIDDEN.has(q.id));
-  // Universal-Fragen, deren id nicht schon bei den L3-Fragen vorkommt (kein Doppel)
-  const l3Ids          = new Set(state.l3.questions.map(q => q.id));
-  const universalQs    = UNIVERSAL_QUESTIONS.filter(q => !l3Ids.has(q.id) && !HIDDEN.has(q.id));
+  const HIDDEN      = new Set(['trivia_type', 'trivia_text', 'highlight']);
+  const universalQs = UNIVERSAL_QUESTIONS.filter(q => !HIDDEN.has(q.id));
 
   function setAnswer(id: string, v: unknown) {
     set('answers', { ...state.answers, [id]: v });
@@ -1424,33 +1299,7 @@ function StepDetails({
     <div className="space-y-7">
       <div>
         <StepHeading>Erzähl uns mehr</StepHeading>
-        <StepSub>
-          Diese Fragen sind auf{' '}
-          <span className="font-semibold" style={{ color: state.l1?.color ?? C.aubergine }}>
-            {state.l3.label}
-          </span>{' '}
-          zugeschnitten. Je mehr du beantwortest, desto wertvoller der Eintrag.
-        </StepSub>
-      </div>
-
-      {/* L3-specific questions */}
-      {l3Questions.map(q => (
-        <div key={q.id} className="space-y-2">
-          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-            {q.label}{q.required && <span className="ml-1 text-[#C96442]">*</span>}
-          </label>
-          {q.hint && <p className="text-xs text-[#9A8FAA]">{q.hint}</p>}
-          <QuestionField q={q} value={state.answers[q.id]} onChange={v => setAnswer(q.id, v)} />
-        </div>
-      ))}
-
-      {/* Divider before universal questions */}
-      <div className="flex items-center gap-3 pt-2">
-        <div className="flex-1 h-px bg-[#E4DCF0]" />
-        <span className="text-xs font-bold uppercase tracking-widest text-[#B0A3BC] px-2 flex-shrink-0">
-          Allgemeine Informationen
-        </span>
-        <div className="flex-1 h-px bg-[#E4DCF0]" />
+        <StepSub>Ein paar allgemeine Fragen — je mehr du beantwortest, desto wertvoller der Eintrag.</StepSub>
       </div>
 
       {/* Universal questions */}
@@ -1733,13 +1582,12 @@ function ReviewSubmit({ state, isEdit }: { state: WizardState; isEdit: boolean }
           <SummaryRow icon="fa-location-dot" label="Ort">
             {state.locationText || (state.lat ? `${state.lat.toFixed(4)}, ${state.lng?.toFixed(4)}` : '—')}
           </SummaryRow>
-          <SummaryRow icon="fa-tag" label="Kategorie">
-            {state.l3
-              ? `${state.l1?.label} › ${state.l2?.label} › ${state.l3.label}`
-              : state.l1 ? `${state.l1.label} › …` : '—'}
-          </SummaryRow>
-          {state.l4Features.length > 0 && (
-            <SummaryRow icon="fa-tags" label="Merkmale">{state.l4Features.join(', ')}</SummaryRow>
+          <SummaryRow icon="fa-tag" label="Typ">{state.tagLabel ?? state.tag ?? '—'}</SummaryRow>
+          {state.merkmale.length > 0 && (
+            <SummaryRow icon="fa-tags" label="Merkmale">{state.merkmale.join(', ')}</SummaryRow>
+          )}
+          {state.vibes.length > 0 && (
+            <SummaryRow icon="fa-wand-magic-sparkles" label="Vibes">{state.vibes.join(', ')}</SummaryRow>
           )}
           {state.media.filter(m => m.serverUrl).length > 0 && (
             <SummaryRow icon="fa-image" label="Fotos/Videos">
@@ -1982,7 +1830,7 @@ export function SubmitPage() {
     if (step === 3) return state.name.trim().length >= 2;                 // Name
     // Beschreibung: mind. 200 Zeichen Klartext (Kurz-Zusammenfassung optional)
     if (step === 4) return state.long.replace(/<[^>]*>/g, '').trim().length >= 200;
-    if (step === 5) return !!state.l3;                                    // Kategorie
+    if (step === 5) return !!state.tag;                                   // Typ-Tag
     return true;
   }
 
@@ -2029,6 +1877,10 @@ export function SubmitPage() {
         l2Slug:       state.l2?.slug,
         l3Slug:       state.l3?.slug,
         l4Features:   state.l4Features,
+        // Neues Taxonomie-Modell
+        tagSlug:      state.tag ?? undefined,
+        merkmale:     state.merkmale,
+        vibes:        state.vibes,
         answers:      state.answers,
         // Filter tips: strip HTML tags to check if actually empty
         tips:         state.tips.filter(t => t.replace(/<[^>]*>/g, '').trim()),
@@ -2045,6 +1897,8 @@ export function SubmitPage() {
       const res = editId
         ? await placesApi.update(editId, payload)
         : await placesApi.submit(payload);
+      // Neue Merkmale/Vibes im Taxonomie-Graph registrieren (UGC → Moderation)
+      if (state.tag) taxonomyApi.resolve(state.tag, state.merkmale, state.vibes).catch(() => {});
       // Revoke all local blob URLs
       state.media.forEach(m => { if (m.localUrl.startsWith('blob:')) URL.revokeObjectURL(m.localUrl); });
       // Force places list to re-fetch so the change appears on the map/discover page
@@ -2091,9 +1945,7 @@ export function SubmitPage() {
             {!isEdit && (
               <button
                 onClick={() => {
-                  setState({ name: '', short: '', locationText: '', lat: null, lng: null,
-                    l1: null, l2: null, l3: null, l4Features: [], answers: {},
-                    long: '', tips: [''], media: [], heroIndex: 0, exifSuggestion: null });
+                  setState({ ...EMPTY });
                   setStep(1); setSuccess('');
                 }}
                 className="py-3 px-6 rounded-2xl font-semibold text-sm border-2 border-[#E4DCF0]"

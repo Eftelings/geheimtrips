@@ -78,6 +78,10 @@ export interface SubmitPlacePayload {
   l2Slug?:       string;
   l3Slug?:       string;
   l4Features?:   string[];
+  // Neues Taxonomie-Modell
+  tagSlug?:      string;
+  merkmale?:     string[];
+  vibes?:        string[];
   answers?:      Record<string, unknown>;
   tips?:         string[];
   mediaItems?:   { url: string; caption: string; type: string; cropX: number; cropY: number }[];
