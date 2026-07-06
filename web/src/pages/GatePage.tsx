@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { BrandLogo } from '../components/ui/BrandLogo.js';
+import { FloatingTiles } from '../components/ui/FloatingTiles.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { authApi } from '../services/api.js';
 
@@ -58,18 +59,29 @@ export function GatePage() {
           <BrandLogo />
         </div>
 
+        {/* Schwebende Orts-Kacheln — echte Lieblingsorte von Menschen */}
+        <FloatingTiles />
+
         {/* Badge */}
         <div className="inline-flex items-center gap-1.5 self-start bg-white/10 text-white/80 text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-5">
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-amber)] inline-block" />
-          Closed Beta
+          Aus Europa · für Europa
         </div>
 
         {/* Hero */}
-        <h1 className="font-display font-bold text-white text-3xl leading-tight mb-4" style={{ letterSpacing: '-0.02em' }}>
+        <h1 className="font-display font-bold text-white text-3xl leading-tight mb-3" style={{ letterSpacing: '-0.02em' }}>
           Die schönsten Orte stehen in{' '}
           <em className="text-[var(--color-amber)] not-italic">keinem</em>{' '}
           Reiseführer.
         </h1>
+
+        {/* Positionierung: für alle, nicht nur Creator/Unternehmen */}
+        <p className="text-white/75 text-sm leading-relaxed mb-5">
+          Geheimtrips ist der Ort, an dem <strong className="text-white">jede:r</strong> seine Lieblingsplätze teilt —
+          nicht nur Creator oder Unternehmen. Zeig, wo du schon warst und was du entdeckt hast: dein Wochenendausflug,
+          dein Lieblingscafé, dein nächster Trip. <strong className="text-white">Keine klassische Werbung</strong>,
+          echte Tipps von echten Menschen.
+        </p>
 
         {/* ── Gründer-Karte: Foto + Geschichte ── */}
         <div className="bg-white/8 backdrop-blur-sm rounded-3xl overflow-hidden border border-white/10 mb-6">
@@ -112,6 +124,15 @@ export function GatePage() {
           Beim Start lernen wir dich in <strong className="text-white/80">unter einer Minute</strong> kennen —
           damit deine Vorschläge von Anfang an passen.
         </p>
+
+        {/* Recruiting: noch im Aufbau */}
+        <div className="flex items-start gap-2.5 rounded-2xl bg-[var(--color-amber)]/12 border border-[var(--color-amber)]/25 px-4 py-3 mb-5">
+          <i className="fa-solid fa-seedling text-[var(--color-amber)] mt-0.5 flex-shrink-0" />
+          <p className="text-white/80 text-xs leading-relaxed">
+            Wir stehen noch am Anfang und füllen die Karte Europas gerade erst mit echten Geheimtipps.
+            <strong className="text-white"> Wir brauchen genau dich</strong> — teile deine Lieblingsorte und hilf mit, etwas Schönes aufzubauen.
+          </p>
+        </div>
 
         {/* Login / Register */}
         <div

@@ -168,6 +168,17 @@ router.get('/', async (c) => {
   })));
 });
 
+// GET /places/showcase — öffentliche Bild+Name-Vorschau für die Landing-Page (ohne Auth)
+router.get('/showcase', async (c) => {
+  const rows = await db.select({
+    id: places.id, name: places.name, region: places.region,
+    hero: places.hero, tagSlug: places.tagSlug, isUserSubmitted: places.isUserSubmitted,
+  }).from(places).all();
+  const pool = rows.filter(r => r.hero && r.hero.trim() && !r.isUserSubmitted);
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  return c.json(pool.slice(0, 12).map(r => ({ id: r.id, name: r.name, region: r.region, hero: r.hero, tagSlug: r.tagSlug })));
+});
+
 // POST /places/submit — user submits a new place (auth required, stored as pending)
 router.post('/submit', requireAuth,
   zValidator('json', z.object({

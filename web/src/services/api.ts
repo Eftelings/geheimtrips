@@ -89,8 +89,11 @@ export interface SubmitPlacePayload {
   heroCropY?:    number;
 }
 
+export interface ShowcasePlace { id: string; name: string; region: string; hero: string; tagSlug?: string | null }
+
 export const placesApi = {
   list:           ()                 => get<Place[]>('/places'),
+  showcase:       ()                 => get<ShowcasePlace[]>('/places/showcase'),
   myCreated:      ()                 => get<Place[]>('/places/me/created'),
   get:            (id: string)       => get<Place>(`/places/${id}`),
   save:           (id: string)       => post<{ saved: boolean }>(`/places/${id}/save`),
