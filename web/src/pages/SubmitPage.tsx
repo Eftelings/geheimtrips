@@ -1369,10 +1369,6 @@ function StepStory({
 
   // ── KI-Unterstützung (Gemini) ────────────────────────────────────────────
   const [aiOn, setAiOn]           = useState(false);
-  const [sumLoading, setSumLoad]  = useState(false);
-  const [sumErr, setSumErr]       = useState('');
-  const [tipsLoading, setTipsLoad]= useState(false);
-  const [tipsErr, setTipsErr]     = useState('');
   const [descLoading, setDescLoad]= useState(false);
   const [descErr, setDescErr]     = useState('');
   useEffect(() => { aiApi.status().then(s => setAiOn(s.configured)).catch(() => {}); }, []);
@@ -1385,27 +1381,11 @@ function StepStory({
     location:  state.locationText,
   });
 
-  async function genSummary() {
-    setSumErr(''); setSumLoad(true);
-    try { const { summary } = await aiApi.placeSummary(aiCtx()); set('short', summary); }
-    catch (e) { setSumErr((e as Error).message || 'Zusammenfassung fehlgeschlagen.'); }
-    setSumLoad(false);
-  }
   async function genDescription() {
     setDescErr(''); setDescLoad(true);
     try { const { description } = await aiApi.placeDescription(aiCtx()); set('long', description); }
     catch (e) { setDescErr((e as Error).message || 'Ausformulieren fehlgeschlagen.'); }
     setDescLoad(false);
-  }
-  async function genTips() {
-    setTipsErr(''); setTipsLoad(true);
-    try {
-      const { tips } = await aiApi.placeTips(aiCtx());
-      const existing = state.tips.filter(t => t.replace(/<[^>]*>/g, '').trim());
-      const merged   = [...existing, ...tips].slice(0, MAX_TIPS);
-      set('tips', merged.length ? merged : ['']);
-    } catch (e) { setTipsErr((e as Error).message || 'Tipps-Vorschlag fehlgeschlagen.'); }
-    setTipsLoad(false);
   }
 
   return (
@@ -1469,29 +1449,18 @@ function StepStory({
           <FieldTip example={'z.B. „Das größte Freilichtmuseum Deutschlands." oder „Das perfekte Café für eine Pause beim Bummel durch Bonn."'} />
         </div>
         <p className="text-xs text-[#9A8FAA]">
-          Dieser Satz erscheint auf der Swipe-Karte im Entdecken-Modus. Schreib ihn selbst –
-          oder lass ihn dir aus deiner Beschreibung (oben) erzeugen.
+          Dieser Satz erscheint auf der Swipe-Karte im Entdecken-Modus. Schreib ihn in deinen eigenen Worten.
         </p>
         <textarea
-          rows={2} spellCheck maxLength={350}
+          rows={2} spellCheck maxLength={200}
           placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
           value={state.short}
           onChange={e => set('short', e.target.value)}
           className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none"
         />
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs" style={{ color: state.short.length > 300 ? '#C96442' : '#A89BB5' }}>
-            {state.short.length} / 350
-          </span>
-          {aiOn && (
-            <AiButton onClick={genSummary} loading={sumLoading} disabled={longLen < 30}
-              label="Aus Beschreibung erzeugen" />
-          )}
-        </div>
-        {aiOn && longLen < 30 && (
-          <p className="text-[11px] text-[#B0A3BC]">Schreib zuerst oben die Beschreibung – dann fasst Gemini sie hier zusammen.</p>
-        )}
-        {sumErr && <p className="text-xs text-[#C96442]">{sumErr}</p>}
+        <span className="text-xs" style={{ color: state.short.length > 180 ? '#C96442' : '#A89BB5' }}>
+          {state.short.length} / 200
+        </span>
       </div>
 
       {/* 3) Trivia — optional */}
@@ -1516,20 +1485,13 @@ function StepStory({
 
       {/* 4) Tipps */}
       <div className="space-y-1.5">
-        <div className="flex items-start justify-between gap-2">
-          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-            Praktische Tipps
-          </label>
-          {aiOn && (
-            <AiButton onClick={genTips} loading={tipsLoading} disabled={longLen < 30}
-              label="Passende Tipps vorschlagen" />
-          )}
-        </div>
+        <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+          Praktische Tipps
+        </label>
         <p className="text-xs text-[#9A8FAA]">
           Jeder Tipp bekommt ein eigenes Feld. Drücke <kbd className="px-1 py-0.5 rounded bg-[#F0EBF7] text-[#71587A] text-[10px] font-mono">Enter</kbd> für den nächsten.
-          Max. {MAX_TIPS} Tipps.{aiOn ? ' Gemini schlägt passende Tipps zum Ort vor – du kannst sie danach anpassen.' : ''}
+          Max. {MAX_TIPS} Tipps.
         </p>
-        {tipsErr && <p className="text-xs text-[#C96442]">{tipsErr}</p>}
         <TipFields tips={state.tips} onChange={v => set('tips', v)} />
       </div>
     </div>
