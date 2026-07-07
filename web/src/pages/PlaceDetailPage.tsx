@@ -18,6 +18,8 @@ import { Avatar } from '../components/ui/Avatar.js';
 import { ReviewFlow } from '../components/ui/ReviewFlow.js';
 import type { ReviewSection } from '../components/ui/ReviewFlow.js';
 import type { Place, Transport } from '../types/index.js';
+import { isOpenNow, HOUR_DAYS } from '../data/detailQuestions.js';
+import type { WeekHours } from '../data/detailQuestions.js';
 import { distanceKm, geocodeSuggestions } from '../services/geoService.js';
 import type { Coords, GeoLocation } from '../services/geoService.js';
 import { pointInGeoJSON, EFFECTIVE_SPEED_KMH, reachBBoxPoints } from '../utils/geo.js';
@@ -277,6 +279,77 @@ const PRICE_ICONS: [RegExp, string][] = [
 function priceIcon(label: string): string {
   for (const [re, icon] of PRICE_ICONS) if (re.test(label)) return icon;
   return 'fa-ticket';
+}
+
+// ─── Praktisches: Öffnungsstatus, Kontakt, Links, Tickets (neues Feld-Modell) ──
+function PlaceExtras({ place, className = '' }: { place: Place; className?: string }) {
+  const answers = ((place.attributes as Record<string, unknown> | undefined)?.answers ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '');
+  const rawHours = answers.opening_hours;
+  const hours = rawHours && typeof rawHours === 'object' && !Array.isArray(rawHours) ? rawHours as WeekHours : null;
+  const open = isOpenNow(hours);
+  const website = str(answers.website), phone = str(answers.phone), email = str(answers.email);
+  const menuUrl = str(answers.menu_url), rsvUrl = str(answers.reservation_url), ticketUrl = str(answers.ticket_url);
+  const tp = answers.ticket_prices && typeof answers.ticket_prices === 'object' ? answers.ticket_prices as Record<string, string> : null;
+  const priceRows = tp ? ([['adult', 'Erwachsene'], ['child', 'Kinder'], ['reduced', 'Ermäßigte'], ['senior', 'Senioren']] as const)
+    .filter(([k]) => str(tp[k])).map(([k, label]) => ({ label, amount: str(tp[k]) })) : [];
+  const daysWithHours = hours ? HOUR_DAYS.filter(([k]) => hours[k] && (hours[k].closed || (hours[k].open && hours[k].close))) : [];
+  const todayKey = ['so', 'mo', 'di', 'mi', 'do', 'fr', 'sa'][new Date().getDay()];
+
+  const links: { href: string; icon: string; label: string }[] = [];
+  if (menuUrl)   links.push({ href: menuUrl,          icon: 'fa-book-open',      label: 'Speisekarte' });
+  if (rsvUrl)    links.push({ href: rsvUrl,           icon: 'fa-calendar-check', label: 'Reservieren' });
+  if (ticketUrl) links.push({ href: ticketUrl,        icon: 'fa-ticket',         label: 'Tickets' });
+  if (website)   links.push({ href: website,          icon: 'fa-globe',          label: 'Website' });
+  if (phone)     links.push({ href: `tel:${phone}`,   icon: 'fa-phone',          label: 'Anrufen' });
+  if (email)     links.push({ href: `mailto:${email}`, icon: 'fa-envelope',      label: 'E-Mail' });
+
+  if (!daysWithHours.length && !links.length && !priceRows.length) return null;
+
+  return (
+    <div className={`rounded-2xl border border-[var(--color-bg-soft)] bg-white p-4 ${className}`}>
+      {daysWithHours.length > 0 && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-lavender)]">Öffnungszeiten</p>
+            {open !== null && (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                style={open ? { background: 'rgba(46,138,78,0.14)', color: '#2D8A4E' } : { background: 'rgba(201,100,66,0.14)', color: '#C96442' }}>
+                <i className="fa-solid fa-circle text-[7px] mr-1 align-middle" />{open ? 'Jetzt geöffnet' : 'Geschlossen'}
+              </span>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            {daysWithHours.map(([k, label]) => (
+              <div key={k} className="flex justify-between text-sm" style={k === todayKey ? { fontWeight: 700, color: '#34254C' } : { color: '#71587A' }}>
+                <span>{label}</span><span>{hours![k].closed ? 'geschlossen' : `${hours![k].open}–${hours![k].close}`}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {priceRows.length > 0 && (
+        <div className="mb-3">
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-lavender)] mb-1.5">Ticketpreise</p>
+          <div className="space-y-0.5">
+            {priceRows.map(p => (
+              <div key={p.label} className="flex justify-between text-sm"><span className="text-[var(--color-lavender)]">{p.label}</span><span className="font-semibold text-[var(--color-aubergine)]">{p.amount}</span></div>
+            ))}
+          </div>
+        </div>
+      )}
+      {links.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {links.map(l => (
+            <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-[var(--color-bg-soft)] text-[var(--color-aubergine)] hover:border-[var(--color-amber)] transition-colors">
+              <i className={`fa-solid ${l.icon} text-[11px] text-[var(--color-amber)]`} />{l.label}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Auf einen Blick card ─────────────────────────────────────────────────────
@@ -2266,6 +2339,7 @@ async function handleVerifyToggle() {
               hoursUrl={hoursUrl} prices={prices} pricesUrl={pricesUrl} specialInfo={specialInfo}
               isOfficiallyManaged={isOfficiallyManaged}
               parking={derivedParking} parkingContribs={parkingContribs} />
+            <PlaceExtras place={place} className="lg:hidden mt-4" />
 
             {/* Mobile: claim button */}
             {!isOfficiallyManaged && (
@@ -2674,6 +2748,7 @@ async function handleVerifyToggle() {
               hoursUrl={hoursUrl} prices={prices} pricesUrl={pricesUrl} specialInfo={specialInfo}
               isOfficiallyManaged={isOfficiallyManaged}
               parking={derivedParking} parkingContribs={parkingContribs} />
+            <PlaceExtras place={place} className="hidden lg:block mt-4" />
 
             {/* Claim button — desktop, only if not yet officially managed */}
             {!isOfficiallyManaged && (
