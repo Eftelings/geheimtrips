@@ -8,6 +8,16 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { cleanRichText, cleanPlainText } from '../lib/sanitize.js';
 import { deriveTag } from '../data/taxMigration.js';
+
+// Budget-Antwort ('Kostenlos' / '€ – …' / '€€ – …' / '€€€ – …') → cost-Spalte + Label
+function budgetToCost(answers: Record<string, unknown> | undefined): { cost: number; costLabel: string } {
+  const b = String(answers?.budget ?? '');
+  if (b.startsWith('Kostenlos')) return { cost: 0, costLabel: 'Gratis' };
+  if (b.startsWith('€€€'))       return { cost: 3, costLabel: '€€€' };
+  if (b.startsWith('€€'))        return { cost: 2, costLabel: '€€' };
+  if (b.startsWith('€'))         return { cost: 1, costLabel: '€' };
+  return { cost: 1, costLabel: '€' };
+}
 import { sendMail } from '../lib/mailer.js';
 import { notify } from '../lib/notify.js';
 
@@ -262,8 +272,7 @@ router.post('/submit', requireAuth,
       long:          cleanRichText(body.long),
       // Kein Stock-Foto erfinden: ohne Upload bleibt das Titelbild leer
       hero:          body.hero || body.mediaItems?.[0]?.url || '',
-      cost:          1,
-      costLabel:     '€',
+      ...budgetToCost(safeAnswers),
       distanceMin:   0,
       distanceLabel: 'Entfernung variiert',
       lat:           body.lat ?? null,
@@ -365,6 +374,7 @@ router.patch('/:id', requireAuth,
       category:      cat.category,
       categoryLabel: cat.categoryLabel,
       tagSlug:       body.tagSlug ?? place.tagSlug ?? deriveTag(body.l3Slug, body.name, cat.category),
+      ...budgetToCost(safeAnswers),
       short:         finalShort,
       long:          cleanRichText(body.long),
       hero:          body.hero || body.mediaItems?.[0]?.url || place.hero,

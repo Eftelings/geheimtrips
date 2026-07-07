@@ -4,6 +4,8 @@ import { AppShell } from '../components/layout/AppShell.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
+import { detailQuestions, HOUR_DAYS } from '../data/detailQuestions.js';
+import type { WeekHours } from '../data/detailQuestions.js';
 import type { Place } from '../types/index.js';
 import { placesApi, mediaApi, aiApi, taxonomyApi } from '../services/api.js';
 import { TaxonomyPicker } from '../components/ui/TaxonomyPicker.js';
@@ -768,25 +770,33 @@ function QuestionField({ q, value, onChange }: {
     );
   }
   if (q.type === 'weekhours') {
-    const v = (value as Record<string, string>) ?? {};
-    const DAYS: [string, string][] = [
-      ['mo', 'Montag'], ['di', 'Dienstag'], ['mi', 'Mittwoch'], ['do', 'Donnerstag'],
-      ['fr', 'Freitag'], ['sa', 'Samstag'], ['so', 'Sonntag'],
-    ];
+    const v = (value as WeekHours) ?? {};
+    const upd = (key: string, patch: Partial<WeekHours[string]>) => onChange({ ...v, [key]: { ...(v[key] ?? {}), ...patch } });
+    const timeCls = 'border rounded-lg px-2 py-1.5 text-sm outline-none border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C]';
     return (
       <div className="space-y-1.5">
-        {DAYS.map(([key, label]) => (
-          <div key={key} className="flex items-center gap-3">
-            <span className="w-24 flex-shrink-0 text-xs font-semibold text-[#9A8FAA]">{label}</span>
-            <input
-              type="text"
-              value={v[key] ?? ''}
-              placeholder="z.B. 10:00–17:00 oder geschlossen"
-              onChange={e => onChange({ ...v, [key]: e.target.value })}
-              className="flex-1 border rounded-xl px-3 py-2 text-sm outline-none border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#C9BCD6] transition-colors"
-            />
-          </div>
-        ))}
+        {HOUR_DAYS.map(([key, label]) => {
+          const d = v[key] ?? {};
+          return (
+            <div key={key} className="flex items-center gap-2">
+              <span className="w-16 flex-shrink-0 text-xs font-semibold text-[#9A8FAA]">{label}</span>
+              {d.closed ? (
+                <span className="flex-1 text-xs text-[#A89BB5] italic">geschlossen</span>
+              ) : (
+                <div className="flex-1 flex items-center gap-1.5">
+                  <input type="time" value={d.open ?? ''} onChange={e => upd(key, { open: e.target.value })} className={timeCls} />
+                  <span className="text-[#9A8FAA] text-xs">–</span>
+                  <input type="time" value={d.close ?? ''} onChange={e => upd(key, { close: e.target.value })} className={timeCls} />
+                </div>
+              )}
+              <button type="button" onClick={() => upd(key, { closed: !d.closed })}
+                className="text-[10px] font-semibold px-2 py-1 rounded-lg flex-shrink-0 transition-colors"
+                style={d.closed ? { background: '#FFF4EB', color: '#F99039' } : { background: '#F0EBF7', color: '#71587A' }}>
+                {d.closed ? 'öffnen' : 'zu'}
+              </button>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -1290,31 +1300,42 @@ function StepDetails({
   // Trivia + „Besonderheit" werden bereits auf der Beschreibungs-Seite abgefragt → hier ausblenden.
   const HIDDEN      = new Set(['trivia_type', 'trivia_text', 'highlight']);
   const universalQs = UNIVERSAL_QUESTIONS.filter(q => !HIDDEN.has(q.id));
+  // Typ-abhängige Zusatz-Infos (Budget/Öffnungszeiten/Kontakt/Links/Tickets)
+  const detailQs    = detailQuestions([state.tag]);
 
   function setAnswer(id: string, v: unknown) {
     set('answers', { ...state.answers, [id]: v });
   }
 
+  const renderQ = (q: SubmitQuestion) => {
+    if (q.showIf && !q.showIf(state.answers)) return null;
+    return (
+      <div key={q.id} className="space-y-2">
+        <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+          {q.label}{q.required && <span className="ml-1 text-[#C96442]">*</span>}
+        </label>
+        {q.hint && <p className="text-xs text-[#9A8FAA]">{q.hint}</p>}
+        <QuestionField q={q} value={state.answers[q.id]} onChange={v => setAnswer(q.id, v)} />
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-7">
       <div>
         <StepHeading>Erzähl uns mehr</StepHeading>
-        <StepSub>Ein paar allgemeine Fragen — je mehr du beantwortest, desto wertvoller der Eintrag.</StepSub>
+        <StepSub>Ein paar Infos zum Ort — je mehr du beantwortest, desto wertvoller der Eintrag.</StepSub>
       </div>
 
-      {/* Universal questions */}
-      {universalQs.map(q => {
-        if (q.showIf && !q.showIf(state.answers)) return null;
-        return (
-          <div key={q.id} className="space-y-2">
-            <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-              {q.label}{q.required && <span className="ml-1 text-[#C96442]">*</span>}
-            </label>
-            {q.hint && <p className="text-xs text-[#9A8FAA]">{q.hint}</p>}
-            <QuestionField q={q} value={state.answers[q.id]} onChange={v => setAnswer(q.id, v)} />
-          </div>
-        );
-      })}
+      {detailQs.map(renderQ)}
+
+      <div className="flex items-center gap-3 pt-1">
+        <div className="flex-1 h-px bg-[#E4DCF0]" />
+        <span className="text-xs font-bold uppercase tracking-widest text-[#B0A3BC]">Allgemeines</span>
+        <div className="flex-1 h-px bg-[#E4DCF0]" />
+      </div>
+
+      {universalQs.map(renderQ)}
     </div>
   );
 }
