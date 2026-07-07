@@ -145,6 +145,9 @@ export const aiApi = {
   placeSummary:    (ctx: AiPlaceCtx)   => post<{ summary: string }>('/ai/place-summary', ctx),
   placeDescription:(ctx: AiPlaceCtx)   => post<{ description: string }>('/ai/place-description', ctx),
   placeTips:       (ctx: AiPlaceCtx & { count?: number }) => post<{ tips: string[] }>('/ai/place-tips', ctx),
+  placeRecommend:  (ctx: { name?: string; location?: string; imageUrls?: string[] }) =>
+                     post<{ description: string }>('/ai/place-recommend', ctx),
+  proofread:       (text: string)      => post<{ text: string }>('/ai/proofread', { text }),
 };
 
 // ─── Trips ─────────────────────────────────────────────────────────────────────

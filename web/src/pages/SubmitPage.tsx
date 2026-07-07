@@ -1394,18 +1394,14 @@ function StepStory({
   const [descErr, setDescErr]     = useState('');
   useEffect(() => { aiApi.status().then(s => setAiOn(s.configured)).catch(() => {}); }, []);
 
-  const aiCtx = () => ({
-    name:      state.name,
-    long:      state.long,
-    highlight: typeof state.answers['highlight'] === 'string' ? (state.answers['highlight'] as string) : '',
-    category:  state.l3?.label ?? state.l2?.label ?? state.l1?.label ?? '',
-    location:  state.locationText,
-  });
-
-  async function genDescription() {
+  // B: Text-Empfehlung aus den hochgeladenen Fotos + Name + Standort (kein Umschreiben deiner Notizen)
+  async function genRecommend() {
     setDescErr(''); setDescLoad(true);
-    try { const { description } = await aiApi.placeDescription(aiCtx()); set('long', description); }
-    catch (e) { setDescErr((e as Error).message || 'Ausformulieren fehlgeschlagen.'); }
+    try {
+      const imageUrls = state.media.filter(m => m.type === 'image' && m.serverUrl).map(m => m.serverUrl!);
+      const { description } = await aiApi.placeRecommend({ name: state.name, location: state.locationText, imageUrls });
+      set('long', description);
+    } catch (e) { setDescErr((e as Error).message || 'Empfehlung fehlgeschlagen.'); }
     setDescLoad(false);
   }
 
@@ -1447,15 +1443,15 @@ function StepStory({
               : `Noch mind. ${200 - longLen} Zeichen (aktuell ${longLen} / 200).`}
           </p>
           {aiOn && (
-            <AiButton onClick={genDescription} loading={descLoading}
-              label={longLen < 30 ? 'Entwurf von Gemini' : 'Ausformulieren'} />
+            <AiButton onClick={genRecommend} loading={descLoading}
+              disabled={state.media.filter(m => m.type === 'image' && m.serverUrl).length === 0}
+              label="Empfehlung für einen Text" />
           )}
         </div>
         {aiOn && (
           <p className="text-[11px] text-[#B0A3BC]">
-            {longLen < 30
-              ? 'Tipp: Name & Standort genügen für einen ersten Entwurf – den du dann anpasst.'
-              : 'Gemini baut deine Stichpunkte zu einer lebendigen Beschreibung aus (du kannst danach editieren).'}
+            Die KI schaut sich deine Fotos, den Namen und den Standort an und schlägt dir einen Text vor –
+            den du frei anpassen kannst. {state.media.filter(m => m.type === 'image' && m.serverUrl).length === 0 ? 'Lade dafür zuerst ein Foto hoch.' : ''}
           </p>
         )}
         {descErr && <p className="text-xs text-[#C96442]">{descErr}</p>}

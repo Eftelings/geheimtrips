@@ -8,6 +8,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { cleanRichText, cleanPlainText } from '../lib/sanitize.js';
 import { deriveTag } from '../data/taxMigration.js';
+import { proofreadSafe } from '../lib/gemini.js';
 
 // Budget-Antwort ('Kostenlos' / '€ – …' / '€€ – …' / '€€€ – …') → cost-Spalte + Label
 function budgetToCost(answers: Record<string, unknown> | undefined): { cost: number; costLabel: string } {
@@ -246,7 +247,9 @@ router.post('/submit', requireAuth,
     // Kurz-Zusammenfassung: vom Nutzer übernehmen, sonst aus der Beschreibung ableiten
     // (Platzhalter bis die KI-Generierung in Etappe 4 greift).
     const cleanShort = cleanPlainText(body.short);
-    const finalShort = cleanShort || deriveSummary(cleanRichText(body.long));
+    const baseShort = cleanShort || deriveSummary(cleanRichText(body.long));
+    // B: reiner Grammatik-/Rechtschreib-Pass beim Absenden (best-effort, kein Umschreiben)
+    const [finalShort, finalLong] = await Promise.all([proofreadSafe(baseShort), proofreadSafe(cleanRichText(body.long))]);
 
     const attributesJson = JSON.stringify({
       l1Slug:       body.l1Slug,
@@ -269,7 +272,7 @@ router.post('/submit', requireAuth,
       categoryLabel: cat.categoryLabel,
       tagSlug:       body.tagSlug || deriveTag(body.l3Slug, body.name, cat.category),
       short:         finalShort,
-      long:          cleanRichText(body.long),
+      long:          finalLong,
       // Kein Stock-Foto erfinden: ohne Upload bleibt das Titelbild leer
       hero:          body.hero || body.mediaItems?.[0]?.url || '',
       ...budgetToCost(safeAnswers),
@@ -353,7 +356,9 @@ router.patch('/:id', requireAuth,
     if (typeof safeAnswers.trivia_text === 'string') safeAnswers.trivia_text = cleanPlainText(safeAnswers.trivia_text);
 
     const cleanShort = cleanPlainText(body.short);
-    const finalShort = cleanShort || deriveSummary(cleanRichText(body.long));
+    const baseShort = cleanShort || deriveSummary(cleanRichText(body.long));
+    // B: reiner Grammatik-/Rechtschreib-Pass beim Absenden (best-effort, kein Umschreiben)
+    const [finalShort, finalLong] = await Promise.all([proofreadSafe(baseShort), proofreadSafe(cleanRichText(body.long))]);
 
     const attributesJson = JSON.stringify({
       l1Slug:       body.l1Slug,
@@ -376,7 +381,7 @@ router.patch('/:id', requireAuth,
       tagSlug:       body.tagSlug ?? place.tagSlug ?? deriveTag(body.l3Slug, body.name, cat.category),
       ...budgetToCost(safeAnswers),
       short:         finalShort,
-      long:          cleanRichText(body.long),
+      long:          finalLong,
       hero:          body.hero || body.mediaItems?.[0]?.url || place.hero,
       lat:           body.lat ?? null,
       lng:           body.lng ?? null,

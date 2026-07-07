@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { generateSummary, generateTips, generateDescription, geminiConfigured } from '../lib/gemini.js';
+import { generateSummary, generateTips, generateDescription, generateRecommendation, proofread, geminiConfigured } from '../lib/gemini.js';
 
 const router = new Hono();
 
@@ -48,6 +48,32 @@ router.post('/place-tips', zValidator('json', placeCtx.extend({ count: z.number(
   try {
     const tips = await generateTips(c.req.valid('json'));
     return c.json({ tips });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 502);
+  }
+});
+
+// POST /ai/place-recommend — Text-Empfehlung aus Fotos + Name + Standort (Vision)
+router.post('/place-recommend', zValidator('json', z.object({
+  name:      z.string().max(200).optional().default(''),
+  location:  z.string().max(300).optional().default(''),
+  imageUrls: z.array(z.string()).max(5).optional().default([]),
+})), async (c) => {
+  if (!geminiConfigured) return c.json({ error: 'KI ist nicht konfiguriert (GEMINI_API_KEY fehlt).' }, 503);
+  try {
+    const description = await generateRecommendation(c.req.valid('json'));
+    return c.json({ description });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 502);
+  }
+});
+
+// POST /ai/proofread — reiner Rechtschreib-/Grammatik-Pass (kein Umschreiben)
+router.post('/proofread', zValidator('json', z.object({ text: z.string().max(8000) })), async (c) => {
+  if (!geminiConfigured) return c.json({ error: 'KI ist nicht konfiguriert.' }, 503);
+  try {
+    const text = await proofread(c.req.valid('json').text);
+    return c.json({ text });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 502);
   }
