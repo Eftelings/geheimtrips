@@ -288,7 +288,7 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
   const rawHours = answers.opening_hours;
   const hours = rawHours && typeof rawHours === 'object' && !Array.isArray(rawHours) ? rawHours as WeekHours : null;
   const open = isOpenNow(hours);
-  const website = str(answers.website), phone = str(answers.phone), email = str(answers.email);
+  const phone = str(answers.phone), email = str(answers.email);
   const menuUrl = str(answers.menu_url), rsvUrl = str(answers.reservation_url), ticketUrl = str(answers.ticket_url);
   const tp = answers.ticket_prices && typeof answers.ticket_prices === 'object' ? answers.ticket_prices as Record<string, string> : null;
   const priceRows = tp ? ([['adult', 'Erwachsene'], ['child', 'Kinder'], ['reduced', 'Ermäßigte'], ['senior', 'Senioren']] as const)
@@ -300,7 +300,6 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
   if (menuUrl)   links.push({ href: menuUrl,          icon: 'fa-book-open',      label: 'Speisekarte' });
   if (rsvUrl)    links.push({ href: rsvUrl,           icon: 'fa-calendar-check', label: 'Reservieren' });
   if (ticketUrl) links.push({ href: ticketUrl,        icon: 'fa-ticket',         label: 'Tickets' });
-  if (website)   links.push({ href: website,          icon: 'fa-globe',          label: 'Website' });
   if (phone)     links.push({ href: `tel:${phone}`,   icon: 'fa-phone',          label: 'Anrufen' });
   if (email)     links.push({ href: `mailto:${email}`, icon: 'fa-envelope',      label: 'E-Mail' });
 
@@ -374,6 +373,8 @@ interface AebProps {
   isOfficiallyManaged?: boolean;
   parking?: 'free' | 'paid' | 'limited' | null;
   parkingContribs?: { yes: number; no: number; limited: number; total: number } | null;
+  merkmale?: string[];
+  vibes?: string[];
 }
 
 const WEEKDAY_KEYS = ['so', 'mo', 'di', 'mi', 'do', 'fr', 'sa'] as const;
@@ -382,7 +383,7 @@ const WEEKDAY_LABELS: Record<string, string> = {
   fr: 'Freitag', sa: 'Samstag', so: 'Sonntag',
 };
 
-function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmount, rating, reviews, website, openingHours, weekHours, hoursSchedule, hoursUrl, prices, pricesUrl, specialInfo, isOfficiallyManaged, parking, parkingContribs }: AebProps) {
+function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmount, rating, reviews, website, openingHours, weekHours, hoursSchedule, hoursUrl, prices, pricesUrl, specialInfo, isOfficiallyManaged, parking, parkingContribs, merkmale, vibes }: AebProps) {
   const todayHours = hoursSchedule ? getTodayHours(hoursSchedule) : null;
   const hasWeekHours = !!weekHours && Object.keys(weekHours).length > 0;
   const todayKey = WEEKDAY_KEYS[new Date().getDay()];
@@ -406,6 +407,32 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
         )}
       </div>
       <div className="flex flex-col gap-3.5">
+
+        {/* Merkmale */}
+        {merkmale && merkmale.length > 0 && (
+          <div className="flex items-start gap-3">
+            <i className="fa-solid fa-tags text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-1.5">Merkmale</p>
+              <div className="flex flex-wrap gap-1.5">
+                {merkmale.map(m => <span key={m} className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'white', color: '#71587a' }}>{m}</span>)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Vibe */}
+        {vibes && vibes.length > 0 && (
+          <div className="flex items-start gap-3">
+            <i className="fa-solid fa-wand-magic-sparkles text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-1.5">Vibe</p>
+              <div className="flex flex-wrap gap-1.5">
+                {vibes.map(v => <span key={v} className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#8A6FB3', color: 'white' }}>{v}</span>)}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Budget */}
         <div className="flex items-start gap-3">
@@ -970,7 +997,6 @@ export function PlaceDetailPage() {
   const [newQuestion, setNewQuestion]  = useState('');
   const [ratingOpen, setRatingOpen]    = useState(false);
   const [addTripOpen, setAddTripOpen]  = useState(false);
-  const [similarMode, setSimilarMode]  = useState<'nearby' | 'global'>('nearby');
   const [gpsLoading, setGpsLoading]    = useState(false);
   const [toastMsg, setToastMsg]        = useState('');
   const [toastVisible, setToastVisible] = useState(false);
@@ -1049,10 +1075,24 @@ export function PlaceDetailPage() {
   }, [place, uploadedPhotos, photoLikes]);
 
 
-  const similar = useMemo(
-    () => place ? places.filter(p => p.id !== place.id && p.category === place.category).slice(0, 3) : [],
-    [places, place, similarMode], // eslint-disable-line
-  );
+  // Ähnliche Orte: Score aus gemeinsamen Tags (stark), Merkmalen, Vibe. Kein Treffer → leer → Abschnitt versteckt.
+  const similar = useMemo(() => {
+    if (!place) return [] as Place[];
+    const tagsOf = (p: Place) => (p.tagSlugs?.length ? p.tagSlugs : (p.tagSlug ? [p.tagSlug] : []));
+    const attrOf = (p: Place, k: string) => { const a = (p.attributes ?? {}) as Record<string, unknown>; return Array.isArray(a[k]) ? a[k] as string[] : []; };
+    const myTags = new Set(tagsOf(place));
+    const myMerk = new Set(attrOf(place, 'merkmale'));
+    const myVibes = new Set([...attrOf(place, 'vibes'), ...(place.vibe ?? [])]);
+    const score = (p: Place) => {
+      let s = 0;
+      for (const t of tagsOf(p)) if (myTags.has(t)) s += 5;
+      for (const m of attrOf(p, 'merkmale')) if (myMerk.has(m)) s += 2;
+      for (const v of [...attrOf(p, 'vibes'), ...(p.vibe ?? [])]) if (myVibes.has(v)) s += 1;
+      return s;
+    };
+    return places.filter(p => p.id !== place.id).map(p => ({ p, s: score(p) }))
+      .filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 3).map(x => x.p);
+  }, [places, place]);
 
   const filteredQa = useMemo(() => {
     const q = qaSearch.trim().toLowerCase();
@@ -1324,6 +1364,9 @@ export function PlaceDetailPage() {
                        : typeof answers.entrance_fee_url === 'string' ? answers.entrance_fee_url : null;
   const specialInfo   = Array.isArray(attrs.specialInfo)          ? attrs.specialInfo as string[] : null;
   const isOfficiallyManaged = place.isOfficiallyManaged ?? false;
+  // Merkmale & Vibe für „Auf einen Blick" (neues Modell; Vibe fällt auf altes vibeJson zurück)
+  const merkmaleList = Array.isArray(attrs.merkmale) ? attrs.merkmale as string[] : [];
+  const vibeList = Array.isArray(attrs.vibes) && (attrs.vibes as string[]).length ? attrs.vibes as string[] : (place.vibe ?? []);
 
   // Entrance fee from UNIVERSAL_QUESTIONS answers
   const entranceFee       = typeof answers.entrance_fee === 'string'        ? answers.entrance_fee        : null;
@@ -1355,9 +1398,6 @@ export function PlaceDetailPage() {
     answersParking?.startsWith('Kein Parkplatz') ? 'limited' :
     place.parking ?? null;
 
-  const googleMapsUrl = place.lat && place.lng
-    ? `https://www.google.com/maps/place/${encodeURIComponent(place.name)}/@${place.lat},${place.lng},17z`
-    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}`;
   const navUrl = place.lat && place.lng
     ? `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}&travelmode=${toGoogleTravelMode(mapTransport)}`
     : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.name)}`;
@@ -1719,11 +1759,6 @@ async function handleVerifyToggle() {
                     <span style={{ color: '#b9a8c4' }}>Standort aus</span>
                   ) : null}
                 </div>
-                <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" title="In Google Maps speichern"
-                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all hover:brightness-95"
-                  style={{ background: '#F1ECF4', color: '#34254c' }}>
-                  <i className="fa-solid fa-bookmark text-sm" />
-                </a>
                 <a href={navUrl} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-3 h-9 rounded-xl flex-shrink-0 font-semibold text-xs transition-all hover:brightness-110"
                   style={{ background: 'var(--color-amber)', color: 'white' }}>
@@ -2342,7 +2377,7 @@ async function handleVerifyToggle() {
               hoursSchedule={hoursSchedule}
               hoursUrl={hoursUrl} prices={prices} pricesUrl={pricesUrl} specialInfo={specialInfo}
               isOfficiallyManaged={isOfficiallyManaged}
-              parking={derivedParking} parkingContribs={parkingContribs} />
+              parking={derivedParking} parkingContribs={parkingContribs} merkmale={merkmaleList} vibes={vibeList} />
             <PlaceExtras place={place} className="lg:hidden mt-4" />
 
             {/* Mobile: claim button */}
@@ -2731,10 +2766,6 @@ async function handleVerifyToggle() {
                 </div>
 
                 <div className="p-3 flex gap-2">
-                  <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-bg-soft)] text-[var(--color-aubergine)] font-semibold py-2.5 rounded-xl text-xs hover:brightness-95 transition-all">
-                    <i className="fa-solid fa-bookmark" /> In Maps speichern
-                  </a>
                   <a href={navUrl} target="_blank" rel="noopener noreferrer"
                     className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-bg-soft)] text-[var(--color-aubergine)] font-semibold py-2.5 rounded-xl text-xs hover:brightness-95 transition-all">
                     <i className="fa-solid fa-diamond-turn-right" /> Route
@@ -2751,7 +2782,7 @@ async function handleVerifyToggle() {
               hoursSchedule={hoursSchedule}
               hoursUrl={hoursUrl} prices={prices} pricesUrl={pricesUrl} specialInfo={specialInfo}
               isOfficiallyManaged={isOfficiallyManaged}
-              parking={derivedParking} parkingContribs={parkingContribs} />
+              parking={derivedParking} parkingContribs={parkingContribs} merkmale={merkmaleList} vibes={vibeList} />
             <PlaceExtras place={place} className="hidden lg:block mt-4" />
 
             {/* Claim button — desktop, only if not yet officially managed */}
@@ -2769,16 +2800,8 @@ async function handleVerifyToggle() {
 
             {similar.length > 0 && (
               <div className="rounded-3xl p-5" style={{ background: '#F1ECF4' }}>
-                <div className="flex items-center justify-between mb-4">
+                <div className="mb-4">
                   <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-lavender)]">Ähnliche Orte</p>
-                  <div className="flex gap-0.5 p-0.5 rounded-xl bg-white">
-                    {(['nearby', 'global'] as const).map(m => (
-                      <button key={m} onClick={() => setSimilarMode(m)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all ${similarMode === m ? 'bg-[var(--color-aubergine)] text-white' : 'text-[var(--color-lavender)]'}`}>
-                        {m === 'nearby' ? 'In der Nähe' : 'Weltweit'}
-                      </button>
-                    ))}
-                  </div>
                 </div>
                 <div className="flex flex-col gap-3">
                   {similar.map(p => (

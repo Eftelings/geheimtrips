@@ -61,7 +61,7 @@ function FitReach({ center, travel, radiusKm, fallback }: {
 const entdeckenCache = {
   searchCenter: null as Coords | null,
   searchLabel: null as string | null,
-  radiusKm: 80,
+  radiusKm: 10,   // Standard vorerst 10 km — Karte zoomt beim Laden genau auf diesen Radius
   mode: 'all' as Mode,
   tagSel: EMPTY_TAG_SEL as TagSelection,
   travelMode: 'radius' as 'radius' | Transport,
@@ -269,14 +269,7 @@ export function MobileEntdecken() {
         </MapContainer>
       </div>
 
-      {/* Hinweis + Bestätigung zum Langdrücken (Radius-Startpunkt) */}
-      {!searchCenter && !pickToast && (
-        <div className="fixed left-1/2 -translate-x-1/2 z-10 pointer-events-none" style={{ top: '31%' }}>
-          <span className="text-[11px] font-semibold text-[var(--color-aubergine)]/80 bg-white/85 backdrop-blur px-3 py-1.5 rounded-full shadow-sm">
-            <i className="fa-solid fa-hand-pointer text-[var(--color-amber)] mr-1.5" />Lange drücken für einen Startpunkt
-          </span>
-        </div>
-      )}
+      {/* Kurze Bestätigung nach dem Setzen eines Startpunkts (der Hinweis dazu steht im Standort-Panel) */}
       {pickToast && (
         <div className="fixed left-1/2 -translate-x-1/2 z-40 pointer-events-none" style={{ top: '31%' }}>
           <span className="text-xs font-bold text-white bg-[var(--color-aubergine)] px-3.5 py-2 rounded-full shadow-lg">
@@ -334,6 +327,9 @@ export function MobileEntdecken() {
                     placeholder="Stadt oder Adresse…"
                     className="flex-1 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]" />
                 </div>
+                <p className="text-[11px] text-[var(--color-lavender)] mb-2 px-1">
+                  <i className="fa-solid fa-hand-pointer text-[var(--color-amber)] mr-1.5" />Tipp: lange auf die Karte drücken, um direkt einen Startpunkt zu setzen.
+                </p>
                 {geoSug.length > 0 ? geoSug.map((s, i) => (
                   <button key={i} onClick={() => pickCenter(s)}
                     className="w-full flex items-start gap-3 px-2 py-2 text-left rounded-xl hover:bg-[var(--color-bg-soft)]">
