@@ -80,6 +80,7 @@ export interface SubmitPlacePayload {
   l4Features?:   string[];
   // Neues Taxonomie-Modell
   tagSlug?:      string;
+  tagSlugs?:     string[];
   merkmale?:     string[];
   vibes?:        string[];
   answers?:      Record<string, unknown>;

@@ -28,7 +28,8 @@ export interface Place {
   region: string;
   category: PlaceCategory;
   categoryLabel: string;
-  tagSlug?: string | null;   // neues Taxonomie-Modell: Typ-Tag
+  tagSlug?: string | null;   // primärer Typ-Tag
+  tagSlugs?: string[];       // alle Typ-Tags (z.B. Restaurant + Café)
   vibe: string[];
   distanceMin: number;
   distanceLabel: string;

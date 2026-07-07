@@ -66,7 +66,8 @@ export const places = sqliteTable('places', {
   isOfficiallyManaged: integer('is_officially_managed', { mode: 'boolean' }).default(false),
   // Community-editable fields
   parking: text('parking'), // null | 'free' | 'paid' | 'limited'
-  tagSlug: text('tag_slug'), // neues Taxonomie-Modell: Typ-Tag (löst category/categoryLabel ab)
+  tagSlug: text('tag_slug'), // neues Taxonomie-Modell: primärer Typ-Tag (löst category/categoryLabel ab)
+  tagSlugsJson: text('tag_slugs_json'), // alle Typ-Tags (JSON string[]) — z.B. Restaurant + Café
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
 

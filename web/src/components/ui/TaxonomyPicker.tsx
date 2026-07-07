@@ -3,8 +3,9 @@ import { taxonomyApi } from '../../services/api.js';
 import type { TaxVocab, TaxTerm } from '../../services/api.js';
 import { suggestTagsFromText } from '../../data/taxVocab.js';
 
-export interface TaxonomyValue { tag: string | null; tagLabel: string | null; merkmale: string[]; vibes: string[] }
+export interface TaxonomyValue { tags: string[]; merkmale: string[]; vibes: string[] }
 
+const MAX_TAGS = 3;
 const VIBE_HINTS = ['z.B. gemütlich', 'z.B. aufregend', 'z.B. romantisch', 'z.B. mystisch', 'z.B. entspannt', 'z.B. lebhaft'];
 const shortGroup = (label: string) => label.split(/[,&]/)[0].trim();
 
@@ -13,14 +14,14 @@ export function looksLikeAdjective(raw: string): boolean {
   const w = raw.trim();
   if (!w || w.split(/\s+/).length > 2) return false;
   const lower = w.toLowerCase();
-  if (/(ung|heit|keit|schaft|tion|taet|tät|ismus|nis|tum|ling)$/.test(lower)) return false;       // typische Nomen-Endungen
-  if (/(ig|lich|isch|sam|bar|haft|los|voll|iv|oes|ös|os|ern|ell|al|ant|ent)$/.test(lower)) return true; // Adjektiv-Endungen
-  return w[0] === lower[0] && lower.length <= 16;  // sonst nur klein geschrieben (dt. Adjektive) & kurz
+  if (/(ung|heit|keit|schaft|tion|taet|tät|ismus|nis|tum|ling)$/.test(lower)) return false;
+  if (/(ig|lich|isch|sam|bar|haft|los|voll|iv|oes|ös|os|ern|ell|al|ant|ent)$/.test(lower)) return true;
+  return w[0] === lower[0] && lower.length <= 16;
 }
 
 /**
- * Anlege-Auswahl im neuen Modell: Tag (Typ) → gemappte Merkmale & Vibes.
- * C: Vorschläge aus dem Beschreibungstext · F: erst 4 Gruppen mit Beispielen · E: Vibes nur Adjektive.
+ * Anlege-Auswahl im neuen Modell: bis zu 3 Typ-Tags (D, z.B. Restaurant + Café) → gemappte Merkmale & Vibes.
+ * C: Vorschläge aus dem Text · F: erst 4 Gruppen mit Beispielen · E: Vibes nur Adjektive.
  */
 export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue; onChange: (v: TaxonomyValue) => void; text?: string }) {
   const [vocab, setVocab] = useState<TaxVocab | null>(null);
@@ -33,16 +34,23 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
 
   useEffect(() => { taxonomyApi.vocab().then(setVocab).catch(() => {}); }, []);
   useEffect(() => {
-    if (value.tag) taxonomyApi.suggestions(value.tag).then(setSugg).catch(() => {});
-    else setSugg({ merkmale: [], vibes: [] });
-  }, [value.tag]);
+    if (!value.tags.length) { setSugg({ merkmale: [], vibes: [] }); return; }
+    Promise.all(value.tags.map(t => taxonomyApi.suggestions(t))).then(rs => {
+      const dedupe = (arr: TaxTerm[]) => Array.from(new Map(arr.map(x => [x.slug, x])).values());
+      setSugg({ merkmale: dedupe(rs.flatMap(r => r.merkmale)), vibes: dedupe(rs.flatMap(r => r.vibes)) });
+    }).catch(() => {});
+  }, [value.tags.join(',')]);
   useEffect(() => { const t = setInterval(() => setHintIdx(i => (i + 1) % VIBE_HINTS.length), 2200); return () => clearInterval(t); }, []);
 
   const textSuggestions = useMemo(() => suggestTagsFromText(text ?? '', vocab), [text, vocab]);
 
   const set = (patch: Partial<TaxonomyValue>) => onChange({ ...value, ...patch });
   const toggle = (arr: string[], label: string) => arr.includes(label) ? arr.filter(x => x !== label) : [...arr, label];
-  const pickTag = (slug: string, label: string) => { set({ tag: slug, tagLabel: label }); setOpenGroup(null); setTagSearch(''); };
+  const atMax = value.tags.length >= MAX_TAGS;
+  const toggleTag = (slug: string) => {
+    if (value.tags.includes(slug)) set({ tags: value.tags.filter(t => t !== slug) });
+    else if (!atMax) { set({ tags: [...value.tags, slug] }); setTagSearch(''); }
+  };
 
   const groupTags = (gSlug: string) => (vocab?.tags ?? []).filter(t => t.groups.includes(gSlug)).sort((a, b) => a.label.localeCompare(b.label, 'de'));
   const searchResults = useMemo(() => {
@@ -61,52 +69,60 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
 
   if (!vocab) return <div className="py-8 text-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>;
 
-  const selectedTag = vocab.tags.find(t => t.slug === value.tag) ?? null;
   const groupColor = (gSlug?: string) => vocab.groups.find(g => g.slug === gSlug)?.color ?? '#8A6FB3';
+  const tagBySlug = (slug: string) => vocab.tags.find(t => t.slug === slug);
   const pillCls = 'px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95';
   const pillOff = { background: 'white', color: '#71587a', borderColor: '#E4DCF0' } as const;
+  const tagPillStyle = (slug: string, gSlug?: string) => value.tags.includes(slug)
+    ? { background: groupColor(gSlug), color: 'white', borderColor: groupColor(gSlug) }
+    : atMax ? { ...pillOff, opacity: 0.45 } : pillOff;
 
   return (
     <div className="flex flex-col gap-6">
-      {/* ── TAG ── */}
+      {/* ── TAGS (bis zu 3) ── */}
       <div>
         <p className="text-sm font-bold text-[var(--color-aubergine)] mb-0.5">Was ist das für ein Ort?</p>
-        <p className="text-xs text-[var(--color-lavender)] mb-3">Wähle den passenden Typ.</p>
+        <p className="text-xs text-[var(--color-lavender)] mb-3">Wähle bis zu {MAX_TAGS} Typen — z.B. Restaurant <em>und</em> Café.</p>
 
         {/* C: Vorschläge aus dem Beschreibungstext */}
-        {!selectedTag && textSuggestions.length > 0 && (
+        {!atMax && textSuggestions.filter(t => !value.tags.includes(t.slug)).length > 0 && (
           <div className="mb-3 rounded-xl p-3" style={{ background: '#FFF6EE', border: '1px solid #F7D9BE' }}>
             <p className="text-[11px] font-bold text-[var(--color-amber)] mb-1.5"><i className="fa-solid fa-wand-magic-sparkles mr-1" />Passt einer davon? (aus deinem Text erkannt)</p>
             <div className="flex flex-wrap gap-1.5">
-              {textSuggestions.map(t => (
-                <button key={t.slug} type="button" onClick={() => pickTag(t.slug, t.label)} className={pillCls}
-                  style={{ background: t.color, color: 'white', borderColor: t.color }}>{t.label}</button>
+              {textSuggestions.filter(t => !value.tags.includes(t.slug)).map(t => (
+                <button key={t.slug} type="button" onClick={() => toggleTag(t.slug)} className={pillCls}
+                  style={{ background: t.color, color: 'white', borderColor: t.color }}>+ {t.label}</button>
               ))}
             </div>
           </div>
         )}
 
-        {/* Ausgewählter Tag */}
-        {selectedTag && (
-          <div className="mb-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: groupColor(selectedTag.groups[0]), color: 'white' }}>
-              {selectedTag.label}
-              <button type="button" onClick={() => set({ tag: null, tagLabel: null })} aria-label="Ändern"><i className="fa-solid fa-xmark text-[10px]" /></button>
-            </span>
+        {/* Ausgewählte Tags */}
+        {value.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {value.tags.map(slug => {
+              const t = tagBySlug(slug);
+              return (
+                <span key={slug} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: groupColor(t?.groups[0]), color: 'white' }}>
+                  {t?.label ?? slug}
+                  <button type="button" onClick={() => toggleTag(slug)} aria-label="Entfernen"><i className="fa-solid fa-xmark text-[10px]" /></button>
+                </span>
+              );
+            })}
           </div>
         )}
+        {atMax && <p className="text-[11px] text-[var(--color-lavender)] mb-2">Maximal {MAX_TAGS} Typen — entferne einen, um zu wechseln.</p>}
 
-        <input value={tagSearch} onChange={e => setTagSearch(e.target.value)} placeholder="Tag suchen…"
+        <input value={tagSearch} onChange={e => setTagSearch(e.target.value)} placeholder="Typ suchen…"
           className="w-full rounded-xl px-3 py-2 text-sm outline-none bg-white" style={{ border: '1px solid #E4DCF0', color: '#34254C' }} />
 
-        {/* F: Suche → Treffer · sonst Gruppe offen → deren Tags · sonst 4 Gruppen mit Beispielen */}
+        {/* F: Suche → Treffer · Gruppe offen → deren Typen · sonst 4 Gruppen mit Beispielen */}
         {tagSearch.trim() ? (
           <div className="flex flex-wrap gap-1.5 mt-3">
             {searchResults.length === 0
-              ? <p className="text-xs text-[var(--color-lavender)]">Kein Tag gefunden — beschreibe den Ort im vorigen Schritt genauer.</p>
+              ? <p className="text-xs text-[var(--color-lavender)]">Kein Typ gefunden — beschreibe den Ort im vorigen Schritt genauer.</p>
               : searchResults.map(t => (
-                <button key={t.slug} type="button" onClick={() => pickTag(t.slug, t.label)} className={pillCls}
-                  style={value.tag === t.slug ? { background: groupColor(t.groups[0]), color: 'white', borderColor: groupColor(t.groups[0]) } : pillOff}>{t.label}</button>
+                <button key={t.slug} type="button" onClick={() => toggleTag(t.slug)} disabled={atMax && !value.tags.includes(t.slug)} className={pillCls} style={tagPillStyle(t.slug, t.groups[0])}>{t.label}</button>
               ))}
           </div>
         ) : openGroup ? (
@@ -116,8 +132,7 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
             </button>
             <div className="flex flex-wrap gap-1.5">
               {groupTags(openGroup).map(t => (
-                <button key={t.slug} type="button" onClick={() => pickTag(t.slug, t.label)} className={pillCls}
-                  style={value.tag === t.slug ? { background: groupColor(openGroup), color: 'white', borderColor: groupColor(openGroup) } : pillOff}>{t.label}</button>
+                <button key={t.slug} type="button" onClick={() => toggleTag(t.slug)} disabled={atMax && !value.tags.includes(t.slug)} className={pillCls} style={tagPillStyle(t.slug, openGroup)}>{t.label}</button>
               ))}
             </div>
           </div>
@@ -140,7 +155,7 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
         )}
       </div>
 
-      {value.tag && (
+      {value.tags.length > 0 && (
         <>
           <TermSection title="Was gibt es dort? (Merkmale)" hint="Harte Fakten & Ausstattung."
             selected={value.merkmale} suggestions={sugg.merkmale.filter(m => !value.merkmale.includes(m.label))}

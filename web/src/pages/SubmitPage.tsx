@@ -6,6 +6,7 @@ import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
 import { detailQuestions, HOUR_DAYS } from '../data/detailQuestions.js';
 import type { WeekHours } from '../data/detailQuestions.js';
+import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place } from '../types/index.js';
 import { placesApi, mediaApi, aiApi, taxonomyApi } from '../services/api.js';
 import { TaxonomyPicker } from '../components/ui/TaxonomyPicker.js';
@@ -45,9 +46,8 @@ interface WizardState {
   l2:           TaxonomyL2 | null;
   l3:           TaxonomyL3 | null;
   l4Features:   string[];
-  // Neues Taxonomie-Modell
-  tag:          string | null;
-  tagLabel:     string | null;
+  // Neues Taxonomie-Modell — bis zu 3 Typ-Tags
+  tags:         string[];
   merkmale:     string[];
   vibes:        string[];
   answers:      Record<string, unknown>;
@@ -61,7 +61,7 @@ interface WizardState {
 const EMPTY: WizardState = {
   name: '', short: '', locationText: '', lat: null, lng: null,
   l1: null, l2: null, l3: null, l4Features: [],
-  tag: null, tagLabel: null, merkmale: [], vibes: [],
+  tags: [], merkmale: [], vibes: [],
   answers: {}, long: '', tips: [''], media: [], heroIndex: 0,
   exifSuggestion: null,
 };
@@ -102,8 +102,7 @@ function placeToWizardState(place: Place): WizardState {
     lng:          place.lng ?? null,
     l1, l2, l3,
     l4Features:   Array.isArray(attrs.l4Features) ? (attrs.l4Features as string[]) : [],
-    tag:          place.tagSlug ?? null,
-    tagLabel:     (attrs.tagLabel as string) ?? null,
+    tags:         place.tagSlugs?.length ? place.tagSlugs : (place.tagSlug ? [place.tagSlug] : []),
     merkmale:     Array.isArray(attrs.merkmale) ? (attrs.merkmale as string[]) : [],
     vibes:        Array.isArray(attrs.vibes) ? (attrs.vibes as string[]) : [],
     answers:      (attrs.answers as Record<string, unknown>) ?? {},
@@ -1368,9 +1367,9 @@ function StepCategory({ state, setState }: {
   state: WizardState;
   setState: React.Dispatch<React.SetStateAction<WizardState>>;
 }) {
-  const value: TaxonomyValue = { tag: state.tag, tagLabel: state.tagLabel, merkmale: state.merkmale, vibes: state.vibes };
+  const value: TaxonomyValue = { tags: state.tags, merkmale: state.merkmale, vibes: state.vibes };
   const onChange = (v: TaxonomyValue) =>
-    setState(prev => ({ ...prev, tag: v.tag, tagLabel: v.tagLabel, merkmale: v.merkmale, vibes: v.vibes }));
+    setState(prev => ({ ...prev, tags: v.tags, merkmale: v.merkmale, vibes: v.vibes }));
 
   return (
     <div className="space-y-7">
@@ -1390,7 +1389,7 @@ function StepDetails({
   state: WizardState;
   set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
 }) {
-  if (!state.tag) {
+  if (!state.tags.length) {
     return (
       <div className="py-16 text-center">
         <i className="fa-solid fa-arrow-left text-3xl mb-4" style={{ color: '#D8CEEA' }} />
@@ -1405,7 +1404,7 @@ function StepDetails({
   const HIDDEN      = new Set(['trivia_type', 'trivia_text', 'highlight']);
   const universalQs = UNIVERSAL_QUESTIONS.filter(q => !HIDDEN.has(q.id));
   // Typ-abhängige Zusatz-Infos (Budget/Öffnungszeiten/Kontakt/Links/Tickets)
-  const detailQs    = detailQuestions([state.tag]);
+  const detailQs    = detailQuestions(state.tags);
 
   function setAnswer(id: string, v: unknown) {
     set('answers', { ...state.answers, [id]: v });
@@ -1653,6 +1652,7 @@ function StepMedia({
 // Zusammenfassung + Hinweis am Ende (Abschicken passiert über die untere Leiste)
 function ReviewSubmit({ state, isEdit }: { state: WizardState; isEdit: boolean }) {
   const pendingUploads = state.media.filter(m => m.uploading).length;
+  const vocab = useTaxVocab();
   return (
     <div className="space-y-5 mt-8 pt-6 border-t border-[#E4DCF0]">
       <div className="rounded-2xl border border-[#E4DCF0] bg-white overflow-hidden">
@@ -1665,7 +1665,7 @@ function ReviewSubmit({ state, isEdit }: { state: WizardState; isEdit: boolean }
           <SummaryRow icon="fa-location-dot" label="Ort">
             {state.locationText || (state.lat ? `${state.lat.toFixed(4)}, ${state.lng?.toFixed(4)}` : '—')}
           </SummaryRow>
-          <SummaryRow icon="fa-tag" label="Typ">{state.tagLabel ?? state.tag ?? '—'}</SummaryRow>
+          <SummaryRow icon="fa-tag" label="Typ">{state.tags.map(s => tagInfoFrom(vocab, s)?.label ?? s).join(' · ') || '—'}</SummaryRow>
           {state.merkmale.length > 0 && (
             <SummaryRow icon="fa-tags" label="Merkmale">{state.merkmale.join(', ')}</SummaryRow>
           )}
@@ -1913,7 +1913,7 @@ export function SubmitPage() {
     if (step === 3) return state.name.trim().length >= 2;                 // Name
     // Beschreibung: mind. 200 Zeichen Klartext (Kurz-Zusammenfassung optional)
     if (step === 4) return state.long.replace(/<[^>]*>/g, '').trim().length >= 200;
-    if (step === 5) return !!state.tag;                                   // Typ-Tag
+    if (step === 5) return state.tags.length > 0;                         // mind. ein Typ-Tag
     return true;
   }
 
@@ -1961,7 +1961,7 @@ export function SubmitPage() {
         l3Slug:       state.l3?.slug,
         l4Features:   state.l4Features,
         // Neues Taxonomie-Modell
-        tagSlug:      state.tag ?? undefined,
+        tagSlugs:     state.tags,
         merkmale:     state.merkmale,
         vibes:        state.vibes,
         answers:      state.answers,
@@ -1981,7 +1981,7 @@ export function SubmitPage() {
         ? await placesApi.update(editId, payload)
         : await placesApi.submit(payload);
       // Neue Merkmale/Vibes im Taxonomie-Graph registrieren (UGC → Moderation)
-      if (state.tag) taxonomyApi.resolve(state.tag, state.merkmale, state.vibes).catch(() => {});
+      state.tags.forEach(t => taxonomyApi.resolve(t, state.merkmale, state.vibes).catch(() => {}));
       // Revoke all local blob URLs
       state.media.forEach(m => { if (m.localUrl.startsWith('blob:')) URL.revokeObjectURL(m.localUrl); });
       // Force places list to re-fetch so the change appears on the map/discover page

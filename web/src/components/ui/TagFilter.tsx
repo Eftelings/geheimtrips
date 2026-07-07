@@ -14,12 +14,15 @@ export function shortGroupLabel(label: string): string {
 
 /** Passt ein Ort zur Gruppen-/Tag-Auswahl? (vocab liefert die Tag→Gruppen-Zuordnung) */
 export function placeMatchesTag(p: Place, sel: TagSelection, vocab: TaxVocab | null): boolean {
-  if (sel.tag) return p.tagSlug === sel.tag;
+  const tags = p.tagSlugs?.length ? p.tagSlugs : (p.tagSlug ? [p.tagSlug] : []);
+  if (sel.tag) return tags.includes(sel.tag);
   if (sel.group) {
-    if (!p.tagSlug) return false;
-    const tag = vocab?.tags.find(t => t.slug === p.tagSlug);
-    if (!tag) return true; // Vokabular noch nicht geladen → nicht wegfiltern
-    return tag.groups.includes(sel.group);
+    if (!tags.length) return false;
+    return tags.some(slug => {
+      const tag = vocab?.tags.find(t => t.slug === slug);
+      if (!tag) return true; // Vokabular noch nicht geladen → nicht wegfiltern
+      return tag.groups.includes(sel.group!);
+    });
   }
   return true;
 }

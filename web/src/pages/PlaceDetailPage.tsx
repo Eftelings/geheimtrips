@@ -637,8 +637,10 @@ function MobileHero({ place, photos, onOpen, onReviews }: {
 
         <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <TagBadge slug={place.tagSlug} fallback={place.categoryLabel} icon variant="dark"
-              className="text-[9px] px-2 py-0.5" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }} />
+            {(place.tagSlugs?.length ? place.tagSlugs : [place.tagSlug]).map((s, i) => (
+              <TagBadge key={i} slug={s} fallback={i === 0 ? place.categoryLabel : undefined} icon={i === 0} variant="dark"
+                className="text-[9px] px-2 py-0.5" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }} />
+            ))}
             {place.isUserSubmitted && (
               <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-white flex items-center gap-1"
                 style={{ background: 'rgba(249,144,57,0.92)' }}>
@@ -1889,8 +1891,10 @@ async function handleVerifyToggle() {
               {/* Place name + rating overlay */}
               <div className="absolute bottom-0 left-0 right-0 p-4 md:p-5">
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <TagBadge slug={place.tagSlug} fallback={place.categoryLabel} icon variant="dark"
-                    className="text-[9px] px-2 py-0.5" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }} />
+                  {(place.tagSlugs?.length ? place.tagSlugs : [place.tagSlug]).map((s, i) => (
+                    <TagBadge key={i} slug={s} fallback={i === 0 ? place.categoryLabel : undefined} icon={i === 0} variant="dark"
+                      className="text-[9px] px-2 py-0.5" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }} />
+                  ))}
                   {place.match > 0 && (
                     <span className="text-[9px] font-bold px-2 py-0.5 rounded-full text-white"
                       style={{ background: 'var(--color-amber)' }}>{place.match}% Match</span>

@@ -49,6 +49,11 @@ db.run(sql`ALTER TABLE places ADD COLUMN tag_slug TEXT`).catch(() => {});
   }
 })().catch(() => {});
 
+// Mehrere Typ-Tags je Ort (Restaurant + Café): Liste als JSON; Bestand = [primärer Tag]
+db.run(sql`ALTER TABLE places ADD COLUMN tag_slugs_json TEXT`).catch(() => {});
+db.run(sql`UPDATE places SET tag_slugs_json = json_array(tag_slug)
+  WHERE tag_slug IS NOT NULL AND tag_slug != '' AND (tag_slugs_json IS NULL OR tag_slugs_json = '')`).catch(() => {});
+
 // Änderungsanfragen zu Orten — gehen an Admins, Ersteller:in und (falls vorhanden) Business.
 db.run(sql`
   CREATE TABLE IF NOT EXISTS change_requests (
@@ -209,6 +214,7 @@ router.post('/submit', requireAuth,
     l4Features:   z.array(z.string()).optional().default([]),
     // Neues Taxonomie-Modell (löst l1–l4 nach und nach ab)
     tagSlug:      z.string().optional(),
+    tagSlugs:     z.array(z.string()).max(3).optional().default([]),
     merkmale:     z.array(z.string()).optional().default([]),
     vibes:        z.array(z.string()).optional().default([]),
     answers:      z.record(z.unknown()).optional().default({}),
@@ -270,7 +276,8 @@ router.post('/submit', requireAuth,
       region:        body.region || (body.locationText ?? ''),
       category:      cat.category,
       categoryLabel: cat.categoryLabel,
-      tagSlug:       body.tagSlug || deriveTag(body.l3Slug, body.name, cat.category),
+      tagSlug:       body.tagSlugs[0] || body.tagSlug || deriveTag(body.l3Slug, body.name, cat.category),
+      tagSlugsJson:  JSON.stringify(body.tagSlugs.length ? body.tagSlugs : [body.tagSlug || deriveTag(body.l3Slug, body.name, cat.category)]),
       short:         finalShort,
       long:          finalLong,
       // Kein Stock-Foto erfinden: ohne Upload bleibt das Titelbild leer
@@ -321,6 +328,7 @@ router.patch('/:id', requireAuth,
     l4Features:   z.array(z.string()).optional().default([]),
     // Neues Taxonomie-Modell (löst l1–l4 nach und nach ab)
     tagSlug:      z.string().optional(),
+    tagSlugs:     z.array(z.string()).max(3).optional().default([]),
     merkmale:     z.array(z.string()).optional().default([]),
     vibes:        z.array(z.string()).optional().default([]),
     answers:      z.record(z.unknown()).optional().default({}),
@@ -378,7 +386,8 @@ router.patch('/:id', requireAuth,
       region:        body.region || (body.locationText ?? '') || place.region,
       category:      cat.category,
       categoryLabel: cat.categoryLabel,
-      tagSlug:       body.tagSlug ?? place.tagSlug ?? deriveTag(body.l3Slug, body.name, cat.category),
+      tagSlug:       body.tagSlugs[0] ?? body.tagSlug ?? place.tagSlug ?? deriveTag(body.l3Slug, body.name, cat.category),
+      tagSlugsJson:  body.tagSlugs.length ? JSON.stringify(body.tagSlugs) : (place.tagSlugsJson ?? JSON.stringify([place.tagSlug ?? deriveTag(body.l3Slug, body.name, cat.category)])),
       ...budgetToCost(safeAnswers),
       short:         finalShort,
       long:          finalLong,
@@ -927,6 +936,10 @@ export function hydrate(p: typeof places.$inferSelect) {
     heroCropY:    typeof attrs.heroCropY === 'number' ? attrs.heroCropY : 0.5,
     tips:         JSON.parse(p.tipsJson  ?? '[]'),
     attributes:   attrs,
+    tagSlugs:     (() => {
+      try { const a = JSON.parse(p.tagSlugsJson ?? '[]'); if (Array.isArray(a) && a.length) return a as string[]; } catch { /* ignore */ }
+      return p.tagSlug ? [p.tagSlug] : [];
+    })(),
     // parking is passed through as-is (null | 'free' | 'paid' | 'limited')
   };
 }
