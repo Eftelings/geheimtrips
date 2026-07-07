@@ -1,20 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import { taxonomyApi } from '../../services/api.js';
 import type { TaxVocab, TaxTerm } from '../../services/api.js';
+import { suggestTagsFromText } from '../../data/taxVocab.js';
 
 export interface TaxonomyValue { tag: string | null; tagLabel: string | null; merkmale: string[]; vibes: string[] }
 
 const VIBE_HINTS = ['z.B. gemütlich', 'z.B. aufregend', 'z.B. romantisch', 'z.B. mystisch', 'z.B. entspannt', 'z.B. lebhaft'];
+const shortGroup = (label: string) => label.split(/[,&]/)[0].trim();
+
+// E: grobe Prüfung, ob eine Eingabe ein Adjektiv ist (für „Wie fühlt es sich an?")
+export function looksLikeAdjective(raw: string): boolean {
+  const w = raw.trim();
+  if (!w || w.split(/\s+/).length > 2) return false;
+  const lower = w.toLowerCase();
+  if (/(ung|heit|keit|schaft|tion|taet|tät|ismus|nis|tum|ling)$/.test(lower)) return false;       // typische Nomen-Endungen
+  if (/(ig|lich|isch|sam|bar|haft|los|voll|iv|oes|ös|os|ern|ell|al|ant|ent)$/.test(lower)) return true; // Adjektiv-Endungen
+  return w[0] === lower[0] && lower.length <= 16;  // sonst nur klein geschrieben (dt. Adjektive) & kurz
+}
 
 /**
- * Anlege-Auswahl im neuen Modell: Tag (Typ) → gemappte Merkmale & Vibes als Pills
- * + Combobox mit Freitext-Eingabe (UGC). Werte sind Labels; das Backend (resolve)
- * ordnet sie bestehenden zu oder legt neue (zur Prüfung) an.
+ * Anlege-Auswahl im neuen Modell: Tag (Typ) → gemappte Merkmale & Vibes.
+ * C: Vorschläge aus dem Beschreibungstext · F: erst 4 Gruppen mit Beispielen · E: Vibes nur Adjektive.
  */
-export function TaxonomyPicker({ value, onChange }: { value: TaxonomyValue; onChange: (v: TaxonomyValue) => void }) {
+export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue; onChange: (v: TaxonomyValue) => void; text?: string }) {
   const [vocab, setVocab] = useState<TaxVocab | null>(null);
   const [sugg, setSugg] = useState<{ merkmale: TaxTerm[]; vibes: TaxTerm[] }>({ merkmale: [], vibes: [] });
   const [tagSearch, setTagSearch] = useState('');
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mQuery, setMQuery] = useState('');
   const [vQuery, setVQuery] = useState('');
   const [hintIdx, setHintIdx] = useState(0);
@@ -26,22 +38,22 @@ export function TaxonomyPicker({ value, onChange }: { value: TaxonomyValue; onCh
   }, [value.tag]);
   useEffect(() => { const t = setInterval(() => setHintIdx(i => (i + 1) % VIBE_HINTS.length), 2200); return () => clearInterval(t); }, []);
 
+  const textSuggestions = useMemo(() => suggestTagsFromText(text ?? '', vocab), [text, vocab]);
+
   const set = (patch: Partial<TaxonomyValue>) => onChange({ ...value, ...patch });
   const toggle = (arr: string[], label: string) => arr.includes(label) ? arr.filter(x => x !== label) : [...arr, label];
+  const pickTag = (slug: string, label: string) => { set({ tag: slug, tagLabel: label }); setOpenGroup(null); setTagSearch(''); };
 
-  const tagsByGroup = useMemo(() => {
+  const groupTags = (gSlug: string) => (vocab?.tags ?? []).filter(t => t.groups.includes(gSlug)).sort((a, b) => a.label.localeCompare(b.label, 'de'));
+  const searchResults = useMemo(() => {
     const q = tagSearch.trim().toLowerCase();
-    const map: Record<string, { slug: string; label: string }[]> = {};
-    (vocab?.tags ?? []).filter(t => !q || t.label.toLowerCase().includes(q)).forEach(t =>
-      t.groups.forEach(g => { (map[g] ??= []).push(t); }));
-    return map;
+    return q ? (vocab?.tags ?? []).filter(t => t.label.toLowerCase().includes(q)).slice(0, 24) : [];
   }, [vocab, tagSearch]);
 
   const combo = (all: TaxTerm[], query: string, selected: string[]) => {
     const q = query.trim().toLowerCase();
     if (!q) return [] as { label: string; isNew: boolean }[];
-    const out = all.filter(t => t.label.toLowerCase().includes(q) && !selected.includes(t.label)).slice(0, 8)
-      .map(m => ({ label: m.label, isNew: false }));
+    const out = all.filter(t => t.label.toLowerCase().includes(q) && !selected.includes(t.label)).slice(0, 8).map(m => ({ label: m.label, isNew: false }));
     const exact = all.some(t => t.label.toLowerCase() === q) || selected.some(s => s.toLowerCase() === q);
     if (!exact) out.push({ label: query.trim(), isNew: true });
     return out;
@@ -49,37 +61,83 @@ export function TaxonomyPicker({ value, onChange }: { value: TaxonomyValue; onCh
 
   if (!vocab) return <div className="py-8 text-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>;
 
+  const selectedTag = vocab.tags.find(t => t.slug === value.tag) ?? null;
+  const groupColor = (gSlug?: string) => vocab.groups.find(g => g.slug === gSlug)?.color ?? '#8A6FB3';
+  const pillCls = 'px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95';
+  const pillOff = { background: 'white', color: '#71587a', borderColor: '#E4DCF0' } as const;
+
   return (
     <div className="flex flex-col gap-6">
       {/* ── TAG ── */}
       <div>
         <p className="text-sm font-bold text-[var(--color-aubergine)] mb-0.5">Was ist das für ein Ort?</p>
-        <p className="text-xs text-[var(--color-lavender)] mb-3">Wähle den passenden Typ (Tag).</p>
+        <p className="text-xs text-[var(--color-lavender)] mb-3">Wähle den passenden Typ.</p>
+
+        {/* C: Vorschläge aus dem Beschreibungstext */}
+        {!selectedTag && textSuggestions.length > 0 && (
+          <div className="mb-3 rounded-xl p-3" style={{ background: '#FFF6EE', border: '1px solid #F7D9BE' }}>
+            <p className="text-[11px] font-bold text-[var(--color-amber)] mb-1.5"><i className="fa-solid fa-wand-magic-sparkles mr-1" />Passt einer davon? (aus deinem Text erkannt)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {textSuggestions.map(t => (
+                <button key={t.slug} type="button" onClick={() => pickTag(t.slug, t.label)} className={pillCls}
+                  style={{ background: t.color, color: 'white', borderColor: t.color }}>{t.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Ausgewählter Tag */}
+        {selectedTag && (
+          <div className="mb-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: groupColor(selectedTag.groups[0]), color: 'white' }}>
+              {selectedTag.label}
+              <button type="button" onClick={() => set({ tag: null, tagLabel: null })} aria-label="Ändern"><i className="fa-solid fa-xmark text-[10px]" /></button>
+            </span>
+          </div>
+        )}
+
         <input value={tagSearch} onChange={e => setTagSearch(e.target.value)} placeholder="Tag suchen…"
-          className="w-full mb-3 rounded-xl px-3 py-2 text-sm outline-none bg-white" style={{ border: '1px solid #E4DCF0', color: '#34254C' }} />
-        <div className="flex flex-col gap-3">
-          {vocab.groups.map(g => {
-            const list = tagsByGroup[g.slug] ?? [];
-            if (!list.length) return null;
-            return (
-              <div key={g.slug}>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: g.color }}>{g.label}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {list.map(t => {
-                    const on = value.tag === t.slug;
-                    return (
-                      <button key={t.slug + g.slug} type="button" onClick={() => set({ tag: t.slug, tagLabel: t.label })}
-                        className="px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95"
-                        style={on ? { background: g.color, color: 'white', borderColor: g.color } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
-                        {t.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+          className="w-full rounded-xl px-3 py-2 text-sm outline-none bg-white" style={{ border: '1px solid #E4DCF0', color: '#34254C' }} />
+
+        {/* F: Suche → Treffer · sonst Gruppe offen → deren Tags · sonst 4 Gruppen mit Beispielen */}
+        {tagSearch.trim() ? (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {searchResults.length === 0
+              ? <p className="text-xs text-[var(--color-lavender)]">Kein Tag gefunden — beschreibe den Ort im vorigen Schritt genauer.</p>
+              : searchResults.map(t => (
+                <button key={t.slug} type="button" onClick={() => pickTag(t.slug, t.label)} className={pillCls}
+                  style={value.tag === t.slug ? { background: groupColor(t.groups[0]), color: 'white', borderColor: groupColor(t.groups[0]) } : pillOff}>{t.label}</button>
+              ))}
+          </div>
+        ) : openGroup ? (
+          <div className="mt-3">
+            <button type="button" onClick={() => setOpenGroup(null)} className="text-xs font-bold text-[var(--color-amber)] mb-2 inline-flex items-center gap-1">
+              <i className="fa-solid fa-chevron-left text-[10px]" />Alle Gruppen
+            </button>
+            <div className="flex flex-wrap gap-1.5">
+              {groupTags(openGroup).map(t => (
+                <button key={t.slug} type="button" onClick={() => pickTag(t.slug, t.label)} className={pillCls}
+                  style={value.tag === t.slug ? { background: groupColor(openGroup), color: 'white', borderColor: groupColor(openGroup) } : pillOff}>{t.label}</button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            {vocab.groups.map(g => {
+              const examples = groupTags(g.slug).slice(0, 4).map(t => t.label).join(' · ');
+              return (
+                <button key={g.slug} type="button" onClick={() => setOpenGroup(g.slug)}
+                  className="text-left rounded-2xl border-2 p-3 transition-all active:scale-[0.98]" style={{ borderColor: '#EFEAF5', background: 'white' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs flex-shrink-0" style={{ background: g.color }}><i className={`fa-solid ${g.icon}`} /></span>
+                    <span className="text-xs font-bold" style={{ color: g.color }}>{shortGroup(g.label)}</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-lavender)] leading-tight line-clamp-2">{examples} …</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {value.tag && (
@@ -88,24 +146,31 @@ export function TaxonomyPicker({ value, onChange }: { value: TaxonomyValue; onCh
             selected={value.merkmale} suggestions={sugg.merkmale.filter(m => !value.merkmale.includes(m.label))}
             query={mQuery} setQuery={setMQuery} combo={combo(vocab.merkmale, mQuery, value.merkmale)}
             placeholder="Merkmal suchen oder hinzufügen…" accent="#F99039"
-            onToggle={label => { set({ merkmale: toggle(value.merkmale, label) }); }} />
+            onToggle={label => set({ merkmale: toggle(value.merkmale, label) })} />
 
-          <TermSection title="Wie fühlt es sich an? (Vibes)" hint="Die Atmosphäre — beschreibe sie mit einem Gefühl."
+          <TermSection title="Wie fühlt es sich an? (Vibes)" hint="Die Atmosphäre — nur Adjektive (wie fühlt es sich an?)."
             selected={value.vibes} suggestions={sugg.vibes.filter(v => !value.vibes.includes(v.label))}
             query={vQuery} setQuery={setVQuery} combo={combo(vocab.vibes, vQuery, value.vibes)}
             placeholder={`Wie fühlst du dich dort? ${VIBE_HINTS[hintIdx]}`} accent="#8A6FB3"
-            onToggle={label => { set({ vibes: toggle(value.vibes, label) }); }} />
+            validateNew={looksLikeAdjective} invalidHint="Bitte ein Adjektiv (z.B. gemütlich, aufregend) — kein Hauptwort."
+            onToggle={label => set({ vibes: toggle(value.vibes, label) })} />
         </>
       )}
     </div>
   );
 }
 
-function TermSection({ title, hint, selected, suggestions, query, setQuery, combo, placeholder, onToggle, accent }: {
+function TermSection({ title, hint, selected, suggestions, query, setQuery, combo, placeholder, onToggle, accent, validateNew, invalidHint }: {
   title: string; hint: string; selected: string[]; suggestions: TaxTerm[];
   query: string; setQuery: (s: string) => void; combo: { label: string; isNew: boolean }[];
   placeholder: string; onToggle: (label: string) => void; accent: string;
+  validateNew?: (s: string) => boolean; invalidHint?: string;
 }) {
+  const [warn, setWarn] = useState('');
+  const add = (label: string, isNew: boolean) => {
+    if (isNew && validateNew && !validateNew(label)) { setWarn(invalidHint ?? 'Ungültig.'); return; }
+    setWarn(''); onToggle(label); setQuery('');
+  };
   return (
     <div>
       <p className="text-sm font-bold text-[var(--color-aubergine)] mb-0.5">{title}</p>
@@ -124,20 +189,19 @@ function TermSection({ title, hint, selected, suggestions, query, setQuery, comb
         <div className="flex flex-wrap gap-1.5 mb-2.5">
           {suggestions.map(s => (
             <button key={s.slug} type="button" onClick={() => onToggle(s.label)}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95"
-              style={{ background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
+              className="px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95" style={{ background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
               + {s.label}
             </button>
           ))}
         </div>
       )}
       <div className="relative">
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={placeholder}
-          className="w-full rounded-xl px-3 py-2 text-sm outline-none bg-white" style={{ border: '1px solid #E4DCF0', color: '#34254C' }} />
+        <input value={query} onChange={e => { setQuery(e.target.value); if (warn) setWarn(''); }} placeholder={placeholder}
+          className="w-full rounded-xl px-3 py-2 text-sm outline-none bg-white" style={{ border: `1px solid ${warn ? '#E5484D' : '#E4DCF0'}`, color: '#34254C' }} />
         {combo.length > 0 && (
           <div className="absolute z-10 left-0 right-0 mt-1 rounded-xl overflow-hidden bg-white" style={{ border: '1px solid #E4DCF0', boxShadow: '0 8px 24px rgba(52,37,76,0.15)' }}>
             {combo.map((r, i) => (
-              <button key={i} type="button" onClick={() => { onToggle(r.label); setQuery(''); }}
+              <button key={i} type="button" onClick={() => add(r.label, r.isNew)}
                 className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-bg-soft)] flex items-center gap-2">
                 {r.isNew
                   ? <><i className="fa-solid fa-plus text-[var(--color-amber)] text-xs" /><span className="text-[var(--color-aubergine)]">„{r.label}" hinzufügen</span></>
@@ -147,6 +211,7 @@ function TermSection({ title, hint, selected, suggestions, query, setQuery, comb
           </div>
         )}
       </div>
+      {warn && <p className="text-xs text-[#C96442] mt-1.5"><i className="fa-solid fa-circle-info mr-1" />{warn}</p>}
     </div>
   );
 }

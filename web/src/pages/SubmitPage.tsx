@@ -1275,7 +1275,7 @@ function StepCategory({ state, setState }: {
         <StepSub>Wähle den Typ und beschreibe kurz, was es dort gibt und wie es sich anfühlt.</StepSub>
       </div>
 
-      <TaxonomyPicker value={value} onChange={onChange} />
+      <TaxonomyPicker value={value} onChange={onChange} text={`${state.name} ${state.long.replace(/<[^>]*>/g, ' ')}`} />
     </div>
   );
 }
