@@ -825,14 +825,144 @@ function QuestionField({ q, value, onChange }: {
   return null;
 }
 
+// ─── Geführter Bild-Editor: Fokus ziehen · Live Hoch-/Querformat · drehen · Bildunterschrift ──
+async function rotateImageFile(url: string): Promise<File> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const i = new Image(); i.crossOrigin = 'anonymous';
+    i.onload = () => resolve(i); i.onerror = () => reject(new Error('load'));
+    i.src = url;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalHeight; canvas.height = img.naturalWidth; // 90° CW → Seiten tauschen
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvas');
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+  const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/webp', 0.9));
+  if (!blob) throw new Error('blob');
+  return new File([blob], `rot-${Date.now()}.webp`, { type: 'image/webp' });
+}
+
+function CropPreview({ url, cropX, cropY, ratio, label }: { url: string; cropX: number; cropY: number; ratio: string; label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1 w-full">
+      <div className="rounded-xl overflow-hidden bg-black/40 w-full ring-1 ring-white/15" style={{ aspectRatio: ratio }}>
+        <img src={url} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${cropX * 100}% ${cropY * 100}%` }} />
+      </div>
+      <span className="text-[10px] font-semibold text-white/70 uppercase tracking-wider">{label}</span>
+    </div>
+  );
+}
+
+function MediaEditorModal({ items, index, setIndex, onClose, onUpdate }: {
+  items: MediaItem[]; index: number; setIndex: (i: number) => void; onClose: () => void;
+  onUpdate: (id: string, patch: Partial<MediaItem>) => void;
+}) {
+  const item = items[index];
+  const [ar, setAr] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  useEffect(() => { setAr(item?.isLandscape ? 3 / 2 : 3 / 4); }, [index, item?.isLandscape]);
+
+  if (!item) return null;
+  const url = item.serverUrl ?? item.localUrl;
+  const isImage = item.type === 'image';
+  const canCrop = isImage && !item.uploading && !item.error && !busy;
+
+  const setFocal = (clientX: number, clientY: number) => {
+    const el = frameRef.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    onUpdate(item.id, {
+      cropX: Math.min(1, Math.max(0, (clientX - r.left) / r.width)),
+      cropY: Math.min(1, Math.max(0, (clientY - r.top) / r.height)),
+    });
+  };
+
+  async function rotate() {
+    if (!item.serverUrl) return;
+    setBusy(true);
+    try {
+      const file = await rotateImageFile(item.serverUrl);
+      const { url: newUrl } = await mediaApi.upload(file);
+      onUpdate(item.id, { serverUrl: newUrl, localUrl: newUrl, cropX: 0.5, cropY: 0.5, isLandscape: undefined });
+    } catch { /* Drehen fehlgeschlagen — Original behalten */ }
+    setBusy(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: 'rgba(15,11,26,0.98)' }}>
+      <div className="flex items-center justify-between px-4 py-3 text-white flex-shrink-0">
+        <span className="text-sm font-semibold">Bild {index + 1} von {items.length}</span>
+        <button type="button" onClick={onClose} className="text-sm font-bold text-[var(--color-amber)]">Fertig</button>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 flex flex-col gap-4">
+        {isImage ? (
+          <>
+            <p className="text-center text-white/60 text-xs">Zieh mit dem Finger über das Bild — der Punkt markiert den wichtigsten Bereich, um den zugeschnitten wird.</p>
+            <div className="relative mx-auto touch-none cursor-crosshair" ref={frameRef} style={{ aspectRatio: ar, maxHeight: '44vh', maxWidth: '100%' }}
+              onPointerDown={e => { if (!canCrop) return; dragging.current = true; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); setFocal(e.clientX, e.clientY); }}
+              onPointerMove={e => { if (dragging.current) setFocal(e.clientX, e.clientY); }}
+              onPointerUp={() => { dragging.current = false; }} onPointerCancel={() => { dragging.current = false; }}>
+              <img src={url} alt="" draggable={false} className="w-full h-full object-contain select-none rounded-xl pointer-events-none"
+                onLoad={e => setAr(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)} />
+              {busy && <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40"><i className="fa-solid fa-circle-notch fa-spin text-white text-2xl" /></div>}
+              {canCrop && (
+                <div className="absolute w-9 h-9 rounded-full border-[3px] border-white -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
+                  style={{ left: `${item.cropX * 100}%`, top: `${item.cropY * 100}%`, boxShadow: '0 0 0 2px rgba(0,0,0,0.5), 0 2px 10px rgba(0,0,0,0.6)' }}>
+                  <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                </div>
+              )}
+            </div>
+            <div className="flex justify-center items-start gap-4 max-w-xs mx-auto w-full">
+              <div className="w-24 flex-shrink-0"><CropPreview url={url} cropX={item.cropX} cropY={item.cropY} ratio="4/5" label="Hochformat" /></div>
+              <div className="flex-1 pt-0"><CropPreview url={url} cropX={item.cropX} cropY={item.cropY} ratio="16/9" label="Querformat" /></div>
+            </div>
+            <div className="flex justify-center">
+              <button type="button" onClick={rotate} disabled={busy || !item.serverUrl}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white disabled:opacity-40" style={{ background: 'rgba(255,255,255,0.12)' }}>
+                <i className="fa-solid fa-rotate-right" />Drehen
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="mx-auto w-full max-w-xs rounded-2xl overflow-hidden bg-black mt-4" style={{ aspectRatio: '9/16', maxHeight: '50vh' }}>
+            <video src={url} className="w-full h-full object-contain" controls playsInline muted={item.muted ?? true} />
+          </div>
+        )}
+
+        <div className="max-w-md mx-auto w-full">
+          <label className="block text-xs font-semibold text-white/70 mb-1.5">Bildunterschrift (optional)</label>
+          <input value={item.caption} onChange={e => onUpdate(item.id, { caption: e.target.value })} maxLength={120}
+            placeholder="Was ist auf dem Bild zu sehen?"
+            className="w-full rounded-xl px-3 py-2.5 text-sm outline-none bg-white/10 text-white placeholder-white/40 border border-white/15 focus:border-[var(--color-amber)]" />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 px-4 py-3 border-t border-white/10 flex-shrink-0">
+        <button type="button" onClick={() => setIndex(index - 1)} disabled={index === 0}
+          className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white/80 disabled:opacity-30"><i className="fa-solid fa-arrow-left mr-1.5" />Zurück</button>
+        <button type="button" onClick={() => index < items.length - 1 ? setIndex(index + 1) : onClose()}
+          className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white" style={{ background: 'var(--color-amber)' }}>
+          {index < items.length - 1 ? <>Weiter<i className="fa-solid fa-arrow-right ml-1.5" /></> : 'Fertig'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── MediaCard ────────────────────────────────────────────────────────────────
 function MediaCard({
-  item, isHero, onSetHero, onUpdate, onRemove,
+  item, isHero, onSetHero, onUpdate, onRemove, onEdit,
 }: {
   item: MediaItem; isHero: boolean;
   onSetHero: () => void;
   onUpdate: (patch: Partial<MediaItem>) => void;
   onRemove: () => void;
+  onEdit: () => void;
 }) {
   const displayUrl = item.serverUrl ?? item.localUrl;
   const pos = `${item.cropX * 100}% ${item.cropY * 100}%`;
@@ -864,58 +994,22 @@ function MediaCard({
       style={{ borderColor: isHero ? C.amber : '#E4DCF0', boxShadow: isHero ? `0 0 0 2px ${C.amber}22` : 'none' }}>
       <div className="flex gap-3 p-4">
 
-        {/* ── Dual preview (image only) ─────────────────────── */}
+        {/* ── Vorschau (tippen → geführter Editor: zuschneiden, drehen, Bildunterschrift) ── */}
         {item.type === 'image' ? (
-          <div className="flex-shrink-0 flex gap-2">
-
-            {/* Portrait 2:3 — crop horizontal */}
-            <div className="flex flex-col items-center gap-1">
-              <p className="text-[8px] font-bold text-[#C4AED0] uppercase tracking-wider">Hochformat</p>
-              <div className="w-[54px] rounded-xl overflow-hidden bg-[#F0EBF7]" style={{ aspectRatio: '2/3' }}>
-                {imgContent()}
-              </div>
-              {!item.uploading && !item.error && (
-                <>
-                  <input
-                    type="range" min="0" max="100"
-                    value={Math.round(item.cropX * 100)}
-                    onChange={e => onUpdate({ cropX: Number(e.target.value) / 100 })}
-                    className="w-[54px] cursor-pointer accent-[#F99039] h-1.5"
-                    title="Links / Rechts"
-                  />
-                  <p className="text-[8px] text-[#C4AED0]">← →</p>
-                </>
-              )}
-            </div>
-
-            {/* Landscape 16:9 — crop vertical */}
-            <div className="flex flex-col items-center gap-1">
-              <p className="text-[8px] font-bold text-[#C4AED0] uppercase tracking-wider">Querformat</p>
-              <div className="rounded-xl overflow-hidden bg-[#F0EBF7]" style={{ width: '80px', aspectRatio: '16/9' }}>
-                {imgContent()}
-              </div>
-              {!item.uploading && !item.error && (
-                <>
-                  <input
-                    type="range" min="0" max="100"
-                    value={Math.round(item.cropY * 100)}
-                    onChange={e => onUpdate({ cropY: Number(e.target.value) / 100 })}
-                    className="w-[54px] cursor-pointer accent-[#F99039] h-1.5"
-                    title="Oben / Unten"
-                  />
-                  <p className="text-[8px] text-[#C4AED0]">↑ ↓</p>
-                </>
-              )}
-            </div>
-          </div>
+          <button type="button" onClick={onEdit} disabled={item.uploading || !!item.error}
+            className="relative flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-[#F0EBF7] active:scale-[0.97] transition-transform" style={{ aspectRatio: '3/4' }}>
+            {imgContent()}
+            {!item.uploading && !item.error && (
+              <span className="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-black/55 backdrop-blur flex items-center justify-center text-white text-[11px]">
+                <i className="fa-solid fa-crop-simple" />
+              </span>
+            )}
+          </button>
         ) : (
-          /* Video — single preview */
-          <div className="flex-shrink-0 w-20 rounded-xl overflow-hidden bg-[#1a1a2e] flex items-center justify-center"
-            style={{ aspectRatio: '2/3' }}>
-            {item.uploading
-              ? <i className="fa-solid fa-circle-notch fa-spin text-white" />
-              : <i className="fa-solid fa-film text-white text-xl" />}
-          </div>
+          <button type="button" onClick={onEdit}
+            className="relative flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-[#1a1a2e] flex items-center justify-center active:scale-[0.97] transition-transform" style={{ aspectRatio: '3/4' }}>
+            {item.uploading ? <i className="fa-solid fa-circle-notch fa-spin text-white" /> : <i className="fa-solid fa-film text-white text-xl" />}
+          </button>
         )}
 
         {/* ── Info + caption ────────────────────────────────── */}
@@ -974,17 +1068,16 @@ function MediaCard({
             </button>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-[#9A8FAA] mb-1">
-              Bildunterschrift
-            </label>
-            <input type="text" value={item.caption}
-              onChange={e => onUpdate({ caption: e.target.value })}
-              placeholder="Was zeigt dieses Foto?"
-              maxLength={150}
-              className="w-full border rounded-lg px-3 py-2 text-xs outline-none border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] transition-colors"
-            />
-          </div>
+          {!item.uploading && !item.error && (
+            <button type="button" onClick={onEdit} className="text-left w-full">
+              {item.caption
+                ? <p className="text-xs text-[#34254C] line-clamp-2">{item.caption}</p>
+                : <p className="text-xs italic text-[#A89BB5]">Keine Bildunterschrift</p>}
+              <span className="text-[11px] font-semibold inline-flex items-center gap-1 mt-1" style={{ color: C.amber }}>
+                <i className="fa-solid fa-crop-simple text-[10px]" />{item.type === 'image' ? 'Zuschneiden & beschriften' : 'Bearbeiten'}
+              </span>
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1003,6 +1096,7 @@ function ImageUploader({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+  const [editIdx, setEditIdx] = useState<number | null>(null);
 
   function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -1056,6 +1150,7 @@ function ImageUploader({
           onSetHero={() => onSetHero(idx)}
           onUpdate={patch => onItemChange(item.id, patch)}
           onRemove={() => onRemove(item.id)}
+          onEdit={() => setEditIdx(idx)}
         />
       ))}
 
@@ -1063,6 +1158,15 @@ function ImageUploader({
         <p className="text-xs text-center text-[#B0A3BC] py-2">
           Maximum von {maxItems} Dateien erreicht.
         </p>
+      )}
+
+      {editIdx !== null && items[editIdx] && (
+        <MediaEditorModal
+          items={items} index={editIdx}
+          setIndex={i => setEditIdx(Math.max(0, Math.min(items.length - 1, i)))}
+          onClose={() => setEditIdx(null)}
+          onUpdate={onItemChange}
+        />
       )}
     </div>
   );
