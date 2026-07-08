@@ -13,6 +13,8 @@ import { ReachControls } from '../components/ui/ReachControls.js';
 import { ReachLayer } from '../components/map/ReachLayer.js';
 import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagFilter.js';
 import type { TagSelection } from '../components/ui/TagFilter.js';
+import { SwipeDeck } from '../components/ui/SwipeDeck.js';
+import { BrandLogo } from '../components/ui/BrandLogo.js';
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place, Transport } from '../types/index.js';
 
@@ -151,6 +153,7 @@ export function MobileEntdecken() {
   // ── Ziehbares Listen-Sheet ────────────────────────────────────────────────
   const listRef = useRef<HTMLDivElement>(null);
   const [sheetExpanded, setSheetExpanded] = useState(entdeckenCache.sheetExpanded);
+  const [swipeOpen, setSwipeOpen] = useState(false);   // aufziehendes Swipe-Overlay
   const [sheetDragY, setSheetDragY] = useState(0);
   const [sheetDragging, setSheetDragging] = useState(false);
   const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
@@ -224,15 +227,8 @@ export function MobileEntdecken() {
     setSheetExpanded(true);
     setTimeout(() => listRef.current?.querySelector(`[data-place-id="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
   }
-  // Swipe-Modus mit denselben Filtern (Standort + Verkehrsmittel/Reisezeit)
-  function goSwipe() {
-    const q = new URLSearchParams();
-    if (reachCenter) { q.set('lat', String(reachCenter.lat)); q.set('lng', String(reachCenter.lng)); }
-    if (reach.travelMode !== 'radius') { q.set('mode', reach.travelMode); q.set('minutes', String(reach.travelMinutes)); }
-    if (mode !== 'new') q.set('known', '1');   // „Nur neue" auf der Karte → auch im Swipe nur neue Orte
-    const s = q.toString();
-    navigate(`/swipe${s ? `?${s}` : ''}`);
-  }
+  // Swipe-Modus als aufziehendes Overlay — nutzt direkt die auf der Karte gefilterten Orte (kein Seitenwechsel)
+  function goSwipe() { setSwipeOpen(true); }
   function onListTouchStart(e: React.TouchEvent) { const t = e.touches[0]; listSwipe.current = { x: t.clientX, y: t.clientY }; }
   function onListTouchEnd(e: React.TouchEvent) {
     const s = listSwipe.current; listSwipe.current = null; if (!s) return;
@@ -424,6 +420,21 @@ export function MobileEntdecken() {
           ))}
         </div>
       </div>
+
+      {/* ── Swipe-Overlay: fährt über die Karte hoch, eigener kompakter Header, kein Seitenwechsel ── */}
+      {swipeOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--color-bg)', animation: 'gtSlideUp 0.3s cubic-bezier(.32,.72,0,1)' }}>
+          <div className="flex-shrink-0 flex items-center justify-between px-4 h-12 border-b border-[var(--color-bg-soft)]" style={{ marginTop: 'env(safe-area-inset-top)' }}>
+            <BrandLogo size="sm" />
+            <button onClick={() => setSwipeOpen(false)} className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--color-aubergine)] active:scale-90 transition-transform" aria-label="Swipe schließen">
+              <i className="fa-solid fa-chevron-down text-lg" />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <SwipeDeck places={shownPlaces} onOpenDetail={id => { setSwipeOpen(false); navigate(`/place/${id}`); }} />
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
