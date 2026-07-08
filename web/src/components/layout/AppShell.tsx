@@ -17,9 +17,11 @@ interface Props {
   headerRight?: ReactNode;
   /** Hide the mobile top header entirely */
   noHeader?: boolean;
+  /** Eingebettet (z.B. im Karten-Overlay): ohne Sidebar/BottomNav/Header — nur der Inhalt */
+  bare?: boolean;
 }
 
-export function AppShell({ children, showBack, title, headerRight, noHeader }: Props) {
+export function AppShell({ children, showBack, title, headerRight, noHeader, bare }: Props) {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [notif, setNotif] = useState(0);
@@ -33,6 +35,9 @@ export function AppShell({ children, showBack, title, headerRight, noHeader }: P
     if (notif > 0) { notificationsApi.seen().catch(() => {}); setNotif(0); }
     navigate('/notifications');
   };
+
+  // Eingebettet (Karten-Overlay): nur der Inhalt, ohne Sidebar/BottomNav/Header
+  if (bare) return <div className="min-h-full bg-[var(--color-bg)]">{children}</div>;
 
   return (
     <div className="min-h-dvh bg-white">

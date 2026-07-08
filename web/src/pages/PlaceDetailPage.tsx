@@ -980,8 +980,9 @@ function VisitorContribPanel({ place, user, onDone, showToast }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export function PlaceDetailPage() {
-  const { id } = useParams<{ id: string }>();
+export function PlaceDetailPage({ id: idProp, embedded }: { id?: string; embedded?: boolean } = {}) {
+  const { id: routeId } = useParams<{ id: string }>();
+  const id = idProp ?? routeId;
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { places, savedIds, visitedIds, toggleSave, markVisited, trips, loadTrips, loadPlaces, funnelAnswers } = useAppStore();
@@ -1594,7 +1595,7 @@ async function handleVerifyToggle() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <AppShell noHeader>
+    <AppShell noHeader bare={embedded}>
 
       {/* ══ Mobil: Vollbildkarte im Hintergrund ══════════════════════════════ */}
       {isMobile && place.lat && place.lng && (
@@ -1834,12 +1835,14 @@ async function handleVerifyToggle() {
 
         {/* ── Row 1: Navigation bar ─────────────────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 flex items-center gap-3">
-          {/* Back button — small lavender circle */}
-          <button onClick={() => navigate(-1)}
-            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
-            style={{ background: '#F1ECF4' }}>
-            <i className="fa-solid fa-arrow-left text-sm" style={{ color: '#34254c' }} />
-          </button>
+          {/* Back button — small lavender circle (im Overlay übernimmt der Overlay-Header das Zurück) */}
+          {!embedded && (
+            <button onClick={() => navigate(-1)}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
+              style={{ background: '#F1ECF4' }}>
+              <i className="fa-solid fa-arrow-left text-sm" style={{ color: '#34254c' }} />
+            </button>
+          )}
 
           {/* „Ich war hier": grüner Status-Button (besucht) oder Toggle */}
           {isVisited ? (

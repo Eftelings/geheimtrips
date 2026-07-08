@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -15,6 +15,9 @@ import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagF
 import type { TagSelection } from '../components/ui/TagFilter.js';
 import { SwipeDeck } from '../components/ui/SwipeDeck.js';
 import { BrandLogo } from '../components/ui/BrandLogo.js';
+
+// Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
+const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place, Transport } from '../types/index.js';
 
@@ -154,6 +157,7 @@ export function MobileEntdecken() {
   const listRef = useRef<HTMLDivElement>(null);
   const [sheetExpanded, setSheetExpanded] = useState(entdeckenCache.sheetExpanded);
   const [swipeOpen, setSwipeOpen] = useState(false);   // aufziehendes Swipe-Overlay
+  const [placeOpen, setPlaceOpen] = useState<string | null>(null);   // Ortsdetails im Overlay
   const [sheetDragY, setSheetDragY] = useState(0);
   const [sheetDragging, setSheetDragging] = useState(false);
   const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
@@ -393,7 +397,7 @@ export function MobileEntdecken() {
               Keine Orte im Radius. Erhöhe Reisezeit/Radius oder ändere die Kategorie.
             </div>
           ) : listPlaces.map(({ p, dist }) => (
-            <button key={p.id} data-place-id={p.id} onClick={() => { if (justSwiped.current) return; navigate(`/place/${p.id}`); }}
+            <button key={p.id} data-place-id={p.id} onClick={() => { if (justSwiped.current) return; setPlaceOpen(p.id); }}
               className="w-full flex items-center gap-3 py-2 px-2 rounded-2xl text-left transition-colors active:scale-[0.99]"
               style={{ background: p.id === selectedId ? '#F1ECF4' : 'transparent' }}>
               <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
@@ -431,7 +435,25 @@ export function MobileEntdecken() {
             </button>
           </div>
           <div className="flex-1 min-h-0">
-            <SwipeDeck places={shownPlaces} onOpenDetail={id => { setSwipeOpen(false); navigate(`/place/${id}`); }} />
+            <SwipeDeck places={shownPlaces} onOpenDetail={id => setPlaceOpen(id)} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Orts-Overlay: Klick auf einen Ort fährt die Details hoch (kein Seitenwechsel) ── */}
+      {placeOpen && (
+        <div className="fixed inset-0 z-[55] flex flex-col" style={{ background: 'var(--color-bg)', animation: 'gtSlideUp 0.3s cubic-bezier(.32,.72,0,1)' }}>
+          <div className="flex-shrink-0 flex items-center justify-between px-2 h-12 border-b border-[var(--color-bg-soft)]" style={{ marginTop: 'env(safe-area-inset-top)' }}>
+            <button onClick={() => setPlaceOpen(null)} className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--color-aubergine)] active:scale-90 transition-transform" aria-label="Zurück zur Karte">
+              <i className="fa-solid fa-arrow-left text-lg" />
+            </button>
+            <BrandLogo size="sm" />
+            <div className="w-10" />
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            <Suspense fallback={<div className="h-full flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
+              <PlaceDetailEmbed id={placeOpen} embedded />
+            </Suspense>
           </div>
         </div>
       )}
