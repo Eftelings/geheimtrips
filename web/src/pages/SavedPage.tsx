@@ -8,6 +8,7 @@ import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { PlaceCard } from '../components/ui/PlaceCard.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { useAppStore } from '../store/useAppStore.js';
+import { placesApi } from '../services/api.js';
 import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagFilter.js';
 import type { TagSelection } from '../components/ui/TagFilter.js';
 import { useTaxVocab } from '../data/taxVocab.js';
@@ -112,11 +113,13 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   const tab: Tab = initialTab;   // Orte vs. Trips wird über die Route bestimmt (Bottom-Nav)
   // Trips-Ansicht: Alle anzeigen · nach Anreisezeit filtern · nach Datum sortieren
   const [tripView, setTripView]  = useState<'alle' | 'anreise' | 'datum'>('alle');
+  const [orteView, setOrteView]  = useState<'gemerkt' | 'anreise' | 'beigetragen'>('gemerkt');
   const [q, setQ]                 = useState('');
   const vocab = useTaxVocab();
   const [tagSel, setTagSel] = useState<TagSelection>(EMPTY_TAG_SEL);
   const catActive = tagSel.group !== null || tagSel.tag !== null;
-  const [showMap, setShowMap]     = useState(true);
+  const [showMap, setShowMap]     = useState(false);   // Liste zuerst — Karte erst per Karten-Icon
+  const [createdPlaces, setCreatedPlaces] = useState<Place[]>([]);
   const [mapReady, setMapReady]   = useState(false);
   // Standort-Suche (wie Startseite): Stadt wählen → Reichweiten-Filter
   const [geoSugs, setGeoSugs]           = useState<GeoLocation[]>([]);
@@ -132,6 +135,8 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
 
   useEffect(() => { loadPlaces(); loadTrips(); loadSavedTags(); }, []); // eslint-disable-line
   useEffect(() => { setMapReady(true); }, []);
+  // Beigetragene Orte (selbst eingereicht) — für den Reiter „Beigetragene"
+  useEffect(() => { placesApi.myCreated().then(setCreatedPlaces).catch(() => {}); }, []);
 
   // Eigener Standort (still): GPS → IP-Fallback — Zentrum für Verkehrsmittel-Reichweiten
   useEffect(() => {
@@ -164,6 +169,8 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   }
 
   const savedPlaces = useMemo(() => places.filter(p => savedIds.has(p.id)), [places, savedIds]);
+  // Basis je Reiter: Beigetragene = eigene Orte, sonst gemerkte Orte
+  const orteBase = orteView === 'beigetragen' ? createdPlaces : savedPlaces;
 
   // Alle eigenen Tags der Sammlung (für die Filterleiste)
   const allTags = useMemo(
@@ -173,7 +180,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
 
   // ── Gefilterte Orte: Reichweite + Freitext + Kategorie + eigene Tags ──────
   const filteredPlaces = useMemo(() => {
-    let list: (Place & { _dist?: number })[] = savedPlaces;
+    let list: (Place & { _dist?: number })[] = orteBase;
     if (catActive) list = list.filter(p => placeMatchesTag(p, tagSel, vocab));
     if (tagFilter) list = list.filter(p => (savedTags[p.id] ?? []).includes(tagFilter));
     const s = q.trim().toLowerCase();
@@ -186,7 +193,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
     }
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedPlaces, q, tagSel, catActive, vocab, tagFilter, savedTags, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
+  }, [orteBase, q, tagSel, catActive, vocab, tagFilter, savedTags, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
 
   // ── Gefilterte Trips: Kategorie-Tag + Freitext + Reichweite ──────────────
   const filteredTrips = useMemo(() => {
@@ -298,6 +305,27 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
           </div>
         )}
 
+        {/* Orte-Ansicht: Gemerkte · Anreisezeit · Beigetragene */}
+        {tab === 'orte' && (
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {([
+              { id: 'gemerkt',     icon: 'fa-bookmark',        label: 'Gemerkte' },
+              { id: 'anreise',     icon: 'fa-car-side',        label: 'Anreisezeit' },
+              { id: 'beigetragen', icon: 'fa-feather-pointed', label: 'Beigetragene' },
+            ] as const).map(v => (
+              <button key={v.id} onClick={() => setOrteView(v.id)}
+                className={`flex flex-col items-center gap-1 py-2.5 rounded-2xl border-2 text-xs font-bold transition-colors ${
+                  orteView === v.id
+                    ? 'border-[var(--color-amber)] bg-[var(--color-amber)] text-white'
+                    : 'border-[var(--color-bg-soft)] bg-white text-[var(--color-lavender)]'
+                }`}>
+                <i className={`fa-solid ${v.icon} text-sm`} />
+                {v.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ── Aktives Suchzentrum ───────────────────────────────────────── */}
         {searchCenter && centerLabel && (tab === 'orte' || tripView === 'anreise') && (
           <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -365,7 +393,8 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
           </button>
         </div>
 
-        {/* ── Reichweite: Radius oder echte Fahrzeit (wie Startseite) ────── */}
+        {/* ── Reichweite: nur im Reiter „Anreisezeit" (Orte) bzw. Trips/Anreisezeit ────── */}
+        {((tab === 'orte' && orteView === 'anreise') || (tab === 'trips' && tripView === 'anreise')) && (
         <div className="mb-4">
           <ReachControls
             travelMode={travelMode} setTravelMode={setTravelMode}
@@ -382,6 +411,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
             </p>
           )}
         </div>
+        )}
         </>)}
 
         {/* ── Orte-Tab ──────────────────────────────────────────────────── */}
@@ -392,8 +422,8 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
               <TagFilter value={tagSel} onChange={setTagSel} />
             </div>
 
-            {/* Eigene Tags — Filterleiste */}
-            {allTags.length > 0 && (
+            {/* Eigene Tags — Filterleiste (nur bei gemerkten Orten) */}
+            {orteView === 'gemerkt' && allTags.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-none">
                 {allTags.map(t => (
                   <button key={t} onClick={() => setTagFilter(tagFilter === t ? null : t)}
@@ -409,7 +439,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
             {hasFilter && (
               <p className="text-xs text-[var(--color-lavender)] mb-3">
                 <span className="font-semibold text-[var(--color-aubergine)]">{filteredPlaces.length}</span>{' '}
-                von {savedPlaces.length} gemerkten Orten
+                von {orteBase.length} {orteView === 'beigetragen' ? 'beigetragenen' : 'gemerkten'} Orten
                 {reachActive && travelMode === 'radius' && centerLabel && <> im Umkreis von {radiusKm} km um {centerLabel}</>}
                 {reachActive && travelMode !== 'radius' && (
                   <> erreichbar in {travelMinutes} Min ({modeLabel}) {centerLabel ? `ab ${centerLabel}` : 'ab deinem Standort'}</>
@@ -417,18 +447,23 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
               </p>
             )}
 
-            {/* Karte */}
-            {showMap && mapReady && savedPlaces.length > 0 && (
+            {/* Karte — nur wenn per Karten-Icon eingeblendet */}
+            {showMap && mapReady && orteBase.length > 0 && (
               <CollectionMap places={filteredPlaces} center={activeCenter} travel={travel}
                 radiusKm={radiusKm} reachActive={reachActive}
                 onOpen={id => navigate(`/place/${id}`)} />
             )}
 
-            {savedPlaces.length === 0 ? (
+            {orteBase.length === 0 ? (
               <div className="text-center py-16 text-[var(--color-lavender)]">
-                <i className="fa-regular fa-bookmark text-5xl mb-4 opacity-30" />
-                <p className="font-semibold mb-1">Noch nichts gemerkt</p>
-                <p className="text-sm">Swipe Orte nach rechts, um sie hier zu speichern.</p>
+                <i className={`${orteView === 'beigetragen' ? 'fa-solid fa-feather-pointed' : 'fa-regular fa-bookmark'} text-5xl mb-4 opacity-30`} />
+                <p className="font-semibold mb-1">{orteView === 'beigetragen' ? 'Noch nichts beigetragen' : 'Noch nichts gemerkt'}</p>
+                <p className="text-sm">{orteView === 'beigetragen' ? 'Reiche einen Ort ein — er erscheint dann hier.' : 'Swipe Orte nach rechts, um sie hier zu speichern.'}</p>
+                {orteView === 'beigetragen' && (
+                  <button onClick={() => navigate('/submit')} className="mt-4 bg-[var(--color-amber)] text-white font-bold px-5 py-2.5 rounded-2xl text-sm">
+                    <i className="fa-solid fa-feather-pointed mr-2" />Ort einreichen
+                  </button>
+                )}
               </div>
             ) : filteredPlaces.length === 0 ? (
               <div className="text-center py-12 text-[var(--color-lavender)]">
