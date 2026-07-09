@@ -49,7 +49,7 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
 
         {/* ── Mobile header (Instagram-Stil) ───────────────────── */}
         {!noHeader && (
-          <header className="md:hidden sticky top-0 z-20 bg-[var(--color-bg)] border-b border-[var(--color-bg-soft)] flex items-center px-4 h-14 gap-3">
+          <header className="md:hidden sticky top-0 z-20 bg-[var(--color-bg)] border-b border-[var(--color-bg-soft)] flex items-center px-4 h-12 gap-3">
             {/* Links: Zurück (Unterseiten) oder Feder zum Einreichen */}
             {showBack ? (
               <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Zurück">
@@ -85,7 +85,7 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
                       )}
                     </button>
                     <button onClick={() => navigate('/profile')} aria-label="Profil">
-                      <Avatar name={user.name} src={user.avatarUrl} size={32} />
+                      <Avatar name={user.name} src={user.avatarUrl} size={28} />
                     </button>
                   </>
                 )

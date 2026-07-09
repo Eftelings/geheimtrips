@@ -279,7 +279,7 @@ export function MobileEntdecken() {
       )}
 
       {/* Toolbar — direkt unter dem Standard-Header (56px), gleiche Koordinaten wie der Header */}
-      <div className="fixed left-0 right-0 z-20 px-3 flex flex-col gap-2" style={{ top: '60px' }}>
+      <div className="fixed left-0 right-0 z-20 px-3 flex flex-col gap-2" style={{ top: '52px' }}>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setPanel(panel === 'loc' ? null : 'loc')} className={toolBtn}
             style={{ ...toolShadow, color: searchCenter ? '#F99039' : '#34254c' }} aria-label="Standort">
@@ -318,7 +318,7 @@ export function MobileEntdecken() {
         <>
           <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
           <div className="fixed left-3 right-3 z-40 bg-white rounded-2xl p-3.5"
-            style={{ top: '116px', boxShadow: '0 14px 40px rgba(52,37,76,0.25)', maxHeight: '58vh', overflowY: 'auto' }}>
+            style={{ top: '108px', boxShadow: '0 14px 40px rgba(52,37,76,0.25)', maxHeight: '58vh', overflowY: 'auto' }}>
             {panel === 'loc' && (
               <div>
                 <div className="flex items-center gap-2 bg-[var(--color-bg-soft)] rounded-xl px-3 h-10 mb-2">
