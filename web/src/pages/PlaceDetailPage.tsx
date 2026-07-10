@@ -980,9 +980,13 @@ function VisitorContribPanel({ place, user, onDone, showToast }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export function PlaceDetailPage({ id: idProp, embedded }: { id?: string; embedded?: boolean } = {}) {
+export function PlaceDetailPage({ id: idProp, embedded, onOpenPlace, onClose }: { id?: string; embedded?: boolean; onOpenPlace?: (id: string) => void; onClose?: () => void } = {}) {
   const { id: routeId } = useParams<{ id: string }>();
   const id = idProp ?? routeId;
+  // Im Overlay: Ort→Ort-Links (z.B. ähnliche Orte) im Overlay öffnen statt Seitenwechsel;
+  // Zurück schließt das Overlay statt die Route zu wechseln.
+  const openPlace = (pid: string) => (onOpenPlace ? onOpenPlace(pid) : navigate(`/place/${pid}`));
+  const goBack = () => (embedded && onClose ? onClose() : navigate(-1));
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { places, savedIds, visitedIds, toggleSave, markVisited, trips, loadTrips, loadPlaces, funnelAnswers } = useAppStore();
@@ -1600,23 +1604,35 @@ async function handleVerifyToggle() {
       {/* ══ Mobil: Vollbildkarte im Hintergrund ══════════════════════════════ */}
       {isMobile && place.lat && place.lng && (
         <div className="fixed inset-0 z-0" style={{ background: '#e8e4ee' }}>
-          <MapContainer center={[place.lat, place.lng]} zoom={14}
-            scrollWheelZoom zoomControl={false} attributionControl={false}
-            style={{ height: '100%', width: '100%' }}>
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            {/* Reichweite: Isochrone / Radius-Kreis + Standort-Zentrum */}
-            <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
-            {/* Bei Radius-/Verkehrsmittel-Änderung auf die Reichweite einpassen (Radius wird sichtbar) */}
-            <FitReachOnChange center={reachCenter} travel={travel} radiusKm={radiusKm} place={[place.lat, place.lng]} />
-            {/* Andere Orte (orange) — Klick wechselt das Sheet auf diesen Ort */}
-            {mapPlaces.map(p => (
-              <Marker key={p.id} position={[p.lat as number, p.lng as number]} icon={brandMarker}
-                eventHandlers={{ click: () => navigate(`/place/${p.id}`) }} />
-            ))}
-            {/* Aktueller Ort (lila) zuletzt → liegt über den anderen */}
-            <Marker position={[place.lat, place.lng]} icon={currentMarker} />
-            <MapRecenter lat={place.lat} lng={place.lng} />
-          </MapContainer>
+          {embedded ? (
+            // Im Karten-Overlay läuft schon eine Leaflet-Karte → hier keine zweite (Performance).
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 px-8 text-center"
+              style={{ background: 'radial-gradient(circle at 50% 40%, #f1ecf4, #e2dcec)' }}>
+              <i className="fa-solid fa-location-dot text-4xl text-[var(--color-amber)]" />
+              <p className="text-sm font-semibold text-[var(--color-aubergine)]">{place.region}</p>
+              <a href={navUrl} target="_blank" rel="noopener noreferrer" className="mt-1 text-xs font-bold text-[var(--color-amber)]">
+                <i className="fa-solid fa-diamond-turn-right mr-1" />Route öffnen
+              </a>
+            </div>
+          ) : (
+            <MapContainer center={[place.lat, place.lng]} zoom={14}
+              scrollWheelZoom zoomControl={false} attributionControl={false}
+              style={{ height: '100%', width: '100%' }}>
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              {/* Reichweite: Isochrone / Radius-Kreis + Standort-Zentrum */}
+              <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
+              {/* Bei Radius-/Verkehrsmittel-Änderung auf die Reichweite einpassen (Radius wird sichtbar) */}
+              <FitReachOnChange center={reachCenter} travel={travel} radiusKm={radiusKm} place={[place.lat, place.lng]} />
+              {/* Andere Orte (orange) — Klick wechselt das Sheet auf diesen Ort */}
+              {mapPlaces.map(p => (
+                <Marker key={p.id} position={[p.lat as number, p.lng as number]} icon={brandMarker}
+                  eventHandlers={{ click: () => navigate(`/place/${p.id}`) }} />
+              ))}
+              {/* Aktueller Ort (lila) zuletzt → liegt über den anderen */}
+              <Marker position={[place.lat, place.lng]} icon={currentMarker} />
+              <MapRecenter lat={place.lat} lng={place.lng} />
+            </MapContainer>
+          )}
         </div>
       )}
 
@@ -1627,7 +1643,7 @@ async function handleVerifyToggle() {
 
           {/* Zeile 1: Zurück + Standort-Suche (Adresse → Suchzentrum) */}
           <div className="flex items-start gap-2">
-            <button onClick={() => navigate(-1)} aria-label="Zurück"
+            <button onClick={goBack} aria-label="Zurück"
               className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0"
               style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.18)' }}>
               <i className="fa-solid fa-arrow-left text-[var(--color-aubergine)]" />
@@ -1836,13 +1852,11 @@ async function handleVerifyToggle() {
         {/* ── Row 1: Navigation bar ─────────────────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 flex items-center gap-3">
           {/* Back button — small lavender circle (im Overlay übernimmt der Overlay-Header das Zurück) */}
-          {!embedded && (
-            <button onClick={() => navigate(-1)}
-              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
-              style={{ background: '#F1ECF4' }}>
-              <i className="fa-solid fa-arrow-left text-sm" style={{ color: '#34254c' }} />
-            </button>
-          )}
+          <button onClick={goBack}
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
+            style={{ background: '#F1ECF4' }}>
+            <i className="fa-solid fa-arrow-left text-sm" style={{ color: '#34254c' }} />
+          </button>
 
           {/* „Ich war hier": grüner Status-Button (besucht) oder Toggle */}
           {isVisited ? (
@@ -2808,7 +2822,7 @@ async function handleVerifyToggle() {
                 </div>
                 <div className="flex flex-col gap-3">
                   {similar.map(p => (
-                    <button key={p.id} onClick={() => navigate(`/place/${p.id}`)} className="flex items-center gap-3 text-left group">
+                    <button key={p.id} onClick={() => openPlace(p.id)} className="flex items-center gap-3 text-left group">
                       <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
                         <img src={p.hero} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                       </div>

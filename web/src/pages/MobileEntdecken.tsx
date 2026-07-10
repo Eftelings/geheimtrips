@@ -14,7 +14,6 @@ import { ReachLayer } from '../components/map/ReachLayer.js';
 import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagFilter.js';
 import type { TagSelection } from '../components/ui/TagFilter.js';
 import { SwipeDeck } from '../components/ui/SwipeDeck.js';
-import { BrandLogo } from '../components/ui/BrandLogo.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
 const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
@@ -497,21 +496,13 @@ export function MobileEntdecken() {
         </>
       )}
 
-      {/* ── Orts-Overlay: Klick auf einen Ort fährt die Details hoch (kein Seitenwechsel) ── */}
+      {/* ── Orts-Overlay: Klick auf einen Ort fährt die Details hoch (kein Seitenwechsel). ──
+           PlaceDetailPage bringt im embedded-Modus sein eigenes Layout + Zurück (onClose) mit. */}
       {placeOpen && (
-        <div className="fixed inset-0 z-[55] flex flex-col" style={{ background: 'var(--color-bg)', animation: 'gtSlideUp 0.3s cubic-bezier(.32,.72,0,1)' }}>
-          <div className="flex-shrink-0 flex items-center justify-between px-2 h-12 border-b border-[var(--color-bg-soft)]" style={{ marginTop: 'env(safe-area-inset-top)' }}>
-            <button onClick={() => setPlaceOpen(null)} className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--color-aubergine)] active:scale-90 transition-transform" aria-label="Zurück zur Karte">
-              <i className="fa-solid fa-arrow-left text-lg" />
-            </button>
-            <BrandLogo size="sm" />
-            <div className="w-10" />
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-            <Suspense fallback={<div className="h-full flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
-              <PlaceDetailEmbed id={placeOpen} embedded />
-            </Suspense>
-          </div>
+        <div className="fixed inset-0 z-[55]" style={{ background: 'var(--color-bg)', animation: 'gtSlideUp 0.3s cubic-bezier(.32,.72,0,1)' }}>
+          <Suspense fallback={<div className="fixed inset-0 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
+            <PlaceDetailEmbed key={placeOpen} id={placeOpen} embedded onOpenPlace={setPlaceOpen} onClose={() => setPlaceOpen(null)} />
+          </Suspense>
         </div>
       )}
     </AppShell>
