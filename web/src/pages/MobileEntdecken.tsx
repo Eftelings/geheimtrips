@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -61,6 +61,15 @@ function FitReach({ center, travel, radiusKm, fallback }: {
   return null;
 }
 
+// Karte auf den aktuellen Swipe-Ort fliegen (damit man beim Runterziehen sieht, wo er liegt)
+function SwipeFlyTo({ lat, lng }: { lat: number | null; lng: number | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (lat != null && lng != null) map.flyTo([lat, lng], Math.max(map.getZoom(), 11), { duration: 0.6 });
+  }, [lat, lng]); // eslint-disable-line
+  return null;
+}
+
 // Merkt sich die Entdecken-Einstellungen für die Session, damit „Zurück" vom Ort
 // die vorherige Liste + Reichweite wiederherstellt (statt frisch zu starten).
 const entdeckenCache = {
@@ -105,7 +114,8 @@ export function MobileEntdecken() {
 
   const reachCenter = searchCenter ?? userCoords;
   const reach = useTravelReach(reachCenter, { mode: entdeckenCache.travelMode, minutes: entdeckenCache.travelMinutes });
-  const travel = { mode: reach.travelMode, minutes: reach.travelMinutes, iso: reach.iso, loading: reach.isoLoading };
+  const travel = useMemo(() => ({ mode: reach.travelMode, minutes: reach.travelMinutes, iso: reach.iso, loading: reach.isoLoading }),
+    [reach.travelMode, reach.travelMinutes, reach.iso, reach.isoLoading]);
   const catActive = tagSel.group !== null || tagSel.tag !== null;
 
   useEffect(() => {
@@ -156,8 +166,13 @@ export function MobileEntdecken() {
   // ── Ziehbares Listen-Sheet ────────────────────────────────────────────────
   const listRef = useRef<HTMLDivElement>(null);
   const [sheetExpanded, setSheetExpanded] = useState(entdeckenCache.sheetExpanded);
-  const [swipeOpen, setSwipeOpen] = useState(false);   // aufziehendes Swipe-Overlay
+  const [swipeOpen, setSwipeOpen] = useState(false);   // Swipe-Sheet über der Karte
+  const [swipeFocus, setSwipeFocus] = useState<Place | null>(null);   // aktueller Swipe-Ort (Karte fokussiert ihn)
+  const [swipeLow, setSwipeLow] = useState(false);     // Sheet heruntergezogen → mehr Karte sichtbar
+  const [swipeDragY, setSwipeDragY] = useState(0);
+  const swipeDrag = useRef<{ startY: number; moved: number } | null>(null);
   const [placeOpen, setPlaceOpen] = useState<string | null>(null);   // Ortsdetails im Overlay
+  const closeSwipe = () => { setSwipeOpen(false); setSwipeFocus(null); setSwipeLow(false); setSwipeDragY(0); };
   const [sheetDragY, setSheetDragY] = useState(0);
   const [sheetDragging, setSheetDragging] = useState(false);
   const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
@@ -226,13 +241,27 @@ export function MobileEntdecken() {
     if (d.moved < 6) { setSheetExpanded(v => !v); return; }
     setSheetExpanded(sheetDragY < peekOffset() / 2);
   }
-  function selectPlace(id: string) {
+  const selectPlace = useCallback((id: string) => {
     setSelectedId(id);
     setSheetExpanded(true);
     setTimeout(() => listRef.current?.querySelector(`[data-place-id="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+  }, []);
+  // Swipe-Sheet über der Karte — nutzt direkt die auf der Karte gefilterten Orte (kein Seitenwechsel)
+  function goSwipe() { setSwipeOpen(true); setSwipeLow(false); }
+  // Swipe-Sheet ziehen: runter → mehr Karte (aktueller Ort sichtbar), hoch → wieder swipen
+  function onSwipeSheetStart(e: React.TouchEvent) { swipeDrag.current = { startY: e.touches[0].clientY, moved: 0 }; }
+  function onSwipeSheetMove(e: React.TouchEvent) {
+    const d = swipeDrag.current; if (!d) return;
+    const delta = e.touches[0].clientY - d.startY;
+    d.moved = Math.max(d.moved, Math.abs(delta));
+    setSwipeDragY(delta);
   }
-  // Swipe-Modus als aufziehendes Overlay — nutzt direkt die auf der Karte gefilterten Orte (kein Seitenwechsel)
-  function goSwipe() { setSwipeOpen(true); }
+  function onSwipeSheetEnd() {
+    const d = swipeDrag.current; swipeDrag.current = null; if (!d) return;
+    if (d.moved < 6) setSwipeLow(v => !v);
+    else setSwipeLow(swipeDragY > 40 ? true : swipeDragY < -40 ? false : swipeLow);
+    setSwipeDragY(0);
+  }
   function onListTouchStart(e: React.TouchEvent) { const t = e.touches[0]; listSwipe.current = { x: t.clientX, y: t.clientY }; }
   function onListTouchEnd(e: React.TouchEvent) {
     const s = listSwipe.current; listSwipe.current = null; if (!s) return;
@@ -249,6 +278,16 @@ export function MobileEntdecken() {
   const toolBtn = 'w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0';
   const toolShadow = { boxShadow: '0 2px 10px rgba(52,37,76,0.18)' } as const;
 
+  // Marker memoisieren → beim Sheet-Ziehen (häufige Re-Renders) werden NICHT alle Leaflet-Marker
+  // neu gebunden (das war die Hänger-Ursache auf Mobil).
+  const highlightId = swipeOpen ? swipeFocus?.id : preview?.id;
+  const markerEls = useMemo(() => shownPlaces.map(p => (
+    <Marker key={p.id} position={[p.lat!, p.lng!]}
+      icon={p.id === highlightId ? purpleMarker : orangeMarker}
+      zIndexOffset={p.id === highlightId ? 1000 : 0}
+      eventHandlers={{ click: () => selectPlace(p.id) }} />
+  )), [shownPlaces, highlightId, selectPlace]);
+
   return (
     <AppShell>
       {/* Vollbildkarte */}
@@ -259,13 +298,9 @@ export function MobileEntdecken() {
           <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
           <LongPressPick onPick={pickMapPoint} />
           <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
-          {shownPlaces.map(p => (
-            <Marker key={p.id} position={[p.lat!, p.lng!]}
-              icon={p.id === preview?.id ? purpleMarker : orangeMarker}
-              zIndexOffset={p.id === preview?.id ? 1000 : 0}
-              eventHandlers={{ click: () => selectPlace(p.id) }} />
-          ))}
+          {markerEls}
           <FitReach center={reachCenter} travel={travel} radiusKm={radiusKm} fallback={fallbackPts} />
+          <SwipeFlyTo lat={swipeOpen ? swipeFocus?.lat ?? null : null} lng={swipeOpen ? swipeFocus?.lng ?? null : null} />
         </MapContainer>
       </div>
 
@@ -278,8 +313,8 @@ export function MobileEntdecken() {
         </div>
       )}
 
-      {/* Toolbar — direkt unter dem Standard-Header (56px), gleiche Koordinaten wie der Header */}
-      <div className="fixed left-0 right-0 z-20 px-3 flex flex-col gap-2" style={{ top: '52px' }}>
+      {/* Toolbar — direkt unter dem Standard-Header; beim Swipen ausgeblendet (Karte bleibt oben frei) */}
+      <div className="fixed left-0 right-0 z-20 px-3 flex flex-col gap-2" style={{ top: '52px', display: swipeOpen ? 'none' : undefined }}>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setPanel(panel === 'loc' ? null : 'loc')} className={toolBtn}
             style={{ ...toolShadow, color: searchCenter ? '#F99039' : '#34254c' }} aria-label="Standort">
@@ -366,13 +401,14 @@ export function MobileEntdecken() {
         </>
       )}
 
-      {/* Orts-Liste als ziehbares Bottom-Sheet (nach Entfernung sortiert) */}
+      {/* Orts-Liste als ziehbares Bottom-Sheet (nach Entfernung sortiert) — beim Swipen ausgeblendet */}
       <div className="fixed left-0 right-0 z-20 flex flex-col overflow-hidden rounded-t-[1.75rem]"
         style={{
           top: '38vh', bottom: 0, background: '#FBF9FC',
           boxShadow: '0 -8px 30px rgba(52,37,76,0.18)',
           transform: `translateY(${sheetDragY}px)`,
           transition: sheetDragging ? 'none' : 'transform .34s cubic-bezier(.32,.72,0,1)',
+          display: swipeOpen ? 'none' : undefined,
         }}>
         {/* Griff + Kopf (Zieh-Bereich) */}
         <div className="flex-shrink-0" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
@@ -425,19 +461,40 @@ export function MobileEntdecken() {
         </div>
       </div>
 
-      {/* ── Swipe-Overlay: fährt über die Karte hoch, eigener kompakter Header, kein Seitenwechsel ── */}
+      {/* ── Swipe-Sheet über der Karte: oben bleibt Karte sichtbar, runterziehen zeigt den aktuellen Ort ── */}
       {swipeOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--color-bg)', animation: 'gtSlideUp 0.3s cubic-bezier(.32,.72,0,1)' }}>
-          <div className="flex-shrink-0 flex items-center justify-between px-4 h-12 border-b border-[var(--color-bg-soft)]" style={{ marginTop: 'env(safe-area-inset-top)' }}>
-            <BrandLogo size="sm" />
-            <button onClick={() => setSwipeOpen(false)} className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--color-aubergine)] active:scale-90 transition-transform" aria-label="Swipe schließen">
-              <i className="fa-solid fa-chevron-down text-lg" />
-            </button>
+        <>
+          {/* aktueller Ort — Label auf dem sichtbaren Karten-Streifen */}
+          {swipeFocus && (
+            <div className="fixed left-1/2 -translate-x-1/2 z-30 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top) + 56px)' }}>
+              <span className="bg-white/90 backdrop-blur px-3 py-1.5 rounded-full text-xs font-bold text-[var(--color-aubergine)] shadow-sm whitespace-nowrap">
+                <i className="fa-solid fa-location-dot text-[var(--color-amber)] mr-1.5" />{swipeFocus.name}
+              </span>
+            </div>
+          )}
+          <div className="fixed left-0 right-0 bottom-0 z-40 flex flex-col overflow-hidden rounded-t-[1.75rem]"
+            style={{
+              top: swipeLow ? '58vh' : '16vh',
+              background: 'var(--color-bg)',
+              boxShadow: '0 -8px 30px rgba(52,37,76,0.22)',
+              transform: `translateY(${Math.max(0, swipeDragY)}px)`,
+              transition: swipeDrag.current ? 'none' : 'top .3s cubic-bezier(.32,.72,0,1), transform .3s cubic-bezier(.32,.72,0,1)',
+            }}>
+            {/* Griff + Kopf (Zieh-Bereich) */}
+            <div className="flex-shrink-0" onTouchStart={onSwipeSheetStart} onTouchMove={onSwipeSheetMove} onTouchEnd={onSwipeSheetEnd} style={{ touchAction: 'none' }}>
+              <div className="flex justify-center pt-2 pb-1"><div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} /></div>
+              <div className="px-4 pb-1.5 flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-[var(--color-lavender)]">
+                  <i className={`fa-solid ${swipeLow ? 'fa-chevron-up' : 'fa-chevron-down'} mr-1.5`} />{swipeLow ? 'Hochziehen zum Swipen' : 'Runterziehen für die Karte'}
+                </span>
+                <button onClick={closeSwipe} className="text-[11px] font-bold text-[var(--color-amber)] flex items-center gap-1"><i className="fa-solid fa-xmark" />Schließen</button>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0">
+              <SwipeDeck places={shownPlaces} onOpenDetail={id => setPlaceOpen(id)} onCardChange={setSwipeFocus} />
+            </div>
           </div>
-          <div className="flex-1 min-h-0">
-            <SwipeDeck places={shownPlaces} onOpenDetail={id => setPlaceOpen(id)} />
-          </div>
-        </div>
+        </>
       )}
 
       {/* ── Orts-Overlay: Klick auf einen Ort fährt die Details hoch (kein Seitenwechsel) ── */}

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Place } from '../../types/index.js';
 import { useAppStore } from '../../store/useAppStore.js';
 import { discoverApi, placesApi } from '../../services/api.js';
@@ -12,7 +12,7 @@ const isVid = (u: string) => /\.(mp4|webm|mov|m4v|ogg)(\?|#|$)/i.test(u);
  * Bildergalerie per Tap. Links = nicht merken, rechts = merken, hoch = Details.
  * Bekommt die bereits gefilterten Orte der Karte übergeben (Filter/Funnel wirken also mit).
  */
-export function SwipeDeck({ places, onOpenDetail }: { places: Place[]; onOpenDetail: (id: string) => void }) {
+export function SwipeDeck({ places, onOpenDetail, onCardChange }: { places: Place[]; onOpenDetail: (id: string) => void; onCardChange?: (p: Place | null) => void }) {
   const { toggleSave, savedIds } = useAppStore();
   const [idx, setIdx] = useState(0);
   const [imgIdx, setImgIdx] = useState(0);
@@ -30,6 +30,8 @@ export function SwipeDeck({ places, onOpenDetail }: { places: Place[]; onOpenDet
     return [...new Set(urls)].map(u => ({ url: u, video: isVid(u) }));
   }, [card]);
   const cur = media[imgIdx] ?? media[0];
+  // Aktuellen Ort nach oben melden → Karte kann darauf fokussieren
+  useEffect(() => { onCardChange?.(card ?? null); }, [card?.id]); // eslint-disable-line
 
   const showToast = (m: string) => { if (!m) return; setToast(m); setTimeout(() => setToast(null), 1400); };
   const advance = (action: 'like' | 'dislike') => {
