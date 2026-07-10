@@ -477,7 +477,7 @@ export function MobileEntdecken() {
               top: swipeLow ? '58vh' : '16vh',
               background: 'var(--color-bg)',
               boxShadow: '0 -8px 30px rgba(52,37,76,0.22)',
-              transform: `translateY(${Math.max(0, swipeDragY)}px)`,
+              transform: `translateY(${swipeLow ? Math.min(0, swipeDragY) : Math.max(0, swipeDragY)}px)`,
               transition: swipeDrag.current ? 'none' : 'top .3s cubic-bezier(.32,.72,0,1), transform .3s cubic-bezier(.32,.72,0,1)',
             }}>
             {/* Griff + Kopf (Zieh-Bereich) */}
