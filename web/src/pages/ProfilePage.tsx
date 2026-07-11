@@ -6,7 +6,7 @@ import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
-import { authApi, rankingsApi, friendsApi, placesApi } from '../services/api.js';
+import { authApi, rankingsApi, friendsApi, placesApi, notificationsApi } from '../services/api.js';
 import { RankingCard } from './DiscoverPage.js';
 import type { MyRankStats } from '../services/api.js';
 import type { FriendRequest, Friend, Place } from '../types/index.js';
@@ -25,12 +25,14 @@ export function ProfilePage() {
   const [requests, setRequests]         = useState<FriendRequest[]>([]);
   const [friends, setFriends]           = useState<Friend[]>([]);
   const [myPlaces, setMyPlaces]         = useState<Place[]>([]);
+  const [notif, setNotif]               = useState(0);
 
   useEffect(() => {
     rankingsApi.me().then(setRankInfo).catch(() => {});
     friendsApi.requests().then(setRequests).catch(() => {});
     friendsApi.list().then(setFriends).catch(() => {});
     placesApi.myCreated().then(setMyPlaces).catch(() => {});
+    notificationsApi.count().then(r => setNotif(r.count)).catch(() => {});
   }, []);
 
   async function respondRequest(friendshipId: number, accept: boolean) {
@@ -93,6 +95,20 @@ export function ProfilePage() {
             <i className="fa-solid fa-gear text-lg" />
           </button>
         </div>
+
+        {/* Postfach — Benachrichtigungen liegen jetzt im Profil */}
+        <button onClick={() => { setNotif(0); navigate('/notifications'); }}
+          className="w-full flex items-center gap-3 bg-white rounded-2xl p-3.5 shadow-[var(--shadow-card)] mb-4 active:scale-[0.99] transition-transform">
+          <span className="w-10 h-10 rounded-xl bg-[var(--color-bg-soft)] flex items-center justify-center flex-shrink-0 relative">
+            <i className="fa-regular fa-bell text-[var(--color-aubergine)] text-lg" />
+            {notif > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[var(--color-amber)] border-2 border-white" />}
+          </span>
+          <div className="flex-1 min-w-0 text-left">
+            <p className="font-semibold text-[var(--color-aubergine)] text-sm">Postfach</p>
+            <p className="text-xs text-[var(--color-lavender)]">{notif > 0 ? `${notif} neue Benachrichtigung${notif > 1 ? 'en' : ''}` : 'Keine neuen Nachrichten'}</p>
+          </div>
+          <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)]" />
+        </button>
 
         {/* Freundschaftsanfragen */}
         {requests.length > 0 && (

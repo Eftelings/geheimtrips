@@ -31,11 +31,6 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
     notificationsApi.count().then(r => setNotif(r.count)).catch(() => {});
   }, [user]);
 
-  const openInbox = () => {
-    if (notif > 0) { notificationsApi.seen().catch(() => {}); setNotif(0); }
-    navigate('/notifications');
-  };
-
   // Eingebettet (Karten-Overlay): nur der Inhalt, ohne Sidebar/BottomNav/Header
   if (bare) return <div className="min-h-full bg-[var(--color-bg)]">{children}</div>;
 
@@ -73,19 +68,19 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
                 : <BrandLogo size="sm" />}
             </div>
 
-            {/* Rechts: Postfach-Glocke + Profil */}
-            <div className="flex items-center gap-0.5 justify-end">
+            {/* Rechts: Fernglas (Fragen-Funnel → neue Orte) + Profil (Postfach liegt jetzt im Profil) */}
+            <div className="flex items-center gap-1 justify-end">
               {headerRight ?? (
                 user && (
                   <>
-                    <button onClick={openInbox} className="relative w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Postfach">
-                      <i className="fa-regular fa-bell text-lg" />
-                      {notif > 0 && (
-                        <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-[var(--color-amber)] border-2 border-[var(--color-bg)]" />
-                      )}
+                    <button onClick={() => navigate('/funnel')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Neue Orte entdecken">
+                      <i className="fa-solid fa-binoculars text-lg" />
                     </button>
-                    <button onClick={() => navigate('/profile')} aria-label="Profil">
+                    <button onClick={() => navigate('/profile')} aria-label="Profil" className="relative">
                       <Avatar name={user.name} src={user.avatarUrl} size={28} />
+                      {notif > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--color-amber)] border-2 border-[var(--color-bg)]" />
+                      )}
                     </button>
                   </>
                 )
