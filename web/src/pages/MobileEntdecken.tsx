@@ -257,9 +257,11 @@ export function MobileEntdecken() {
   }
   function onSwipeSheetEnd() {
     const d = swipeDrag.current; swipeDrag.current = null; if (!d) return;
-    if (d.moved < 6) setSwipeLow(v => !v);
-    else setSwipeLow(swipeDragY > 40 ? true : swipeDragY < -40 ? false : swipeLow);
+    const dy = swipeDragY;
     setSwipeDragY(0);
+    if (d.moved < 6) { setSwipeLow(v => !v); return; }        // Tippen = umschalten Swipe/Karte
+    if (swipeLow && dy > 90) { closeSwipe(); return; }         // aus der Kartenansicht weit runter → zurück zur Liste
+    setSwipeLow(dy > 40 ? true : dy < -40 ? false : swipeLow);
   }
   function onListTouchStart(e: React.TouchEvent) { const t = e.touches[0]; listSwipe.current = { x: t.clientX, y: t.clientY }; }
   function onListTouchEnd(e: React.TouchEvent) {
@@ -312,8 +314,16 @@ export function MobileEntdecken() {
         </div>
       )}
 
-      {/* Toolbar — direkt unter dem Standard-Header; beim Swipen ausgeblendet (Karte bleibt oben frei) */}
-      <div className="fixed left-0 right-0 z-20 px-3 flex flex-col gap-2" style={{ top: '52px', display: swipeOpen ? 'none' : undefined }}>
+      {/* Toolbar — direkt unter dem Standard-Header. Beim Swipen (Karte nicht sichtbar) fliegt sie
+          nach oben weg; sobald man das Swipe-Sheet runterzieht (swipeLow), fliegt sie wieder rein. */}
+      <div className="fixed left-0 right-0 z-30 px-3 flex flex-col gap-2"
+        style={{
+          top: '52px',
+          transform: (swipeOpen && !swipeLow) ? 'translateY(-150%)' : 'translateY(0)',
+          opacity: (swipeOpen && !swipeLow) ? 0 : 1,
+          pointerEvents: (swipeOpen && !swipeLow) ? 'none' : 'auto',
+          transition: 'transform .32s cubic-bezier(.32,.72,0,1), opacity .28s ease',
+        }}>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setPanel(panel === 'loc' ? null : 'loc')} className={toolBtn}
             style={{ ...toolShadow, color: searchCenter ? '#F99039' : '#34254c' }} aria-label="Standort">
@@ -463,9 +473,9 @@ export function MobileEntdecken() {
       {/* ── Swipe-Sheet über der Karte: oben bleibt Karte sichtbar, runterziehen zeigt den aktuellen Ort ── */}
       {swipeOpen && (
         <>
-          {/* aktueller Ort — Label auf dem sichtbaren Karten-Streifen */}
+          {/* aktueller Ort — Label auf dem sichtbaren Karten-Streifen (bei Filter-Ansicht unter die Toolbar) */}
           {swipeFocus && (
-            <div className="fixed left-1/2 -translate-x-1/2 z-30 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top) + 56px)' }}>
+            <div className="fixed left-1/2 -translate-x-1/2 z-20 pointer-events-none transition-all" style={{ top: swipeLow ? 'calc(env(safe-area-inset-top) + 140px)' : 'calc(env(safe-area-inset-top) + 56px)' }}>
               <span className="bg-white/90 backdrop-blur px-3 py-1.5 rounded-full text-xs font-bold text-[var(--color-aubergine)] shadow-sm whitespace-nowrap">
                 <i className="fa-solid fa-location-dot text-[var(--color-amber)] mr-1.5" />{swipeFocus.name}
               </span>
@@ -476,7 +486,7 @@ export function MobileEntdecken() {
               top: swipeLow ? '58vh' : '16vh',
               background: 'var(--color-bg)',
               boxShadow: '0 -8px 30px rgba(52,37,76,0.22)',
-              transform: `translateY(${swipeLow ? Math.min(0, swipeDragY) : Math.max(0, swipeDragY)}px)`,
+              transform: `translateY(${swipeLow ? swipeDragY : Math.max(0, swipeDragY)}px)`,
               transition: swipeDrag.current ? 'none' : 'top .3s cubic-bezier(.32,.72,0,1), transform .3s cubic-bezier(.32,.72,0,1)',
             }}>
             {/* Griff + Kopf (Zieh-Bereich) */}
@@ -484,9 +494,9 @@ export function MobileEntdecken() {
               <div className="flex justify-center pt-2 pb-1"><div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} /></div>
               <div className="px-4 pb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-[var(--color-lavender)]">
-                  <i className={`fa-solid ${swipeLow ? 'fa-chevron-up' : 'fa-chevron-down'} mr-1.5`} />{swipeLow ? 'Hochziehen zum Swipen' : 'Runterziehen für die Karte'}
+                  <i className={`fa-solid ${swipeLow ? 'fa-chevron-up' : 'fa-chevron-down'} mr-1.5`} />{swipeLow ? 'Hoch zum Swipen · weiter runter zur Liste' : 'Runterziehen für Karte & Filter'}
                 </span>
-                <button onClick={closeSwipe} className="text-[11px] font-bold text-[var(--color-amber)] flex items-center gap-1"><i className="fa-solid fa-xmark" />Schließen</button>
+                <button onClick={closeSwipe} className="text-xs font-bold text-[var(--color-amber)] flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: 'rgba(249,144,57,0.12)' }}><i className="fa-solid fa-list" />Liste</button>
               </div>
             </div>
             <div className="flex-1 min-h-0">
