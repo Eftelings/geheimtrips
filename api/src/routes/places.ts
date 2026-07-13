@@ -10,6 +10,15 @@ import { cleanRichText, cleanPlainText } from '../lib/sanitize.js';
 import { deriveTag } from '../data/taxMigration.js';
 import { proofreadSafe } from '../lib/gemini.js';
 
+/** Proofread für die Beschreibung — aber Ort-Verlinkungen (data-place-id) dürfen dabei nicht
+ *  verloren gehen. Ändert die KI ihre Anzahl, behalten wir das Original. */
+async function proofreadLong(html: string): Promise<string> {
+  const idsIn = (html.match(/data-place-id/g) ?? []).length;
+  const out = await proofreadSafe(html);
+  const idsOut = (out.match(/data-place-id/g) ?? []).length;
+  return idsOut === idsIn ? out : html;
+}
+
 // Budget-Antwort ('Kostenlos' / '€ – …' / '€€ – …' / '€€€ – …') → cost-Spalte + Label
 function budgetToCost(answers: Record<string, unknown> | undefined): { cost: number; costLabel: string } {
   const b = String(answers?.budget ?? '');
@@ -267,7 +276,7 @@ router.post('/submit', requireAuth,
     const cleanShort = cleanPlainText(body.short);
     const baseShort = cleanShort || deriveSummary(cleanRichText(body.long));
     // B: reiner Grammatik-/Rechtschreib-Pass beim Absenden (best-effort, kein Umschreiben)
-    const [finalShort, finalLong] = await Promise.all([proofreadSafe(baseShort), proofreadSafe(cleanRichText(body.long))]);
+    const [finalShort, finalLong] = await Promise.all([proofreadSafe(baseShort), proofreadLong(cleanRichText(body.long))]);
 
     const attributesJson = JSON.stringify({
       l1Slug:       body.l1Slug,
@@ -378,7 +387,7 @@ router.patch('/:id', requireAuth,
     const cleanShort = cleanPlainText(body.short);
     const baseShort = cleanShort || deriveSummary(cleanRichText(body.long));
     // B: reiner Grammatik-/Rechtschreib-Pass beim Absenden (best-effort, kein Umschreiben)
-    const [finalShort, finalLong] = await Promise.all([proofreadSafe(baseShort), proofreadSafe(cleanRichText(body.long))]);
+    const [finalShort, finalLong] = await Promise.all([proofreadSafe(baseShort), proofreadLong(cleanRichText(body.long))]);
 
     const attributesJson = JSON.stringify({
       l1Slug:       body.l1Slug,

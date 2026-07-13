@@ -117,10 +117,13 @@ function placeToWizardState(place: Place): WizardState {
 // ─── MiniRichText ─────────────────────────────────────────────────────────────
 function MiniRichText({
   value, onChange, placeholder = '', maxLength = 4000, minHeight = 160, images = [], maxImages = 2,
+  linkPlaces = [],
 }: {
   value: string; onChange: (html: string) => void;
   placeholder?: string; maxLength?: number; minHeight?: number;
   images?: string[]; maxImages?: number;
+  /** Andere Orte, die im Text verlinkt werden können (id + Name). */
+  linkPlaces?: { id: string; name: string }[];
 }) {
   const ref           = useRef<HTMLDivElement>(null);
   const lastValid     = useRef(value);        // last HTML that was within limit
@@ -129,6 +132,8 @@ function MiniRichText({
   const [empty, setEmpty] = useState(!value);
   const [imgCount, setImgCount]   = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [linkOpen, setLinkOpen]     = useState(false);
+  const [linkQuery, setLinkQuery]   = useState('');
 
   // Aktuelle Auswahl im Editor merken (für das Einfügen nach Klick auf eine Miniatur)
   function saveSelection() {
@@ -151,6 +156,22 @@ function MiniRichText({
     document.execCommand('insertHTML', false, `<img src="${url}" class="gt-embed" alt="" /><br>`);
     savedRange.current = null;
     setPickerOpen(false);
+    sync();
+  }
+  function insertPlaceLink(p: { id: string; name: string }) {
+    const el = ref.current; if (!el) return;
+    el.focus();
+    const sel = window.getSelection();
+    if (savedRange.current && el.contains(savedRange.current.startContainer)) {
+      sel?.removeAllRanges(); sel?.addRange(savedRange.current);
+    } else {
+      const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+      sel?.removeAllRanges(); sel?.addRange(r);
+    }
+    const safe = p.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    document.execCommand('insertHTML', false, `<a href="/place/${p.id}" class="gt-place" data-place-id="${p.id}">${safe}</a>&nbsp;`);
+    savedRange.current = null;
+    setLinkOpen(false); setLinkQuery('');
     sync();
   }
 
@@ -229,17 +250,49 @@ function MiniRichText({
             {label}
           </button>
         ))}
-        <span className="mx-1 text-[#E4DCF0]">|</span>
-        <span className="text-[10px] text-[#B0A3BC] font-normal ml-0.5 select-none">Fett / Kursiv / Unterstrichen</span>
+        {linkPlaces.length > 0 && (
+          <>
+            <span className="mx-1 text-[#E4DCF0]">|</span>
+            <button type="button"
+              onMouseDown={e => { e.preventDefault(); saveSelection(); setLinkOpen(o => !o); setPickerOpen(false); }}
+              title="Anderen Ort im Text verlinken"
+              className={`inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-semibold transition-colors ${linkOpen ? 'bg-[#E4DCF0] text-[#34254C]' : 'text-[#71587A] hover:bg-[#E4DCF0] hover:text-[#34254C]'}`}>
+              <i className="fa-solid fa-location-dot text-[11px]" /> Ort verlinken
+            </button>
+          </>
+        )}
         {images.length > 0 && (
           <button type="button" disabled={imgCount >= maxImages}
-            onMouseDown={e => { e.preventDefault(); saveSelection(); setPickerOpen(o => !o); }}
+            onMouseDown={e => { e.preventDefault(); saveSelection(); setPickerOpen(o => !o); setLinkOpen(false); }}
             title="Bild in den Text einfügen"
             className="ml-auto inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-semibold text-[#71587A] hover:bg-[#E4DCF0] hover:text-[#34254C] transition-colors disabled:opacity-40">
             <i className="fa-solid fa-image text-[11px]" /> Bild ({imgCount}/{maxImages})
           </button>
         )}
       </div>
+      {/* Ort-Verlinkung: anderen Geheimtrip suchen und als Link in den Text einfügen */}
+      {linkOpen && linkPlaces.length > 0 && (
+        <div className="px-2 py-2 border-b border-[#F0EBF7] bg-[#FAF7FD]">
+          <input autoFocus value={linkQuery} onChange={e => setLinkQuery(e.target.value)}
+            placeholder="Ort suchen…"
+            className="w-full mb-2 rounded-lg border border-[#E4DCF0] px-3 py-1.5 text-sm outline-none focus:border-[#F99039]" />
+          <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
+            {linkPlaces
+              .filter(p => p.name.toLowerCase().includes(linkQuery.trim().toLowerCase()))
+              .slice(0, 30)
+              .map(p => (
+                <button key={p.id} type="button"
+                  onMouseDown={e => { e.preventDefault(); insertPlaceLink(p); }}
+                  className="text-left px-2.5 py-1.5 rounded-lg text-sm text-[#34254C] hover:bg-[#E4DCF0] transition-colors truncate">
+                  <i className="fa-solid fa-location-dot text-[10px] text-[#F99039] mr-1.5" />{p.name}
+                </button>
+              ))}
+            {linkPlaces.filter(p => p.name.toLowerCase().includes(linkQuery.trim().toLowerCase())).length === 0 && (
+              <p className="text-xs text-[#B0A3BC] px-2.5 py-2">Kein Ort gefunden.</p>
+            )}
+          </div>
+        </div>
+      )}
       {/* Bild-Auswahl: eingereichte Fotos in den Fließtext einbetten (Reiseblog-Stil) */}
       {pickerOpen && images.length > 0 && (
         <div className="flex gap-2 px-2 py-2 border-b border-[#F0EBF7] bg-[#FAF7FD] overflow-x-auto">
@@ -270,7 +323,7 @@ function MiniRichText({
           onMouseUp={saveSelection}
           onBlur={saveSelection}
           style={{ minHeight }}
-          className="px-4 py-3 text-sm text-[#34254C] outline-none leading-relaxed [&_img.gt-embed]:rounded-xl [&_img.gt-embed]:my-2 [&_img.gt-embed]:max-h-60 [&_img.gt-embed]:w-auto"
+          className="px-4 py-3 text-sm text-[#34254C] outline-none leading-relaxed [&_img.gt-embed]:rounded-xl [&_img.gt-embed]:my-2 [&_img.gt-embed]:max-h-60 [&_img.gt-embed]:w-auto [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline"
         />
       </div>
       {/* Char counter */}
@@ -1485,13 +1538,21 @@ function AiButton({ onClick, loading, disabled, label }: {
 }
 
 function StepStory({
-  state, set,
+  state, set, excludeId = null,
 }: {
   state: WizardState;
   set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
+  excludeId?: string | null;
 }) {
   const longLen = state.long.replace(/<[^>]*>/g, '').trim().length;
   const longOk  = longLen >= 200;
+  // Andere Orte, die im Fließtext verlinkt werden können (z.B. Spots in einem Stadtteil)
+  const allPlaces  = useAppStore(s => s.places);
+  const loadPlaces = useAppStore(s => s.loadPlaces);
+  useEffect(() => { loadPlaces(); }, [loadPlaces]);
+  const linkPlaces = allPlaces
+    .filter(p => p.id !== excludeId)
+    .map(p => ({ id: p.id, name: p.name }));
   const setAnswer    = (id: string, v: unknown) => set('answers', { ...state.answers, [id]: v });
   const triviaTypeQ  = UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_type');
   const triviaTextQ  = UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_text');
@@ -1542,8 +1603,15 @@ function StepStory({
           maxLength={4000}
           images={state.media.filter(m => m.type === 'image' && m.serverUrl).map(m => m.serverUrl!)}
           maxImages={2}
+          linkPlaces={linkPlaces}
           placeholder="Ich war spät nachmittags dort, als die Sonne schon tief stand und das Wasser in einem unwirklichen Blaugrün leuchtete…"
         />
+        {linkPlaces.length > 0 && (
+          <p className="text-xs text-[#9A8FAA]">
+            <i className="fa-solid fa-location-dot text-[10px] text-[#F99039] mr-1" />
+            Tipp: Verlinke andere Geheimtrips im Text (z.B. Spots in einem Stadtteil) – darunter erscheint automatisch eine kleine Karte mit allen verlinkten Orten.
+          </p>
+        )}
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs flex items-center gap-1.5" style={{ color: longOk ? '#2D8A4E' : '#C96442' }}>
             <i className={`fa-solid ${longOk ? 'fa-circle-check' : 'fa-circle-info'} text-[10px]`} />
@@ -2091,7 +2159,7 @@ export function SubmitPage() {
         )}
         {step === 2 && <Step2 state={state} setLocation={setLocation} />}
         {step === 3 && <Step1 state={state} set={set} />}
-        {step === 4 && <StepStory state={state} set={set} />}
+        {step === 4 && <StepStory state={state} set={set} excludeId={editId} />}
         {step === 5 && <StepCategory state={state} setState={setState} />}
         {step === 6 && (
           <>

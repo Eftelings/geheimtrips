@@ -98,6 +98,51 @@ function MapRecenter({ lat, lng }: { lat: number; lng: number }) {
   return null;
 }
 
+// Karte auf mehrere Punkte einpassen (verlinkte Orte in einer Beschreibung)
+function FitBounds({ points }: { points: [number, number][] }) {
+  const map = useMap();
+  const key = points.map(p => p.join(',')).join('|');
+  useEffect(() => {
+    if (!points.length) return;
+    if (points.length === 1) { map.setView(points[0], 14); return; }
+    map.fitBounds(L.latLngBounds(points), { padding: [28, 28], maxZoom: 15 });
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/** Mini-Karte mit allen im Text verlinkten Orten (z.B. Spots in einem Stadtteil). */
+function LinkedPlacesMap({ linked, onOpen }: {
+  linked: { id: string; name: string; lat: number; lng: number }[];
+  onOpen: (id: string) => void;
+}) {
+  const pts = linked.map(p => [p.lat, p.lng] as [number, number]);
+  return (
+    <div className="rounded-2xl overflow-hidden border border-[var(--color-bg-soft)]">
+      <div style={{ height: 200, position: 'relative', zIndex: 0 }}>
+        <MapContainer center={pts[0]} zoom={13} scrollWheelZoom={false} zoomControl={false} attributionControl={false}
+          style={{ height: '100%', width: '100%' }}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
+          {linked.map(p => (
+            <Marker key={p.id} position={[p.lat, p.lng]} icon={brandMarker}
+              eventHandlers={{ click: () => onOpen(p.id) }} />
+          ))}
+          <FitBounds points={pts} />
+        </MapContainer>
+      </div>
+      <div className="flex flex-wrap gap-1.5 p-3 bg-white">
+        {linked.map(p => (
+          <button key={p.id} onClick={() => onOpen(p.id)}
+            className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full active:scale-95 transition-transform"
+            style={{ background: '#FFF4EB', color: '#C96442' }}>
+            <i className="fa-solid fa-location-dot text-[10px]" />{p.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Bei Änderung von Radius/Verkehrsmittel die Karte auf die Reichweite (+ aktuellen Ort) einpassen,
 // damit der gewählte Radius sichtbar wird. Erstansicht bleibt auf den Ort zentriert.
 function FitReachOnChange({ center, travel, radiusKm, place }: {
@@ -1104,6 +1149,23 @@ export function PlaceDetailPage({ id: idProp, embedded, onOpenPlace, onClose }: 
     return places.filter(p => p.id !== place.id).map(p => ({ p, s: score(p) }))
       .filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 3).map(x => x.p);
   }, [places, place]);
+
+  // Im Beschreibungstext verlinkte andere Orte (data-place-id) → kleine Karte darunter
+  const linkedInStory = useMemo(() => {
+    if (!place?.long) return [] as { id: string; name: string; lat: number; lng: number }[];
+    const ids: string[] = [];
+    try {
+      const doc = new DOMParser().parseFromString(place.long, 'text/html');
+      doc.querySelectorAll('a.gt-place[data-place-id]').forEach(a => {
+        const pid = a.getAttribute('data-place-id');
+        if (pid && !ids.includes(pid)) ids.push(pid);
+      });
+    } catch { /* kaputtes HTML ignorieren */ }
+    return ids
+      .map(pid => places.find(p => p.id === pid))
+      .filter((p): p is Place => !!p && p.id !== place.id && p.lat != null && p.lng != null)
+      .map(p => ({ id: p.id, name: p.name, lat: p.lat as number, lng: p.lng as number }));
+  }, [place?.long, place?.id, places]);
 
   const filteredQa = useMemo(() => {
     const q = qaSearch.trim().toLowerCase();
@@ -2359,7 +2421,11 @@ async function handleVerifyToggle() {
               <section>
                 <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">Über diesen Ort</p>
                 <div
-                  className={`text-[15px] text-[var(--color-body)] leading-relaxed prose prose-sm max-w-none [&_img]:rounded-2xl [&_img]:w-full [&_img]:my-4 [&_img]:shadow-[var(--shadow-card)] ${!storyExpanded && isLongStory ? 'line-clamp-5' : ''}`}
+                  className={`text-[15px] text-[var(--color-body)] leading-relaxed prose prose-sm max-w-none [&_img]:rounded-2xl [&_img]:w-full [&_img]:my-4 [&_img]:shadow-[var(--shadow-card)] [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline [&_a.gt-place]:cursor-pointer ${!storyExpanded && isLongStory ? 'line-clamp-5' : ''}`}
+                  onClick={e => {
+                    const a = (e.target as HTMLElement).closest?.('a.gt-place') as HTMLElement | null;
+                    if (a) { e.preventDefault(); const pid = a.getAttribute('data-place-id'); if (pid) openPlace(pid); }
+                  }}
                   // eslint-disable-next-line react/no-danger
                   dangerouslySetInnerHTML={{ __html: place.long }}
                 />
@@ -2369,6 +2435,15 @@ async function handleVerifyToggle() {
                     {storyExpanded ? 'Weniger anzeigen' : 'Mehr lesen'}
                     <i className={`fa-solid fa-chevron-${storyExpanded ? 'up' : 'down'} text-xs`} />
                   </button>
+                )}
+                {/* Karte mit den im Text verlinkten Orten (z.B. Stadtteil mit mehreren Spots) */}
+                {linkedInStory.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-2">
+                      Orte in diesem Text
+                    </p>
+                    <LinkedPlacesMap linked={linkedInStory} onOpen={openPlace} />
+                  </div>
                 )}
               </section>
             )}

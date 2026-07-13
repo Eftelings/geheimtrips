@@ -9,12 +9,14 @@ import sanitizeHtml from 'sanitize-html';
 const OPTIONS: sanitizeHtml.IOptions = {
   // img erlaubt eingebettete Reiseblog-Bilder; Schemes leer → nur relative /api/uploads/-URLs,
   // keine externen Bilder/Tracking-Pixel/data:-URIs.
-  allowedTags: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'ul', 'ol', 'li', 'span', 'img'],
+  allowedTags: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'ul', 'ol', 'li', 'span', 'img', 'a'],
   // Nur ein gefiltertes style-Attribut: manche Browser (v.a. iOS Safari) erzeugen
   // beim Formatieren <span style="font-weight:…"> statt <b>/<i>/<u>. Wir erlauben
   // ausschließlich diese harmlosen Formatierungs-Properties — kein position, url(),
   // kein onerror etc. → kein XSS / kein Layout-Hijack.
-  allowedAttributes: { '*': ['style'], img: ['src', 'class', 'alt'] },
+  // <a> nur für interne Ort-Verlinkungen: href ist relativ (/place/…) → externe/js:-Schemes
+  // werden durch allowedSchemes:[] geblockt.
+  allowedAttributes: { '*': ['style'], img: ['src', 'class', 'alt'], a: ['href', 'class', 'data-place-id'] },
   allowedStyles: {
     '*': {
       'font-weight':          [/^(bold|bolder|[5-9]00)$/],
