@@ -90,7 +90,7 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
         )}
 
         {/* Page content */}
-        <main className="flex-1 pb-20 md:pb-0 bg-[var(--color-bg)]">
+        <main className="flex-1 flex flex-col pb-20 md:pb-0 bg-[var(--color-bg)]">
           {children}
         </main>
       </div>

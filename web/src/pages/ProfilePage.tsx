@@ -96,18 +96,19 @@ export function ProfilePage() {
           </button>
         </div>
 
-        {/* Postfach — Benachrichtigungen liegen jetzt im Profil */}
+        {/* Postfach — Benachrichtigungen liegen jetzt im Profil (lila hervorgehoben) */}
         <button onClick={() => { setNotif(0); navigate('/notifications'); }}
-          className="w-full flex items-center gap-3 bg-white rounded-2xl p-3.5 shadow-[var(--shadow-card)] mb-4 active:scale-[0.99] transition-transform">
-          <span className="w-10 h-10 rounded-xl bg-[var(--color-bg-soft)] flex items-center justify-center flex-shrink-0 relative">
-            <i className="fa-regular fa-bell text-[var(--color-aubergine)] text-lg" />
-            {notif > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[var(--color-amber)] border-2 border-white" />}
+          className="w-full flex items-center gap-3 rounded-2xl p-3.5 mb-4 active:scale-[0.99] transition-transform text-white"
+          style={{ background: 'linear-gradient(135deg, #4a3268, #34254c)', boxShadow: '0 6px 20px rgba(52,37,76,0.30)' }}>
+          <span className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0 relative">
+            <i className="fa-regular fa-bell text-white text-lg" />
+            {notif > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-amber)] text-white text-[10px] font-bold flex items-center justify-center border-2 border-[#34254c]">{notif > 9 ? '9+' : notif}</span>}
           </span>
           <div className="flex-1 min-w-0 text-left">
-            <p className="font-semibold text-[var(--color-aubergine)] text-sm">Postfach</p>
-            <p className="text-xs text-[var(--color-lavender)]">{notif > 0 ? `${notif} neue Benachrichtigung${notif > 1 ? 'en' : ''}` : 'Keine neuen Nachrichten'}</p>
+            <p className="font-semibold text-sm">Postfach</p>
+            <p className="text-xs text-white/70">{notif > 0 ? `${notif} neue Benachrichtigung${notif > 1 ? 'en' : ''}` : 'Keine neuen Nachrichten'}</p>
           </div>
-          <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)]" />
+          <i className="fa-solid fa-chevron-right text-white/60" />
         </button>
 
         {/* Freundschaftsanfragen */}

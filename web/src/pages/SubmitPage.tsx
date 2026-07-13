@@ -1443,26 +1443,6 @@ function StepDetails({
   );
 }
 
-function FieldTip({ example }: { example: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative flex-shrink-0">
-      <button type="button" onClick={() => setOpen(o => !o)}
-        className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border-2 transition-colors"
-        style={{ borderColor: open ? C.amber : '#E4DCF0', background: open ? '#FFF4EB' : 'white', color: C.amber }}>
-        <i className="fa-solid fa-lightbulb text-[10px]" /> Tipp
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-64 z-30 bg-white border border-[#E4DCF0] rounded-xl shadow-lg p-3 text-xs leading-relaxed text-[#71587A]">
-          <button type="button" onClick={() => setOpen(false)}
-            className="absolute top-1.5 right-2 text-[#C4AED0] hover:text-[#71587A]"><i className="fa-solid fa-xmark text-[10px]" /></button>
-          {example}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── KI-Knopf (Gemini) ──────────────────────────────────────────────────────────
 function AiButton({ onClick, loading, disabled, label }: {
   onClick: () => void; loading: boolean; disabled?: boolean; label: string;
@@ -1524,7 +1504,6 @@ function StepStory({
           <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
             Ausführliche Beschreibung <span className="text-[#C96442]">*</span>
           </label>
-          <FieldTip example={'z.B. „Versteckt hinter der alten Mühle führt ein schmaler Pfad zu einem Wasserfall, den kaum jemand kennt. Am schönsten früh morgens, wenn das Licht durch die Bäume fällt …"'} />
         </div>
         <p className="text-xs text-[#9A8FAA]">
           Atmosphäre, was dich überrascht hat, was andere übersehen. Nutze{' '}
@@ -1548,7 +1527,7 @@ function StepStory({
           {aiOn && (
             <AiButton onClick={genRecommend} loading={descLoading}
               disabled={state.media.filter(m => m.type === 'image' && m.serverUrl).length === 0}
-              label="Empfehlung für einen Text" />
+              label="Beispieltext für diesen Ort" />
           )}
         </div>
         {aiOn && (
@@ -1566,7 +1545,6 @@ function StepStory({
           <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
             In einem Satz: Was ist das Besondere an diesem Ort?
           </label>
-          <FieldTip example={'z.B. „Das größte Freilichtmuseum Deutschlands." oder „Das perfekte Café für eine Pause beim Bummel durch Bonn."'} />
         </div>
         <p className="text-xs text-[#9A8FAA]">
           Dieser Satz erscheint auf der Swipe-Karte im Entdecken-Modus. Schreib ihn in deinen eigenen Worten.

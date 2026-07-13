@@ -12,11 +12,17 @@ const shortGroup = (label: string) => label.split(/[,&]/)[0].trim();
 // E: grobe Prüfung, ob eine Eingabe ein Adjektiv ist (für „Wie fühlt es sich an?")
 export function looksLikeAdjective(raw: string): boolean {
   const w = raw.trim();
-  if (!w || w.split(/\s+/).length > 2) return false;
-  const lower = w.toLowerCase();
-  if (/(ung|heit|keit|schaft|tion|taet|tät|ismus|nis|tum|ling)$/.test(lower)) return false;
+  const words = w.split(/\s+/);
+  if (!w || words.length > 2) return false;
+  const last = words[words.length - 1];      // Kopfwort (bei „sehr gemütlich" = „gemütlich")
+  const lower = last.toLowerCase();
+  // typische Nomen-Endungen → ablehnen (inkl. Komposita wie „Kaffeehaus", „Freizeitpark")
+  if (/(ung|heit|keit|schaft|tion|taet|tät|ismus|nis|tum|ling|haus|platz|garten|halle|park|welt|zimmer|raum|weg|berg|see|bau|stadt|dorf|hof|markt|museum|bad)$/.test(lower)) return false;
+  // typische Adjektiv-Endungen → ok
   if (/(ig|lich|isch|sam|bar|haft|los|voll|iv|oes|ös|os|ern|ell|al|ant|ent)$/.test(lower)) return true;
-  return w[0] === lower[0] && lower.length <= 16;
+  // zweiwortig + Kopfwort großgeschrieben → sehr wahrscheinlich Nomen → ablehnen
+  if (words.length === 2 && last[0] !== lower[0]) return false;
+  return lower.length <= 16;
 }
 
 /**

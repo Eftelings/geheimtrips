@@ -368,6 +368,7 @@ export function FunnelPage() {
 
   return (
     <Routes>
+      <Route index             element={<StepWhen {...props} />} />
       <Route path="when"       element={<StepWhen {...props} />} />
       <Route path="location"   element={<StepLocation {...props} />} />
       <Route path="transport"  element={<StepTransport {...props} />} />
