@@ -36,7 +36,7 @@ export function detailQuestions(tags: (string | null | undefined)[]): SubmitQues
       hint: 'Als Uhrzeit hinterlegt – so sehen andere, ob gerade geöffnet ist.' });
     qs.push({ id: 'phone',   label: 'Telefon (optional)', type: 'text', placeholder: '+49 …' });
     qs.push({ id: 'email',   label: 'E-Mail (optional)',  type: 'text', placeholder: 'kontakt@ort.de' });
-    qs.push({ id: 'website', label: 'Website (optional)', type: 'text', placeholder: 'https://…' });
+    // Website NICHT hier — sie wird universal (für alle Orte) im „Allgemeines"-Block gefragt (keine Dublette).
   }
   if (gastro) {
     qs.push({ id: 'menu_url',        label: 'Link zur Speisekarte (optional)', type: 'text', placeholder: 'https://…' });

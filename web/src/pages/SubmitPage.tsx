@@ -1480,7 +1480,8 @@ function StepDetails({
     'trivia_type', 'trivia_text', 'highlight',
     'entrance_fee', 'entrance_prices', 'entrance_fee_url',
     'has_opening_hours', 'opening_hours_week', 'opening_hours_url', 'opening_hours_text',
-    'website',
+    // 'website' bleibt sichtbar (universal, für alle Orte) → detailQuestions fragt sie NICHT mehr,
+    // damit sie nicht doppelt erscheint.
   ]);
   const universalQs = UNIVERSAL_QUESTIONS.filter(q => !HIDDEN.has(q.id));
   // Typ-abhängige Zusatz-Infos (Budget/Öffnungszeiten/Kontakt/Links/Tickets)
