@@ -83,6 +83,13 @@ async function seedTaxonomy() {
   }
   await runRows('INSERT OR IGNORE INTO tax_tag_merkmal (tag_slug,merkmal_slug)', tm);
   await runRows('INSERT OR IGNORE INTO tax_tag_vibe (tag_slug,vibe_slug)', tv);
+
+  // Aufräumen: Vibes sind Adjektive — Nomen-Vibe „Klassisches Kaffeehaus" → „Nostalgisch".
+  // (INSERT OR IGNORE lässt Alt-Einträge sonst stehen; idempotent.)
+  await db.run(sql`UPDATE places SET vibe_json = replace(vibe_json, 'klassisches-kaffeehaus', 'nostalgisch')
+    WHERE vibe_json LIKE '%klassisches-kaffeehaus%'`).catch(() => {});
+  await db.run(sql`DELETE FROM tax_tag_vibe WHERE vibe_slug = 'klassisches-kaffeehaus'`).catch(() => {});
+  await db.run(sql`DELETE FROM tax_vibes WHERE slug = 'klassisches-kaffeehaus'`).catch(() => {});
 }
 
 (async () => {

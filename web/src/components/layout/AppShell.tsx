@@ -35,9 +35,9 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
   if (bare) return <div className="min-h-full bg-[var(--color-bg)]">{children}</div>;
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="min-h-dvh bg-[var(--color-bg)]">
       {/* Max-width container — centres layout on ultra-wide displays */}
-      <div className="flex min-h-dvh max-w-[1440px] mx-auto">
+      <div className="flex min-h-dvh max-w-[1440px] mx-auto bg-[var(--color-bg)]">
       <Sidebar />
 
       <div className="flex flex-col flex-1 min-w-0">

@@ -81,7 +81,25 @@ const PageFallback = (
 export function App() {
   const { hydrate } = useAuthStore();
 
-  useEffect(() => { hydrate(); }, []);
+  useEffect(() => {
+    hydrate();
+    // Häufige Tab-Ziele im Leerlauf vorladen → Footer-Wechsel fühlt sich sofort an
+    // (Vite bündelt dieselben import()-Specifier, der Klick greift dann auf den Cache zu).
+    const prefetch = () => {
+      import('./pages/SavedPage.js');
+      import('./pages/VisitedPage.js');
+      import('./pages/game/GeoGamePage.js');
+      import('./pages/ProfilePage.js');
+      import('./pages/PlaceDetailPage.js');
+      import('./pages/NotificationInboxPage.js');
+    };
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    const t = ric ? ric(prefetch) : window.setTimeout(prefetch, 1500);
+    return () => {
+      const cic = (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;
+      if (ric && cic) cic(t as number); else clearTimeout(t as number);
+    };
+  }, []); // eslint-disable-line
 
   return (
     <Suspense fallback={PageFallback}>

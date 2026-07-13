@@ -130,7 +130,7 @@ export const T2_VIBES: string[] = [
   // Action & Energie
   'Adrenalin-Kick', 'Fantasiewelten', 'Lebhaft / Trubelig', 'Hip & Urban', 'Team-Geist',
   // Klassisch & Anspruchsvoll
-  'Klassisches Kaffeehaus', 'Chic & Elegant', 'Puristisch / Modern',
+  'Nostalgisch', 'Chic & Elegant', 'Puristisch / Modern',
 ];
 
 /**
@@ -209,7 +209,7 @@ export const T2_MAP: Record<string, { m: string[]; v: string[] }> = {
   'VR- & Gaming-Lounge': { m: ['Interaktive Exponate', 'Indoor', 'E-Sports'], v: [] },
 
   'Restaurant': { m: ['Vegan', 'Vegetarisch', 'Terrasse', 'Regionalgeschichte', 'Aussicht', 'Außergewöhnlich', 'Mittelalter', 'Erlebnisgastronomie'], v: [] },
-  'Café': { m: ['Hauseigene Röstung', 'Vegan', 'Vegetarisch', 'Terrasse', 'Aussicht', 'Erlebnisgastronomie', 'Teehaus', 'Kuchen', 'Torten', 'Tiere'], v: ['Hygge', 'Klassisches Kaffeehaus'] },
+  'Café': { m: ['Hauseigene Röstung', 'Vegan', 'Vegetarisch', 'Terrasse', 'Aussicht', 'Erlebnisgastronomie', 'Teehaus', 'Kuchen', 'Torten', 'Tiere'], v: ['Hygge', 'Nostalgisch'] },
   'Eisdiele': { m: ['Vegan', 'Terrasse', 'Aussicht'], v: [] },
   'Bar & Pub': { m: ['Terrasse', 'Indoor', 'Live-Musik', 'Erlebnisgastronomie'], v: [] },
   'Markt & Markthalle': { m: ['Regionalgeschichte', 'Architektur', 'Lebensmittel', 'Foodcourt', 'Gründerzeit', 'Viktorianisch'], v: [] },
