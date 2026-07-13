@@ -74,6 +74,7 @@ function SwipeFlyTo({ lat, lng }: { lat: number | null; lng: number | null }) {
 const entdeckenCache = {
   searchCenter: null as Coords | null,
   searchLabel: null as string | null,
+  userCoords: null as Coords | null,   // zuletzt bekannter GPS-Standort → „Zurück" muss nicht erst neu orten
   radiusKm: 10,   // Standard vorerst 10 km — Karte zoomt beim Laden genau auf diesen Radius
   mode: 'all' as Mode,
   tagSel: EMPTY_TAG_SEL as TagSelection,
@@ -95,7 +96,7 @@ export function MobileEntdecken() {
   const { places, loadPlaces, savedIds, visitedIds, funnelAnswers } = useAppStore();
   const vocab = useTaxVocab();
 
-  const [userCoords, setUserCoords] = useState<Coords | null>(() => funnelAnswers?.coords ?? null);
+  const [userCoords, setUserCoords] = useState<Coords | null>(() => entdeckenCache.userCoords ?? funnelAnswers?.coords ?? null);
   const [searchCenter, setSearchCenter] = useState<Coords | null>(entdeckenCache.searchCenter);
   const [searchLabel, setSearchLabel] = useState<string | null>(entdeckenCache.searchLabel);
   const [pickToast, setPickToast] = useState(false);
@@ -194,7 +195,7 @@ export function MobileEntdecken() {
   // Einstellungen für „Zurück" merken — jeder Render hält den Cache aktuell
   useEffect(() => {
     Object.assign(entdeckenCache, {
-      searchCenter, searchLabel, radiusKm, mode, tagSel,
+      searchCenter, searchLabel, userCoords, radiusKm, mode, tagSel,
       travelMode: reach.travelMode, travelMinutes: reach.travelMinutes,
       selectedId, sheetExpanded, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
     });
@@ -426,7 +427,9 @@ export function MobileEntdecken() {
             <p className="font-display font-bold text-[var(--color-aubergine)]">
               {listPlaces.length} {listPlaces.length === 1 ? 'Ort' : 'Orte'}{reachCenter ? ' in der Nähe' : ''}
             </p>
-            <button onClick={goSwipe} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold flex-shrink-0"
+            <button onClick={goSwipe}
+              onTouchStart={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold flex-shrink-0"
               style={{ background: 'var(--color-amber)', color: 'white' }}>
               <i className="fa-solid fa-layer-group" /> Swipen
             </button>
@@ -496,7 +499,9 @@ export function MobileEntdecken() {
                 <span className="text-[11px] font-semibold text-[var(--color-lavender)]">
                   <i className={`fa-solid ${swipeLow ? 'fa-chevron-up' : 'fa-chevron-down'} mr-1.5`} />{swipeLow ? 'Hoch zum Swipen · weiter runter zur Liste' : 'Runterziehen für Karte & Filter'}
                 </span>
-                <button onClick={closeSwipe} className="text-xs font-bold text-[var(--color-amber)] flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: 'rgba(249,144,57,0.12)' }}><i className="fa-solid fa-list" />Liste</button>
+                <button onClick={closeSwipe}
+                  onTouchStart={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}
+                  className="text-xs font-bold text-[var(--color-amber)] flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: 'rgba(249,144,57,0.12)' }}><i className="fa-solid fa-list" />Liste</button>
               </div>
             </div>
             <div className="flex-1 min-h-0">
