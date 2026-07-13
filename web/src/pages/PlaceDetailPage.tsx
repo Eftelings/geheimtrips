@@ -11,6 +11,7 @@ import { PlaceImage } from '../components/ui/PlaceImage.js';
 import { TagBadge } from '../components/ui/TagBadge.js';
 import { WeatherForecast } from '../components/ui/WeatherForecast.js';
 import { useAppStore } from '../store/useAppStore.js';
+import exifr from 'exifr';
 import { placesApi, businessApi, mediaApi } from '../services/api.js';
 import type { ParkingContributions, PlaceQuestion } from '../services/api.js';
 import { useAuthStore } from '../store/useAuthStore.js';
@@ -1026,7 +1027,7 @@ export function PlaceDetailPage({ id: idProp, embedded, onOpenPlace, onClose }: 
   const [claimSent, setClaimSent]      = useState(false);
   const [suggestOpen, setSuggestOpen]     = useState(false);
   // Review-Prozess
-  const [reviewStatus, setReviewStatus]   = useState<{ canReview: boolean; needsReview: boolean; reviewCount: number; points: number } | null>(null);
+  const [reviewStatus, setReviewStatus]   = useState<{ canReview: boolean; needsReview: boolean; reviewCount: number; snoozed?: boolean; points: number } | null>(null);
   const [reviewPopup, setReviewPopup]     = useState(false);
   const [reviewFlowOpen, setReviewFlowOpen] = useState(false);
   const [suggestCategory, setSuggestCategory] = useState<string | null>(null);
@@ -1146,10 +1147,13 @@ export function PlaceDetailPage({ id: idProp, embedded, onOpenPlace, onClose }: 
       const cached = places.find(p => p.id === id);
       if (cached) setPlace(cached);
       placesApi.get(id).then(setPlace).catch(() => {});
-      // Review-Prozess: braucht der Ort ein Review + darf ich? → Pop-up
+      // Review-Prozess: braucht der Ort ein Review + darf ich? → Pop-up.
+      // Wenn schon vertagt (liegt im Postfach), nur über den Postfach-Link (?review=1) erneut anzeigen –
+      // sonst nicht ungefragt am Ort nachhaken (kein Spam).
+      const forceReview = new URLSearchParams(window.location.search).get('review') === '1';
       placesApi.reviewStatus(id).then(rs => {
         setReviewStatus(rs);
-        if (rs.canReview && rs.needsReview) setReviewPopup(true);
+        if (rs.canReview && rs.needsReview && (!rs.snoozed || forceReview)) setReviewPopup(true);
       }).catch(() => setReviewStatus(null));
     }
     loadTrips();
@@ -1575,22 +1579,36 @@ async function handleVerifyToggle() {
     if (!pendingUpload || !pendingCcAccepted || !place || uploadBusy) return;
     setUploadBusy(true);
     let ok = 0;
+    let autoVisited = false;
     try {
       // 1) Datei zum Server hochladen (HEIC wird dort zu JPEG), 2) am Ort persistieren
       for (let i = 0; i < pendingUpload.files.length; i++) {
         const file = pendingUpload.files[i];
         try {
+          // Standortdaten aus den Foto-EXIF lesen — Foto nah am Ort ⇒ automatisch „besucht"
+          let lat: number | null = null, lng: number | null = null;
+          if (file.type.startsWith('image/')) {
+            try {
+              const g = await exifr.gps(file);
+              if (g && typeof g.latitude === 'number' && typeof g.longitude === 'number') { lat = g.latitude; lng = g.longitude; }
+            } catch { /* keine EXIF-GPS */ }
+          }
           const { url } = await mediaApi.upload(file);
           const type = file.type.startsWith('video/') ? 'video' : 'photo';
           const c = pendingCrops[i] ?? { x: 0.5, y: 0.5 };
-          await placesApi.addMedia(place.id, { url, type, cropX: c.x, cropY: c.y });
+          const res = await placesApi.addMedia(place.id, { url, type, cropX: c.x, cropY: c.y, lat, lng });
+          if (res.visited) autoVisited = true;
           ok++;
         } catch { /* einzelne Datei übersprungen */ }
       }
       // 3) Ort frisch laden → die persistierten Medien erscheinen dauerhaft in der Galerie
       const fresh = await placesApi.get(place.id).catch(() => null);
       if (fresh) setPlace(fresh);
-      showToast(ok > 0 ? `${ok} Datei${ok > 1 ? 'en' : ''} hinzugefügt!` : 'Upload fehlgeschlagen.');
+      // Foto mit passenden Standortdaten hat den Ort als besucht markiert
+      if (autoVisited && !isVisited) await markVisited(place.id).catch(() => {});
+      showToast(autoVisited
+        ? `${ok} Foto${ok > 1 ? 's' : ''} hinzugefügt — als besucht markiert ✓`
+        : ok > 0 ? `${ok} Datei${ok > 1 ? 'en' : ''} hinzugefügt!` : 'Upload fehlgeschlagen.');
     } finally {
       setUploadBusy(false);
       setPendingUpload(null);
@@ -3193,6 +3211,14 @@ async function handleVerifyToggle() {
             <button onClick={() => { setReviewPopup(false); placesApi.dismissReview(place.id).catch(() => {}); }}
               className="w-full text-[var(--color-lavender)] font-semibold py-2 text-sm">
               Später — erinnere mich im Postfach
+            </button>
+            <button onClick={() => {
+                setReviewPopup(false);
+                setReviewStatus(s => s ? { ...s, canReview: false } : s);
+                placesApi.declineReview(place.id).catch(() => {});
+              }}
+              className="w-full text-[var(--color-lavender-lt)] font-medium py-1.5 text-[13px]">
+              Nein danke — diesen Ort möchte ich nicht prüfen
             </button>
           </div>
         </div>

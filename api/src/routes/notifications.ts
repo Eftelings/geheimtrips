@@ -19,6 +19,14 @@ db.run(sql`CREATE TABLE IF NOT EXISTS notifications (
   actor_id INTEGER,
   created_at TEXT DEFAULT (datetime('now'))
 )`).catch(() => {});
+// Weggewischte Postfach-Einträge (abgeleitete Items wie Fragen/Änderungswünsche werden
+// nicht gelöscht, sondern nur pro Nutzer:in ausgeblendet).
+db.run(sql`CREATE TABLE IF NOT EXISTS notification_dismissals (
+  user_id INTEGER NOT NULL,
+  item_key TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, item_key)
+)`).catch(() => {});
 
 // GET /notifications/count — Anzahl neuer Ereignisse seit dem letzten Ansehen:
 // neue Bewertungen auf meinen Orten + neue Likes auf meinen Fotos (nicht von mir selbst).
@@ -96,6 +104,11 @@ router.get('/list', requireAuth, async (c) => {
   type Item = { type: string; id: string; title: string; body: string; link: string; createdAt: string };
   const items: Item[] = [];
 
+  // Weggewischte Einträge dieser Person
+  const dismissedRows = await db.all(sql`
+    SELECT item_key AS k FROM notification_dismissals WHERE user_id = ${me.id}`).catch(() => []) as { k: string }[];
+  const dismissed = new Set(dismissedRows.map(r => r.k));
+
   // 1) Freundschaftsanfragen
   const reqs = await db.select({ id: friendships.id, name: users.name, handle: users.handle, createdAt: friendships.createdAt })
     .from(friendships).innerJoin(users, eq(users.id, friendships.requesterId))
@@ -128,14 +141,33 @@ router.get('/list', requireAuth, async (c) => {
     FROM notifications WHERE user_id = ${me.id} ORDER BY id DESC LIMIT 50`).catch(() => []) as any[];
   for (const e of evs) items.push({ type: e.type, id: `n-${e.id}`, title: e.title, body: e.body, link: e.link ?? '/notifications', createdAt: e.createdAt ?? '' });
 
-  items.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
-  return c.json(items);
+  const visible = items.filter(it => !dismissed.has(it.id));
+  visible.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  return c.json(visible);
 });
 
 // POST /notifications/seen — alles als gesehen markieren (löscht den Punkt)
 router.post('/seen', requireAuth, async (c) => {
   const me = c.get('user');
   await db.update(users).set({ notificationsSeenAt: sql`datetime('now')` }).where(eq(users.id, me.id));
+  return c.json({ ok: true });
+});
+
+// POST /notifications/dismiss — einen Postfach-Eintrag wegwischen.
+// Echte Ereignisse (n-…) werden gelöscht, abgeleitete Items (fr-/q-/cr-…) nur ausgeblendet.
+router.post('/dismiss', requireAuth, async (c) => {
+  const me = c.get('user');
+  const body = await c.req.json().catch(() => ({})) as { id?: string };
+  const id = (body.id ?? '').trim();
+  if (!id) return c.json({ error: 'id fehlt.' }, 400);
+  if (id.startsWith('n-')) {
+    const nid = Number(id.slice(2));
+    if (Number.isFinite(nid)) {
+      await db.run(sql`DELETE FROM notifications WHERE id = ${nid} AND user_id = ${me.id}`).catch(() => {});
+    }
+  }
+  await db.run(sql`
+    INSERT OR IGNORE INTO notification_dismissals (user_id, item_key) VALUES (${me.id}, ${id})`).catch(() => {});
   return c.json({ ok: true });
 });
 

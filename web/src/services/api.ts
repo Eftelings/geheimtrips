@@ -111,8 +111,8 @@ export const placesApi = {
                     post<{ ok: boolean }>(`/places/${id}/contribute`, { type, value }),
   likePhoto:      (id: string, url: string) =>
                     post<{ liked: boolean; count: number }>(`/places/${id}/photos/like`, { url }),
-  addMedia:       (id: string, data: { url: string; type?: 'photo' | 'video'; cropX?: number; cropY?: number; caption?: string }) =>
-                    post<{ ok: boolean; place: Place }>(`/places/${id}/media`, data),
+  addMedia:       (id: string, data: { url: string; type?: 'photo' | 'video'; cropX?: number; cropY?: number; caption?: string; lat?: number | null; lng?: number | null }) =>
+                    post<{ ok: boolean; visited: boolean; place: Place }>(`/places/${id}/media`, data),
   submit:         (payload: SubmitPlacePayload) =>
                     post<{ ok: boolean; id: string }>('/places/submit', payload),
   update:         (id: string, payload: SubmitPlacePayload) =>
@@ -125,9 +125,10 @@ export const placesApi = {
   deleteQuestion: (id: string, qid: number) => del<{ ok: boolean }>(`/places/${id}/questions/${qid}`),
   suggestChange:  (id: string, category: string, text: string) =>
                     post<{ ok: boolean }>(`/places/${id}/change-request`, { category, text }),
-  reviewStatus:   (id: string) => get<{ canReview: boolean; needsReview: boolean; reviewCount: number; alreadyReviewed: boolean; points: number }>(`/places/${id}/review-status`),
+  reviewStatus:   (id: string) => get<{ canReview: boolean; needsReview: boolean; reviewCount: number; alreadyReviewed: boolean; snoozed: boolean; points: number }>(`/places/${id}/review-status`),
   submitReview:   (id: string) => post<{ ok: boolean; points: number }>(`/places/${id}/review`),
   dismissReview:  (id: string) => post<{ ok: boolean }>(`/places/${id}/review-dismiss`),
+  declineReview:  (id: string) => post<{ ok: boolean }>(`/places/${id}/review-decline`),
 };
 
 export interface PlaceQuestion {
@@ -220,9 +221,10 @@ export interface InboxItem {
 }
 
 export const notificationsApi = {
-  count: () => get<{ count: number; ratings: number; likes: number; requests: number; questions?: number; changes?: number; events?: number }>('/notifications/count'),
-  list:  () => get<InboxItem[]>('/notifications/list'),
-  seen:  () => post<{ ok: boolean }>('/notifications/seen'),
+  count:   () => get<{ count: number; ratings: number; likes: number; requests: number; questions?: number; changes?: number; events?: number }>('/notifications/count'),
+  list:    () => get<InboxItem[]>('/notifications/list'),
+  seen:    () => post<{ ok: boolean }>('/notifications/seen'),
+  dismiss: (id: string) => post<{ ok: boolean }>('/notifications/dismiss', { id }),
 };
 
 // ─── Business ──────────────────────────────────────────────────────────────────

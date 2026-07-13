@@ -80,6 +80,18 @@ db.run(sql`
   )
 `).catch(console.error);
 
+// Review-Nachfrage pro Person unterdrücken: 'snoozed' (später, liegt im Postfach) oder
+// 'declined' (möchte diesen Ort gar nicht prüfen). Verhindert Dauer-Nachfragen am Ort.
+db.run(sql`
+  CREATE TABLE IF NOT EXISTS place_review_optout (
+    user_id    INTEGER NOT NULL,
+    place_id   TEXT    NOT NULL,
+    status     TEXT    NOT NULL,
+    created_at TEXT    DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, place_id)
+  )
+`).catch(console.error);
+
 // Fragen zu Orten (Community-Q&A). Antwort optional (vom/von der Ersteller:in).
 db.run(sql`
   CREATE TABLE IF NOT EXISTS place_questions (
@@ -625,13 +637,15 @@ router.post('/:id/media', requireAuth,
     cropX:   z.number().min(0).max(1).optional(),
     cropY:   z.number().min(0).max(1).optional(),
     caption: z.string().max(280).optional(),
+    lat:     z.number().nullable().optional(),   // Geo-Tag aus den Foto-EXIF-Daten
+    lng:     z.number().nullable().optional(),
   })),
   async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
     const place = await db.select().from(places).where(eq(places.id, id)).get();
     if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
-    const { url, type = 'photo', cropX = 0.5, cropY = 0.5, caption = '' } = c.req.valid('json');
+    const { url, type = 'photo', cropX = 0.5, cropY = 0.5, caption = '', lat = null, lng = null } = c.req.valid('json');
 
     // An galleryJson anhängen (gleiches Objekt-Format wie beim Einreichen)
     let gallery: unknown[] = [];
@@ -644,8 +658,25 @@ router.post('/:id/media', requireAuth,
     // Uploader vermerken (für Eigentum + Like-Benachrichtigungen)
     await db.insert(placeMedia).values({ placeId: id, userId: user.id, url, type, ccConfirmed: true }).catch(() => {});
 
+    // Foto mit Standortdaten nahe am Ort → automatisch als „besucht" markieren
+    let visited = false;
+    if (typeof lat === 'number' && typeof lng === 'number' && place.lat != null && place.lng != null) {
+      const R = 6371000; // m
+      const dLat = (lat - place.lat) * Math.PI / 180;
+      const dLng = (lng - place.lng) * Math.PI / 180;
+      const hav = Math.sin(dLat / 2) ** 2 +
+        Math.cos(place.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      const dist = 2 * R * Math.asin(Math.min(1, Math.sqrt(hav)));
+      if (dist <= 500) {
+        const existing = await db.select({ id: visitedPlaces.placeId }).from(visitedPlaces)
+          .where(and(eq(visitedPlaces.userId, user.id), eq(visitedPlaces.placeId, id))).get();
+        if (!existing) await db.insert(visitedPlaces).values({ userId: user.id, placeId: id, gpsVerified: true }).catch(() => {});
+        visited = true;
+      }
+    }
+
     const updated = await db.select().from(places).where(eq(places.id, id)).get();
-    return c.json({ ok: true, place: updated ? hydrate(updated) : null });
+    return c.json({ ok: true, visited, place: updated ? hydrate(updated) : null });
   }
 );
 
@@ -852,10 +883,19 @@ router.get('/:id/review-status', requireAuth, async (c) => {
   const visited = await db.select({ id: visitedPlaces.placeId }).from(visitedPlaces)
     .where(and(eq(visitedPlaces.userId, user.id), eq(visitedPlaces.placeId, placeId))).get();
 
+  // Hat die Person die Nachfrage bereits vertagt (im Postfach) oder abgelehnt?
+  const optoutRows = await db.all<{ status: string }>(sql`
+    SELECT status FROM place_review_optout WHERE user_id = ${user.id} AND place_id = ${placeId} LIMIT 1
+  `).catch(() => []);
+  const optout   = optoutRows[0]?.status ?? null;
+  const declined = optout === 'declined';
+  const snoozed  = optout === 'snoozed';
+
   const alreadyReviewed = Number(a.mineRecent) === 1;
   const needsReview     = reviewCount < 2 || Number(a.stale) === 1;
-  const canReview       = !!visited && place.submittedBy !== user.id && !alreadyReviewed;
-  return c.json({ canReview, needsReview, reviewCount, alreadyReviewed, points: W_REVIEW });
+  // 'declined' → gar nicht mehr fragen; 'snoozed' → nicht automatisch aufpoppen (nur über Postfach).
+  const canReview       = !!visited && place.submittedBy !== user.id && !alreadyReviewed && !declined;
+  return c.json({ canReview, needsReview, reviewCount, alreadyReviewed, snoozed, points: W_REVIEW });
 });
 
 // POST /places/:id/review — Review abschließen → Punkte
@@ -871,16 +911,32 @@ router.post('/:id/review', requireAuth, async (c) => {
   return c.json({ ok: true, points: W_REVIEW });
 });
 
-// POST /places/:id/review-dismiss — später erinnern (Postfach-Notiz)
+// POST /places/:id/review-dismiss — später erinnern (Postfach-Notiz).
+// Merkt sich 'snoozed', damit die Frage am Ort nicht erneut aufpoppt (Postfach reicht).
 router.post('/:id/review-dismiss', requireAuth, async (c) => {
   const user = c.get('user');
   const placeId = c.req.param('id');
   const place = await db.select({ name: places.name }).from(places).where(eq(places.id, placeId)).get();
+  await db.run(sql`
+    INSERT INTO place_review_optout (user_id, place_id, status) VALUES (${user.id}, ${placeId}, 'snoozed')
+    ON CONFLICT(user_id, place_id) DO UPDATE SET status = 'snoozed', created_at = datetime('now')
+  `).catch(() => {});
   if (place) await notify({
     userId: user.id, type: 'review_reminder', title: 'Review noch offen',
     body: `Magst du später kurz prüfen, ob bei „${place.name}" noch alles stimmt? Dafür gibt's Punkte.`,
-    link: `/place/${placeId}`,
+    link: `/place/${placeId}?review=1`,
   });
+  return c.json({ ok: true });
+});
+
+// POST /places/:id/review-decline — diesen Ort möchte ich gar nicht prüfen (nie wieder fragen)
+router.post('/:id/review-decline', requireAuth, async (c) => {
+  const user = c.get('user');
+  const placeId = c.req.param('id');
+  await db.run(sql`
+    INSERT INTO place_review_optout (user_id, place_id, status) VALUES (${user.id}, ${placeId}, 'declined')
+    ON CONFLICT(user_id, place_id) DO UPDATE SET status = 'declined', created_at = datetime('now')
+  `).catch(() => {});
   return c.json({ ok: true });
 });
 
