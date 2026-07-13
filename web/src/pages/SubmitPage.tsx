@@ -769,11 +769,29 @@ function QuestionField({ q, value, onChange }: {
     );
   }
   if (q.type === 'weekhours') {
-    const v = (value as WeekHours) ?? {};
+    const v = (value ?? {}) as WeekHours & { alwaysOpen?: boolean };
+    const always = v.alwaysOpen === true;
     const upd = (key: string, patch: Partial<WeekHours[string]>) => onChange({ ...v, [key]: { ...(v[key] ?? {}), ...patch } });
     const timeCls = 'border rounded-lg px-2 py-1.5 text-sm outline-none border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C]';
     return (
-      <div className="space-y-1.5">
+      <div className="space-y-2">
+        {/* Umschalter: immer geöffnet ODER feste Öffnungszeiten */}
+        <div className="inline-flex gap-1 p-1 bg-[#F0EBF7] rounded-xl">
+          {([['open', 'Immer geöffnet'], ['hours', 'Öffnungszeiten']] as const).map(([id, lbl]) => {
+            const active = (id === 'open') === always;
+            return (
+              <button key={id} type="button" onClick={() => onChange({ ...v, alwaysOpen: id === 'open' })}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={active ? { background: 'white', color: '#34254C', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' } : { color: '#71587A' }}>
+                {lbl}
+              </button>
+            );
+          })}
+        </div>
+        {always ? (
+          <p className="text-xs text-[#9A8FAA] italic pl-1">Dieser Ort ist rund um die Uhr geöffnet.</p>
+        ) : (
+        <div className="space-y-1.5">
         {HOUR_DAYS.map(([key, label]) => {
           const d = v[key] ?? {};
           return (
@@ -796,6 +814,8 @@ function QuestionField({ q, value, onChange }: {
             </div>
           );
         })}
+        </div>
+        )}
       </div>
     );
   }
@@ -1401,7 +1421,14 @@ function StepDetails({
   }
 
   // Trivia + „Besonderheit" werden bereits auf der Beschreibungs-Seite abgefragt → hier ausblenden.
-  const HIDDEN      = new Set(['trivia_type', 'trivia_text', 'highlight']);
+  // Trivia/Besonderheit stehen schon auf der Beschreibungs-Seite; die alten Preis-/Öffnungszeiten-/Website-
+  // Fragen sind durch die neuen (berechenbaren) in detailQuestions ersetzt → hier ausblenden (keine Dubletten).
+  const HIDDEN      = new Set([
+    'trivia_type', 'trivia_text', 'highlight',
+    'entrance_fee', 'entrance_prices', 'entrance_fee_url',
+    'has_opening_hours', 'opening_hours_week', 'opening_hours_url', 'opening_hours_text',
+    'website',
+  ]);
   const universalQs = UNIVERSAL_QUESTIONS.filter(q => !HIDDEN.has(q.id));
   // Typ-abhängige Zusatz-Infos (Budget/Öffnungszeiten/Kontakt/Links/Tickets)
   const detailQs    = detailQuestions(state.tags);

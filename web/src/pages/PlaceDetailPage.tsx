@@ -286,7 +286,8 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
   const answers = ((place.attributes as Record<string, unknown> | undefined)?.answers ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '');
   const rawHours = answers.opening_hours;
-  const hours = rawHours && typeof rawHours === 'object' && !Array.isArray(rawHours) ? rawHours as WeekHours : null;
+  const hours = rawHours && typeof rawHours === 'object' && !Array.isArray(rawHours) ? rawHours as (WeekHours & { alwaysOpen?: boolean }) : null;
+  const alwaysOpen = hours?.alwaysOpen === true;
   const open = isOpenNow(hours);
   const phone = str(answers.phone), email = str(answers.email);
   const menuUrl = str(answers.menu_url), rsvUrl = str(answers.reservation_url), ticketUrl = str(answers.ticket_url);
@@ -303,11 +304,11 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
   if (phone)     links.push({ href: `tel:${phone}`,   icon: 'fa-phone',          label: 'Anrufen' });
   if (email)     links.push({ href: `mailto:${email}`, icon: 'fa-envelope',      label: 'E-Mail' });
 
-  if (!daysWithHours.length && !links.length && !priceRows.length) return null;
+  if (!alwaysOpen && !daysWithHours.length && !links.length && !priceRows.length) return null;
 
   return (
     <div className={`rounded-2xl border border-[var(--color-bg-soft)] bg-white p-4 ${className}`}>
-      {daysWithHours.length > 0 && (
+      {(alwaysOpen || daysWithHours.length > 0) && (
         <div className="mb-3">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-lavender)]">Öffnungszeiten</p>
@@ -318,6 +319,9 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
               </span>
             )}
           </div>
+          {alwaysOpen ? (
+            <p className="text-sm text-[var(--color-aubergine)]">Durchgehend geöffnet (rund um die Uhr)</p>
+          ) : (
           <div className="space-y-0.5">
             {daysWithHours.map(([k, label]) => (
               <div key={k} className="flex justify-between text-sm" style={k === todayKey ? { fontWeight: 700, color: '#34254C' } : { color: '#71587A' }}>
@@ -325,6 +329,7 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
       {priceRows.length > 0 && (

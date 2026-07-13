@@ -26,6 +26,8 @@ export function detailQuestions(tags: (string | null | undefined)[]): SubmitQues
   const gastro = tags.some(isGastroTag);
   const entry  = tags.some(isEntryTag);
   const qs: SubmitQuestion[] = [
+    { id: 'indoor_outdoor', label: 'Drinnen oder draußen?', type: 'select',
+      options: ['Draußen (Outdoor)', 'Drinnen (Indoor)', 'Beides'] },
     { id: 'budget', label: 'Preisniveau', type: 'select',
       options: ['Kostenlos', '€ – günstig', '€€ – mittel', '€€€ – gehoben'] },
   ];
@@ -56,8 +58,9 @@ export const HOUR_DAYS: [string, string][] = [
 ];
 
 /** Ist der Ort laut Öffnungszeiten gerade geöffnet? null = keine Angabe. */
-export function isOpenNow(hours: WeekHours | null | undefined, now = new Date()): boolean | null {
+export function isOpenNow(hours: (WeekHours & { alwaysOpen?: boolean }) | null | undefined, now = new Date()): boolean | null {
   if (!hours || typeof hours !== 'object') return null;
+  if (hours.alwaysOpen === true) return true;   // rund um die Uhr geöffnet
   const keys = ['so', 'mo', 'di', 'mi', 'do', 'fr', 'sa'];
   const day = hours[keys[now.getDay()]];
   if (!day) return null;
