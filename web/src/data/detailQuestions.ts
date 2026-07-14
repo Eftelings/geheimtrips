@@ -21,6 +21,26 @@ export function hasHours(tags: (string | null | undefined)[]): boolean {
   return tags.some(t => isGastroTag(t) || isEntryTag(t));
 }
 
+/**
+ * „Erlebnis-Orte" mit mehreren Sehenswürdigkeiten → dürfen Must-see-Highlights anlegen.
+ * (Freizeitparks, Museen, Zoos, botanische Gärten, große Natur-/Historik-Areale …)
+ * Bewusst NICHT: Gastro, Einzel-Attraktionen (Kino, Escape-Room), einzelne Landmarken/Punkt-Natur.
+ */
+const HIGHLIGHTABLE = new Set([
+  // Museen & Wissen
+  'kunstmuseum', 'galerie', 'technikmuseum', 'industriemuseum', 'naturkundemuseum', 'wissenschaftsmuseum',
+  'geschichtsmuseum', 'anthropologisches-museum', 'freilichtmuseum', 'bergwerk', 'science-center', 'planetarium',
+  'miniaturwelt', 'markenwelt', 'industriedenkmal-und-zeche',
+  // Historische Anlagen (mehrere sehenswerte Punkte)
+  'burg', 'schloss', 'palast', 'kloster', 'archaeologische-staette', 'historische-altstadt-viertel',
+  // Natur-Gebiete (Naturparks, große Flächen mit Aussichten/Stationen)
+  'wald', 'berg', 'schlucht', 'moor', 'heide', 'park', 'botanischer-garten',
+  // Tier- & Erlebniswelten
+  'zoo', 'tierpark', 'wildgehege', 'aquarium', 'freizeitpark', 'wasserpark',
+]);
+export function isHighlightableTag(tag: string | null | undefined): boolean { return !!tag && HIGHLIGHTABLE.has(tag); }
+export function hasHighlights(tags: (string | null | undefined)[]): boolean { return tags.some(isHighlightableTag); }
+
 /** Fragen für einen (oder mehrere) Typ-Tag(s). */
 export function detailQuestions(tags: (string | null | undefined)[]): SubmitQuestion[] {
   const gastro = tags.some(isGastroTag);

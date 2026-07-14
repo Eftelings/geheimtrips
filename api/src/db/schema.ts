@@ -54,6 +54,8 @@ export const places = sqliteTable('places', {
   hero: text('hero').notNull(),
   galleryJson: text('gallery_json').notNull().default('[]'),
   tipsJson: text('tips_json').notNull().default('[]'),
+  // Must-see-Highlights (nur bei Erlebnis-Orten): [{ title, description, photos: string[] }]
+  highlightsJson: text('highlights_json').notNull().default('[]'),
   attributesJson: text('attributes_json').notNull().default('{}'),
   authorId: integer('author_id').references(() => authors.id),
   lat: real('lat'),

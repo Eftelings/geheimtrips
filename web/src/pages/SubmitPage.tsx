@@ -4,7 +4,7 @@ import { AppShell } from '../components/layout/AppShell.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
-import { detailQuestions, HOUR_DAYS } from '../data/detailQuestions.js';
+import { detailQuestions, HOUR_DAYS, hasHighlights } from '../data/detailQuestions.js';
 import type { WeekHours } from '../data/detailQuestions.js';
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place } from '../types/index.js';
@@ -36,6 +36,12 @@ interface MediaItem {
   muted?:       boolean;    // video mute state (default true)
 }
 
+// Ein Must-see-Highlight im Wizard (Titel + Beschreibung + mind. 1 Foto)
+interface HighlightPhoto { id: string; localUrl: string; serverUrl?: string; uploading: boolean; error?: string; }
+interface HighlightDraft { id: string; title: string; description: string; photos: HighlightPhoto[]; }
+const MAX_HIGHLIGHTS = 12;
+const MAX_HL_PHOTOS  = 6;
+
 interface WizardState {
   name:         string;
   short:        string;
@@ -53,6 +59,7 @@ interface WizardState {
   answers:      Record<string, unknown>;
   long:         string;     // HTML from rich-text editor
   tips:         string[];
+  highlights:   HighlightDraft[];  // Must-sees (nur bei Erlebnis-Orten)
   media:        MediaItem[];
   heroIndex:    number;     // index of selected cover image
   exifSuggestion: { lat: number; lng: number } | null;  // aus Foto-EXIF gelesener Standortvorschlag
@@ -62,7 +69,7 @@ const EMPTY: WizardState = {
   name: '', short: '', locationText: '', lat: null, lng: null,
   l1: null, l2: null, l3: null, l4Features: [],
   tags: [], merkmale: [], vibes: [],
-  answers: {}, long: '', tips: [''], media: [], heroIndex: 0,
+  answers: {}, long: '', tips: [''], highlights: [], media: [], heroIndex: 0,
   exifSuggestion: null,
 };
 
@@ -108,6 +115,11 @@ function placeToWizardState(place: Place): WizardState {
     answers:      (attrs.answers as Record<string, unknown>) ?? {},
     long:         place.long ?? '',
     tips:         place.tips?.length ? place.tips : [''],
+    highlights:   (place.highlights ?? []).map((h, i) => ({
+      id: `h${i}-${Math.random().toString(36).slice(2, 7)}`,
+      title: h.title ?? '', description: h.description ?? '',
+      photos: (h.photos ?? []).map((url, j) => ({ id: `hp${i}-${j}`, localUrl: url, serverUrl: url, uploading: false })),
+    })),
     media,
     heroIndex:    0,
     exifSuggestion: null,
@@ -1456,11 +1468,128 @@ function StepCategory({ state, setState }: {
   );
 }
 
+// ─── Must-see-Highlights (nur bei Erlebnis-Orten) ───────────────────────────────
+function HighlightsEditor({ state, setState }: {
+  state: WizardState;
+  setState: React.Dispatch<React.SetStateAction<WizardState>>;
+}) {
+  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
+  const upd = (fn: (hs: HighlightDraft[]) => HighlightDraft[]) =>
+    setState(prev => ({ ...prev, highlights: fn(prev.highlights) }));
+
+  const rid = () => crypto.randomUUID?.() ?? Math.random().toString(36).slice(2, 10);
+
+  function addHighlight() {
+    if (state.highlights.length >= MAX_HIGHLIGHTS) return;
+    upd(hs => [...hs, { id: rid(), title: '', description: '', photos: [] }]);
+  }
+  const removeHighlight = (id: string) => upd(hs => hs.filter(h => h.id !== id));
+  const setField = (id: string, k: 'title' | 'description', v: string) =>
+    upd(hs => hs.map(h => h.id === id ? { ...h, [k]: v } : h));
+  const removePhoto = (hid: string, pid: string) =>
+    upd(hs => hs.map(h => h.id === hid ? { ...h, photos: h.photos.filter(p => p.id !== pid) } : h));
+
+  async function addPhotos(hid: string, files: File[]) {
+    const imgs = files.filter(f => f.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif)$/i.test(f.name));
+    const current = state.highlights.find(h => h.id === hid)?.photos.length ?? 0;
+    const toAdd = imgs.slice(0, Math.max(0, MAX_HL_PHOTOS - current));
+    if (!toAdd.length) return;
+    const fresh: HighlightPhoto[] = toAdd.map(f => ({ id: rid(), localUrl: URL.createObjectURL(f), uploading: true }));
+    upd(hs => hs.map(h => h.id === hid ? { ...h, photos: [...h.photos, ...fresh] } : h));
+    await Promise.all(toAdd.map(async (file, i) => {
+      const pid = fresh[i].id;
+      try {
+        const { url } = await mediaApi.upload(file);
+        setState(prev => ({ ...prev, highlights: prev.highlights.map(h => h.id === hid
+          ? { ...h, photos: h.photos.map(p => p.id === pid ? { ...p, serverUrl: url, uploading: false } : p) } : h) }));
+      } catch (e: unknown) {
+        setState(prev => ({ ...prev, highlights: prev.highlights.map(h => h.id === hid
+          ? { ...h, photos: h.photos.map(p => p.id === pid ? { ...p, uploading: false, error: (e as Error).message ?? 'Fehler' } : p) } : h) }));
+      }
+    }));
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-[#E4DCF0]" />
+        <span className="text-xs font-bold uppercase tracking-widest text-[#B0A3BC]">
+          <i className="fa-solid fa-star mr-1.5 text-[var(--color-amber)]" />Das musst du sehen
+        </span>
+        <div className="flex-1 h-px bg-[#E4DCF0]" />
+      </div>
+      <p className="text-xs text-[#9A8FAA] -mt-1">
+        Bei größeren Orten lohnt sich eine Liste der echten Must-sees – z.&nbsp;B. einzelne Achterbahnen, Gemälde oder Aussichtspunkte.
+        Jedes Highlight braucht einen Titel und <strong>mindestens 1 Foto</strong>. (Optional – wenn es hier nichts Herausragendes gibt, einfach leer lassen.)
+      </p>
+
+      {state.highlights.map((h, idx) => (
+        <div key={h.id} className="rounded-2xl border border-[#EAE3F2] bg-white/60 p-3.5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#B0A3BC]">Highlight {idx + 1}</span>
+            <button type="button" onClick={() => removeHighlight(h.id)}
+              className="text-[#C96442] text-xs font-semibold flex items-center gap-1 active:scale-95">
+              <i className="fa-solid fa-trash-can" />Entfernen
+            </button>
+          </div>
+
+          {/* Fotos */}
+          <div className="flex flex-wrap gap-2">
+            {h.photos.map(p => (
+              <div key={p.id} className="relative w-20 h-20 rounded-xl overflow-hidden bg-[#F1ECF4]">
+                <img src={p.serverUrl ?? p.localUrl} alt="" className="w-full h-full object-cover" />
+                {p.uploading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+                    <i className="fa-solid fa-circle-notch fa-spin text-white" />
+                  </div>
+                )}
+                {p.error && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#C96442]/80 text-white text-[9px] text-center px-1">Fehler</div>
+                )}
+                <button type="button" onClick={() => removePhoto(h.id, p.id)}
+                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/55 text-white flex items-center justify-center text-[10px]">
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              </div>
+            ))}
+            {h.photos.length < MAX_HL_PHOTOS && (
+              <button type="button" onClick={() => fileInputs.current[h.id]?.click()}
+                className="w-20 h-20 rounded-xl border-2 border-dashed border-[#D8CEEA] flex flex-col items-center justify-center gap-1 text-[#9A8FAA] active:scale-95">
+                <i className="fa-solid fa-camera text-lg" />
+                <span className="text-[10px] font-semibold">Foto</span>
+              </button>
+            )}
+            <input ref={el => { fileInputs.current[h.id] = el; }} type="file" accept="image/*" multiple hidden
+              onChange={e => { addPhotos(h.id, Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+          </div>
+
+          <input value={h.title} onChange={e => setField(h.id, 'title', e.target.value)} maxLength={120}
+            placeholder="Titel – z. B. Achterbahn Taron"
+            className="w-full rounded-xl border border-[#E4DCF0] px-3 py-2.5 text-sm outline-none focus:border-[var(--color-amber)]"
+            style={{ color: C.aubergine }} />
+          <textarea value={h.description} onChange={e => setField(h.id, 'description', e.target.value)} maxLength={600} rows={2}
+            placeholder="Warum sollte man das nicht verpassen? (optional)"
+            className="w-full rounded-xl border border-[#E4DCF0] px-3 py-2.5 text-sm outline-none focus:border-[var(--color-amber)] resize-none"
+            style={{ color: C.aubergine }} />
+        </div>
+      ))}
+
+      {state.highlights.length < MAX_HIGHLIGHTS && (
+        <button type="button" onClick={addHighlight}
+          className="w-full rounded-2xl border-2 border-dashed border-[#D8CEEA] py-3 text-sm font-semibold text-[var(--color-lavender)] active:scale-[0.99] flex items-center justify-center gap-2">
+          <i className="fa-solid fa-plus" />{state.highlights.length ? 'Weiteres Highlight' : 'Highlight hinzufügen'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function StepDetails({
-  state, set,
+  state, set, setState,
 }: {
   state: WizardState;
   set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
+  setState: React.Dispatch<React.SetStateAction<WizardState>>;
 }) {
   if (!state.tags.length) {
     return (
@@ -1512,6 +1641,8 @@ function StepDetails({
       </div>
 
       {detailQs.map(renderQ)}
+
+      {hasHighlights(state.tags) && <HighlightsEditor state={state} setState={setState} />}
 
       <div className="flex items-center gap-3 pt-1">
         <div className="flex-1 h-px bg-[#E4DCF0]" />
@@ -1752,6 +1883,10 @@ function ReviewSubmit({ state, isEdit }: { state: WizardState; isEdit: boolean }
               {state.media.filter(m => m.serverUrl).length !== 1 ? 'en' : ''} hochgeladen
             </SummaryRow>
           )}
+          {(() => {
+            const n = state.highlights.filter(h => h.title.trim() && h.photos.some(p => p.serverUrl)).length;
+            return n > 0 ? <SummaryRow icon="fa-star" label="Highlights">{n} Must-see{n !== 1 ? 's' : ''}</SummaryRow> : null;
+          })()}
         </div>
       </div>
 
@@ -2010,9 +2145,23 @@ export function SubmitPage() {
 
   // ── Submit ───────────────────────────────────────────────────────────────
   async function handleSubmit() {
-    const pendingUploads = state.media.filter(m => m.uploading).length;
+    const pendingUploads = state.media.filter(m => m.uploading).length
+      + state.highlights.reduce((n, h) => n + h.photos.filter(p => p.uploading).length, 0);
     if (pendingUploads > 0) {
       setError('Bitte warte, bis alle Dateien hochgeladen sind.');
+      return;
+    }
+
+    // Highlights validieren: jedes angefangene braucht Titel UND mind. 1 (hochgeladenes) Foto.
+    // Nur bei Erlebnis-Orten relevant → sonst leeren (räumt ggf. veraltete Highlights nach Typ-Wechsel auf).
+    const hlDone = hasHighlights(state.tags)
+      ? state.highlights
+          .map(h => ({ title: h.title.trim(), description: h.description.trim(), photos: h.photos.filter(p => p.serverUrl && !p.error).map(p => p.serverUrl!) }))
+          .filter(h => h.title || h.photos.length)   // komplett leere Entwürfe ignorieren
+      : [];
+    const badHl = hlDone.find(h => !h.title || h.photos.length === 0);
+    if (badHl) {
+      setError('Jedes Highlight braucht einen Titel und mindestens ein Foto (oder lösche das leere Highlight).');
       return;
     }
 
@@ -2041,6 +2190,7 @@ export function SubmitPage() {
         answers:      state.answers,
         // Filter tips: strip HTML tags to check if actually empty
         tips:         state.tips.filter(t => t.replace(/<[^>]*>/g, '').trim()),
+        highlights:   hlDone,
         heroCropX:    heroItem?.cropX ?? 0.5,
         heroCropY:    heroItem?.cropY ?? 0.5,
         mediaItems:   successMedia.map(m => ({
@@ -2164,7 +2314,7 @@ export function SubmitPage() {
         {step === 5 && <StepCategory state={state} setState={setState} />}
         {step === 6 && (
           <>
-            <StepDetails state={state} set={set} />
+            <StepDetails state={state} set={set} setState={setState} />
             <ReviewSubmit state={state} isEdit={isEdit} />
           </>
         )}

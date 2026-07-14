@@ -44,6 +44,7 @@ export interface Place {
   hero: string;
   gallery: string[];
   tips: string[];
+  highlights?: PlaceHighlight[];   // Must-sees bei Erlebnis-Orten (Freizeitpark, Museum …)
   attributes: Record<string, unknown>;
   authorId: number | null;
   author?: Author | null;
@@ -69,6 +70,13 @@ export interface Place {
 }
 
 export type PlaceCategory = 'natur' | 'kultur' | 'genuss' | 'aktiv' | 'mystisch' | 'wasser';
+
+/** Ein „Das musst du sehen"-Highlight eines Ortes (z.B. eine Achterbahn, ein Gemälde). */
+export interface PlaceHighlight {
+  title: string;
+  description: string;
+  photos: string[];   // mind. 1 Foto-URL
+}
 
 // Backend-Kategorie (im Admin editierbar). slug = places.category bei den Standard-6.
 export interface CategoryDef {

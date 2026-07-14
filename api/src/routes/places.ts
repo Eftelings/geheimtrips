@@ -19,6 +19,26 @@ async function proofreadLong(html: string): Promise<string> {
   return idsOut === idsIn ? out : html;
 }
 
+/** Must-see-Highlights säubern + Beschreibung Korrektur lesen. Nur vollständige
+ *  Highlights (Titel + mind. 1 Foto) werden übernommen. Gibt einen JSON-String zurück. */
+async function buildHighlightsJson(
+  raw: { title?: string; description?: string; photos?: string[] }[] | undefined,
+): Promise<string> {
+  const list = (raw ?? [])
+    .map(h => ({
+      title: cleanPlainText(String(h.title ?? '')).slice(0, 120),
+      description: cleanPlainText(String(h.description ?? '')).slice(0, 600),
+      photos: (Array.isArray(h.photos) ? h.photos : []).filter(u => typeof u === 'string' && u).slice(0, 6),
+    }))
+    .filter(h => h.title && h.photos.length > 0)
+    .slice(0, 12);
+  const clean = await Promise.all(list.map(async h => ({
+    ...h,
+    description: h.description ? await proofreadSafe(h.description) : '',
+  })));
+  return JSON.stringify(clean);
+}
+
 // Budget-Antwort ('Kostenlos' / '€ – …' / '€€ – …' / '€€€ – …') → cost-Spalte + Label
 function budgetToCost(answers: Record<string, unknown> | undefined): { cost: number; costLabel: string } {
   const b = String(answers?.budget ?? '');
@@ -62,6 +82,9 @@ db.run(sql`ALTER TABLE places ADD COLUMN tag_slug TEXT`).catch(() => {});
 db.run(sql`ALTER TABLE places ADD COLUMN tag_slugs_json TEXT`).catch(() => {});
 db.run(sql`UPDATE places SET tag_slugs_json = json_array(tag_slug)
   WHERE tag_slug IS NOT NULL AND tag_slug != '' AND (tag_slugs_json IS NULL OR tag_slugs_json = '')`).catch(() => {});
+
+// Must-see-Highlights (Erlebnis-Orte): [{ title, description, photos: string[] }]
+db.run(sql`ALTER TABLE places ADD COLUMN highlights_json TEXT DEFAULT '[]'`).catch(() => {});
 
 // Änderungsanfragen zu Orten — gehen an Admins, Ersteller:in und (falls vorhanden) Business.
 db.run(sql`
@@ -240,6 +263,11 @@ router.post('/submit', requireAuth,
     vibes:        z.array(z.string()).optional().default([]),
     answers:      z.record(z.unknown()).optional().default({}),
     tips:         z.array(z.string()).optional().default([]),
+    highlights:   z.array(z.object({
+      title:       z.string().optional().default(''),
+      description: z.string().optional().default(''),
+      photos:      z.array(z.string()).optional().default([]),
+    })).optional().default([]),
     mediaItems:   z.array(z.object({
       url:     z.string(),
       caption: z.string().optional().default(''),
@@ -276,7 +304,9 @@ router.post('/submit', requireAuth,
     const cleanShort = cleanPlainText(body.short);
     const baseShort = cleanShort || deriveSummary(cleanRichText(body.long));
     // B: reiner Grammatik-/Rechtschreib-Pass beim Absenden (best-effort, kein Umschreiben)
-    const [finalShort, finalLong] = await Promise.all([proofreadSafe(baseShort), proofreadLong(cleanRichText(body.long))]);
+    const [finalShort, finalLong, highlightsJson] = await Promise.all([
+      proofreadSafe(baseShort), proofreadLong(cleanRichText(body.long)), buildHighlightsJson(body.highlights),
+    ]);
 
     const attributesJson = JSON.stringify({
       l1Slug:       body.l1Slug,
@@ -313,6 +343,7 @@ router.post('/submit', requireAuth,
       isUserSubmitted: 1 as unknown as boolean,
       attributesJson,
       tipsJson:      JSON.stringify((body.tips ?? []).map(cleanRichText).filter(Boolean)),
+      highlightsJson,
       vibeJson:      '[]',
       // Store as objects with crop coords; hero URL not duplicated in gallery
       galleryJson:   JSON.stringify(
@@ -354,6 +385,11 @@ router.patch('/:id', requireAuth,
     vibes:        z.array(z.string()).optional().default([]),
     answers:      z.record(z.unknown()).optional().default({}),
     tips:         z.array(z.string()).optional().default([]),
+    highlights:   z.array(z.object({
+      title:       z.string().optional().default(''),
+      description: z.string().optional().default(''),
+      photos:      z.array(z.string()).optional().default([]),
+    })).optional().default([]),
     mediaItems:   z.array(z.object({
       url:     z.string(),
       caption: z.string().optional().default(''),
@@ -387,7 +423,9 @@ router.patch('/:id', requireAuth,
     const cleanShort = cleanPlainText(body.short);
     const baseShort = cleanShort || deriveSummary(cleanRichText(body.long));
     // B: reiner Grammatik-/Rechtschreib-Pass beim Absenden (best-effort, kein Umschreiben)
-    const [finalShort, finalLong] = await Promise.all([proofreadSafe(baseShort), proofreadLong(cleanRichText(body.long))]);
+    const [finalShort, finalLong, highlightsJson] = await Promise.all([
+      proofreadSafe(baseShort), proofreadLong(cleanRichText(body.long)), buildHighlightsJson(body.highlights),
+    ]);
 
     const attributesJson = JSON.stringify({
       l1Slug:       body.l1Slug,
@@ -417,6 +455,7 @@ router.patch('/:id', requireAuth,
       lng:           body.lng ?? null,
       attributesJson,
       tipsJson:      JSON.stringify((body.tips ?? []).map(cleanRichText).filter(Boolean)),
+      highlightsJson,
       galleryJson:   JSON.stringify(
         (body.mediaItems ?? [])
           .filter(m => m.url !== (body.hero || ''))
@@ -1000,6 +1039,10 @@ export function hydrate(p: typeof places.$inferSelect) {
     heroCropX:    typeof attrs.heroCropX === 'number' ? attrs.heroCropX : 0.5,
     heroCropY:    typeof attrs.heroCropY === 'number' ? attrs.heroCropY : 0.5,
     tips:         JSON.parse(p.tipsJson  ?? '[]'),
+    highlights:   (() => {
+      try { const h = JSON.parse((p as { highlightsJson?: string }).highlightsJson ?? '[]'); return Array.isArray(h) ? h : []; }
+      catch { return []; }
+    })(),
     attributes:   attrs,
     tagSlugs:     (() => {
       try { const a = JSON.parse(p.tagSlugsJson ?? '[]'); if (Array.isArray(a) && a.length) return a as string[]; } catch { /* ignore */ }

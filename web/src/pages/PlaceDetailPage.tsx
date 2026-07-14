@@ -2448,6 +2448,39 @@ async function handleVerifyToggle() {
               </section>
             )}
 
+            {/* Must-see-Highlights — „Das solltest du sehen" (nur Erlebnis-Orte) */}
+            {Array.isArray(place.highlights) && place.highlights.length > 0 && (
+              <section>
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">
+                  <i className="fa-solid fa-star mr-1.5" />Das solltest du sehen
+                </p>
+                <div className="flex flex-col gap-4">
+                  {place.highlights.map((h, i) => (
+                    <div key={i} className="rounded-2xl overflow-hidden border border-[var(--color-bg-soft)] bg-white shadow-[var(--shadow-card)]">
+                      {h.photos.length > 0 && (
+                        h.photos.length === 1 ? (
+                          <img src={h.photos[0]} alt={h.title} className="w-full aspect-[16/10] object-cover" />
+                        ) : (
+                          <div className="flex overflow-x-auto scrollbar-none snap-x" style={{ scrollbarWidth: 'none' }}>
+                            {h.photos.map((src, j) => (
+                              <img key={j} src={src} alt="" className="h-44 w-auto flex-shrink-0 object-cover snap-start" />
+                            ))}
+                          </div>
+                        )
+                      )}
+                      <div className="p-3.5">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[11px] font-bold" style={{ background: 'var(--color-amber)' }}>{i + 1}</span>
+                          <h3 className="font-display font-bold text-[var(--color-aubergine)]">{h.title}</h3>
+                        </div>
+                        {h.description && <p className="text-[14px] text-[var(--color-body)] leading-relaxed">{h.description}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Trivia — optionaler heller-Lila Block mit typ-spezifischem Icon */}
             {triviaText && (
               <section className="rounded-2xl p-4 flex items-start gap-3" style={{ background: '#F1ECF4' }}>
