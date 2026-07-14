@@ -4,7 +4,7 @@ import {
   users, places, authors, visitedPlaces, savedPlaces,
   ratings, placeMedia, takedownReports, trips, tripPlaces,
   businessClaims, businessProfiles, perks, categories,
-  placeContributions, photoLikes,
+  placeContributions, photoLikes, favoritePlaces,
 } from '../db/schema.js';
 import { eq, desc, count, sql, asc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
@@ -483,29 +483,45 @@ router.get('/places/quality', async (c) => {
   return c.json(result);
 });
 
+/**
+ * Ort samt aller abhängigen Zeilen löschen. Foreign Keys werden erzwungen
+ * (PRAGMA foreign_keys = 1) und referenzieren places mit NO ACTION — ein blankes
+ * DELETE auf places scheitert daher, sobald irgendeine Kind-Zeile existiert.
+ * Jede Einreichung hat mindestens einen visited_places-Eintrag (Ersteller:in gilt
+ * automatisch als „war hier"), deshalb IMMER über diesen Helper löschen.
+ */
+async function deletePlaceCascade(id: string) {
+  // Takedown-Reports sind rechtliche Belege → nicht löschen, nur Verweise lösen
+  await db.run(sql`UPDATE takedown_reports SET media_id = NULL WHERE media_id IN (SELECT id FROM place_media WHERE place_id = ${id})`);
+  await db.update(takedownReports).set({ placeId: null }).where(eq(takedownReports.placeId, id));
+
+  // Kinder zuerst (FK-sichere Reihenfolge)
+  await db.delete(photoLikes).where(eq(photoLikes.placeId, id));
+  await db.delete(placeContributions).where(eq(placeContributions.placeId, id));
+  await db.delete(savedPlaces).where(eq(savedPlaces.placeId, id));
+  await db.delete(visitedPlaces).where(eq(visitedPlaces.placeId, id));
+  await db.delete(ratings).where(eq(ratings.placeId, id));
+  await db.delete(tripPlaces).where(eq(tripPlaces.placeId, id));
+  await db.delete(businessClaims).where(eq(businessClaims.placeId, id));
+  await db.delete(placeMedia).where(eq(placeMedia.placeId, id));
+  await db.delete(favoritePlaces).where(eq(favoritePlaces.placeId, id));
+  // Laufzeit-Tabellen ohne Drizzle-Schema (sonst bleiben Waisen zurück)
+  await db.run(sql`DELETE FROM swipe_events        WHERE place_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM place_questions     WHERE place_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM place_reviews       WHERE place_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM place_review_optout WHERE place_id = ${id}`).catch(() => {});
+  await db.run(sql`DELETE FROM change_requests     WHERE place_id = ${id}`).catch(() => {});
+
+  await db.delete(places).where(eq(places.id, id));
+}
+
 router.delete('/places/:id', async (c) => {
   const id = c.req.param('id');
   const existing = await db.select({ id: places.id }).from(places).where(eq(places.id, id)).get();
   if (!existing) return c.json({ error: 'Ort nicht gefunden.' }, 404);
 
   try {
-    // Takedown-Reports sind rechtliche Belege → nicht löschen, nur Verweise lösen
-    await db.run(sql`UPDATE takedown_reports SET media_id = NULL WHERE media_id IN (SELECT id FROM place_media WHERE place_id = ${id})`);
-    await db.update(takedownReports).set({ placeId: null }).where(eq(takedownReports.placeId, id));
-
-    // Alle abhängigen Zeilen entfernen (FK-sichere Reihenfolge, Kinder zuerst)
-    await db.delete(photoLikes).where(eq(photoLikes.placeId, id));
-    await db.delete(placeContributions).where(eq(placeContributions.placeId, id));
-    await db.delete(savedPlaces).where(eq(savedPlaces.placeId, id));
-    await db.delete(visitedPlaces).where(eq(visitedPlaces.placeId, id));
-    await db.delete(ratings).where(eq(ratings.placeId, id));
-    await db.delete(tripPlaces).where(eq(tripPlaces.placeId, id));
-    await db.delete(businessClaims).where(eq(businessClaims.placeId, id));
-    await db.delete(placeMedia).where(eq(placeMedia.placeId, id));
-    // Laufzeit-Tabelle (kein Drizzle-Schema)
-    await db.run(sql`DELETE FROM swipe_events WHERE place_id = ${id}`).catch(() => {});
-
-    await db.delete(places).where(eq(places.id, id));
+    await deletePlaceCascade(id);
     return c.json({ ok: true });
   } catch (e) {
     console.error('Ort löschen fehlgeschlagen:', e);
@@ -579,9 +595,19 @@ router.patch('/submissions/:id/approve', async (c) => {
   return c.json({ ok: true });
 });
 
+// Einreichung ablehnen = Ort löschen. Muss über den Cascade-Helper laufen, sonst
+// scheitert es an den Foreign Keys (jede Einreichung hat einen visited_places-Eintrag).
 router.delete('/submissions/:id', async (c) => {
-  await db.delete(places).where(eq(places.id, c.req.param('id')));
-  return c.json({ ok: true });
+  const id = c.req.param('id');
+  const existing = await db.select({ id: places.id }).from(places).where(eq(places.id, id)).get();
+  if (!existing) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+  try {
+    await deletePlaceCascade(id);
+    return c.json({ ok: true });
+  } catch (e) {
+    console.error('Einreichung ablehnen fehlgeschlagen:', e);
+    return c.json({ error: 'Einreichung konnte nicht gelöscht werden.' }, 500);
+  }
 });
 
 // ─── Takedown Reports ─────────────────────────────────────────────────────────

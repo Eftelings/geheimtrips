@@ -7,6 +7,8 @@ export function AdminSubmissions() {
   const navigate = useNavigate();
   const [items, setItems]   = useState<AdminPlace[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError]   = useState('');
+  const [busy, setBusy]     = useState<string | null>(null);
 
   async function load() {
     const s = await adminApi.submissions();
@@ -15,19 +17,27 @@ export function AdminSubmissions() {
 
   useEffect(() => { load(); }, []);
 
-  async function approve(id: string) {
-    await adminApi.approveSubmission(id);
-    load();
+  // Fehler nie verschlucken — vorher schlug das Löschen still fehl (FK-Verletzung)
+  async function run(id: string, fn: () => Promise<unknown>) {
+    setBusy(id); setError('');
+    try { await fn(); await load(); }
+    catch (e) { setError((e as Error).message || 'Aktion fehlgeschlagen.'); }
+    finally { setBusy(null); }
   }
 
-  async function reject(id: string) {
-    if (!confirm('Einreichung ablehnen und löschen?')) return;
-    await adminApi.rejectSubmission(id);
-    load();
-  }
+  const approve = (id: string) => run(id, () => adminApi.approveSubmission(id));
+  const reject  = (id: string) => {
+    if (!confirm('Einreichung ablehnen und endgültig löschen?')) return;
+    return run(id, () => adminApi.rejectSubmission(id));
+  };
 
   return (
     <AdminLayout title={`Einreichungen (${items.length})`}>
+      {error && (
+        <div className="mb-4 rounded-xl px-4 py-3 text-sm bg-red-500/10 text-red-300 border border-red-500/20">
+          <i className="fa-solid fa-triangle-exclamation mr-2" />{error}
+        </div>
+      )}
       {loading ? (
         <div className="flex justify-center py-12 text-white/30">
           <i className="fa-solid fa-circle-notch fa-spin text-3xl" />
@@ -65,13 +75,13 @@ export function AdminSubmissions() {
                   </button>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => approve(p.id)}
-                    className="flex-1 bg-[var(--color-success)]/20 text-[var(--color-success)] font-semibold py-2 rounded-xl text-xs hover:bg-[var(--color-success)]/30 transition-colors">
-                    <i className="fa-solid fa-check mr-1" /> Freischalten
+                  <button onClick={() => approve(p.id)} disabled={busy === p.id}
+                    className="flex-1 bg-[var(--color-success)]/20 text-[var(--color-success)] font-semibold py-2 rounded-xl text-xs hover:bg-[var(--color-success)]/30 transition-colors disabled:opacity-40">
+                    <i className={`fa-solid ${busy === p.id ? 'fa-circle-notch fa-spin' : 'fa-check'} mr-1`} /> Freischalten
                   </button>
-                  <button onClick={() => reject(p.id)}
-                    className="flex-1 bg-red-500/10 text-red-400 font-semibold py-2 rounded-xl text-xs hover:bg-red-500/20 transition-colors">
-                    <i className="fa-solid fa-xmark mr-1" /> Ablehnen
+                  <button onClick={() => reject(p.id)} disabled={busy === p.id}
+                    className="flex-1 bg-red-500/10 text-red-400 font-semibold py-2 rounded-xl text-xs hover:bg-red-500/20 transition-colors disabled:opacity-40">
+                    <i className={`fa-solid ${busy === p.id ? 'fa-circle-notch fa-spin' : 'fa-xmark'} mr-1`} /> Ablehnen
                   </button>
                 </div>
               </div>

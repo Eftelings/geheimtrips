@@ -20,7 +20,6 @@ const AdminTakedown      = lz(() => import('./pages/admin/AdminTakedown.js'), 'A
 const AdminAuthors       = lz(() => import('./pages/admin/AdminAuthors.js'), 'AdminAuthors');
 const AdminClaims        = lz(() => import('./pages/admin/AdminClaims.js'), 'AdminClaims');
 const AdminPerks         = lz(() => import('./pages/admin/AdminPerks.js'), 'AdminPerks');
-const AdminCategories    = lz(() => import('./pages/admin/AdminCategories.js'), 'AdminCategories');
 const AdminTaxonomy      = lz(() => import('./pages/admin/AdminTaxonomy.js'), 'AdminTaxonomy');
 const AdminChangeRequests = lz(() => import('./pages/admin/AdminChangeRequests.js'), 'AdminChangeRequests');
 const AdminTaxonomyMod = lz(() => import('./pages/admin/AdminTaxonomyMod.js'), 'AdminTaxonomyMod');
@@ -176,7 +175,6 @@ export function App() {
         <Route path="/admin/authors" element={<RequireAdmin><AdminAuthors /></RequireAdmin>} />
         <Route path="/admin/claims"  element={<RequireAdmin><AdminClaims /></RequireAdmin>} />
         <Route path="/admin/perks"   element={<RequireAdmin><AdminPerks /></RequireAdmin>} />
-        <Route path="/admin/categories" element={<RequireAdmin><AdminCategories /></RequireAdmin>} />
         <Route path="/admin/taxonomy" element={<RequireAdmin><AdminTaxonomy /></RequireAdmin>} />
         <Route path="/admin/questions" element={<RequireAdmin><AdminQuestions /></RequireAdmin>} />
         <Route path="/admin/change-requests" element={<RequireAdmin><AdminChangeRequests /></RequireAdmin>} />
