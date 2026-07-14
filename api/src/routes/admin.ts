@@ -295,6 +295,36 @@ router.post('/taxonomy-nodes/restore', zValidator('json', z.object({
   return c.json({ ok: true });
 });
 
+// ─── Fragen-CMS: pro Typ-Tag steuern, welche Einreichungs-Fragen gestellt werden ──
+// Tabelle wird in taxonomy.ts angelegt; hier nur Lesen/Schreiben der Overrides.
+router.get('/questions-config', async (c) => {
+  const rows = await db.all<{ tag_slug: string; question_id: string; enabled: number }>(
+    sql`SELECT tag_slug, question_id, enabled FROM question_config`).catch(() => []);
+  const map: Record<string, Record<string, boolean>> = {};
+  for (const r of rows) { (map[r.tag_slug] ??= {})[r.question_id] = r.enabled === 1; }
+  return c.json(map);
+});
+
+router.post('/questions-config/toggle', zValidator('json', z.object({
+  tagSlug: z.string().min(1), questionId: z.string().min(1), enabled: z.boolean(),
+})), async (c) => {
+  const { tagSlug, questionId, enabled } = c.req.valid('json');
+  await db.run(sql`
+    INSERT INTO question_config (tag_slug, question_id, enabled) VALUES (${tagSlug}, ${questionId}, ${enabled ? 1 : 0})
+    ON CONFLICT(tag_slug, question_id) DO UPDATE SET enabled = ${enabled ? 1 : 0}`).catch(() => {});
+  return c.json({ ok: true });
+});
+
+// Override(s) löschen → zurück zur Code-Vorgabe (ein Tag oder eine einzelne Frage)
+router.post('/questions-config/reset', zValidator('json', z.object({
+  tagSlug: z.string().min(1), questionId: z.string().optional(),
+})), async (c) => {
+  const { tagSlug, questionId } = c.req.valid('json');
+  if (questionId) await db.run(sql`DELETE FROM question_config WHERE tag_slug = ${tagSlug} AND question_id = ${questionId}`).catch(() => {});
+  else await db.run(sql`DELETE FROM question_config WHERE tag_slug = ${tagSlug}`).catch(() => {});
+  return c.json({ ok: true });
+});
+
 // ─── Änderungsanfragen ──────────────────────────────────────────────────────────
 router.get('/change-requests', async (c) => {
   const rows = await db.all(sql`

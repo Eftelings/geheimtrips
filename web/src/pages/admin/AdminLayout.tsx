@@ -13,6 +13,7 @@ const NAV = [
   { to: '/admin/authors',     icon: 'fa-user-pen',       label: 'Autoren' },
   { to: '/admin/claims',      icon: 'fa-building',       label: 'Unternehmen' },
   { to: '/admin/taxonomy',    icon: 'fa-folder-tree',    label: 'Kategorien & Merkmale' },
+  { to: '/admin/questions',   icon: 'fa-circle-question', label: 'Fragen' },
   { to: '/admin/taxonomy-mod', icon: 'fa-clipboard-check', label: 'Taxonomie-Moderation' },
   { to: '/admin/categories',  icon: 'fa-tags',           label: 'Filter-Kategorien (alt)' },
   { to: '/admin/perks',       icon: 'fa-gift',           label: 'Vorteile' },

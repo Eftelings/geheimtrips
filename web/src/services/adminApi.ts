@@ -134,6 +134,12 @@ export const adminApi = {
                     patch<{ ok: boolean }>('/taxonomy-nodes', { level, slug, ...d }),
   hideTaxNode:    (level: 2 | 3, slug: string) => post<{ ok: boolean }>('/taxonomy-nodes/hide', { level, slug }),
   restoreTaxNode: (level: 2 | 3, slug: string) => post<{ ok: boolean }>('/taxonomy-nodes/restore', { level, slug }),
+  // Fragen-CMS: pro Typ-Tag steuern, welche Einreichungs-Fragen gestellt werden
+  questionsConfig: () => get<Record<string, Record<string, boolean>>>('/questions-config'),
+  toggleQuestion:  (tagSlug: string, questionId: string, enabled: boolean) =>
+                     post<{ ok: boolean }>('/questions-config/toggle', { tagSlug, questionId, enabled }),
+  resetQuestions:  (tagSlug: string, questionId?: string) =>
+                     post<{ ok: boolean }>('/questions-config/reset', { tagSlug, questionId }),
   // Änderungsanfragen
   changeRequests:       ()  => get<AdminChangeRequest[]>('/change-requests'),
   resolveChangeRequest: (id: number, status: 'open' | 'done' | 'dismissed') =>

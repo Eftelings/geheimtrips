@@ -6,6 +6,8 @@ import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
 import { detailQuestions, HOUR_DAYS, hasHighlights } from '../data/detailQuestions.js';
 import type { WeekHours } from '../data/detailQuestions.js';
+import { UNIVERSAL_DETAIL_QUESTIONS, enabledForPlace } from '../data/questionCatalog.js';
+import type { QuestionConfig } from '../data/questionCatalog.js';
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place } from '../types/index.js';
 import { placesApi, mediaApi, aiApi, taxonomyApi } from '../services/api.js';
@@ -1585,11 +1587,12 @@ function HighlightsEditor({ state, setState }: {
 }
 
 function StepDetails({
-  state, set, setState,
+  state, set, setState, qConfig,
 }: {
   state: WizardState;
   set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
   setState: React.Dispatch<React.SetStateAction<WizardState>>;
+  qConfig: QuestionConfig | null;
 }) {
   if (!state.tags.length) {
     return (
@@ -1602,17 +1605,8 @@ function StepDetails({
     );
   }
 
-  // Trivia + „Besonderheit" werden bereits auf der Beschreibungs-Seite abgefragt → hier ausblenden.
-  // Trivia/Besonderheit stehen schon auf der Beschreibungs-Seite; die alten Preis-/Öffnungszeiten-/Website-
-  // Fragen sind durch die neuen (berechenbaren) in detailQuestions ersetzt → hier ausblenden (keine Dubletten).
-  const HIDDEN      = new Set([
-    'trivia_type', 'trivia_text', 'highlight',
-    'entrance_fee', 'entrance_prices', 'entrance_fee_url',
-    'has_opening_hours', 'opening_hours_week', 'opening_hours_url', 'opening_hours_text',
-    // 'website' bleibt sichtbar (universal, für alle Orte) → detailQuestions fragt sie NICHT mehr,
-    // damit sie nicht doppelt erscheint.
-  ]);
-  const universalQs = UNIVERSAL_QUESTIONS.filter(q => !HIDDEN.has(q.id));
+  // Universelle Detail-Fragen (ohne die auf der Beschreibungs-Seite/berechenbar ersetzten — SUBMIT_HIDDEN).
+  const universalQs = UNIVERSAL_DETAIL_QUESTIONS;
   // Typ-abhängige Zusatz-Infos (Budget/Öffnungszeiten/Kontakt/Links/Tickets)
   const detailQs    = detailQuestions(state.tags);
 
@@ -1622,6 +1616,8 @@ function StepDetails({
 
   const renderQ = (q: SubmitQuestion) => {
     if (q.showIf && !q.showIf(state.answers)) return null;
+    // Admin-Fragen-CMS: für die Typ-Tags dieses Ortes deaktivierte Fragen ausblenden
+    if (!enabledForPlace(state.tags, q.id, qConfig)) return null;
     return (
       <div key={q.id} className="space-y-2">
         <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
@@ -2020,7 +2016,11 @@ export function SubmitPage() {
   // mounten die Rich-Text-Editoren mit leerem Inhalt.
   const [ready, setReady]     = useState(!editId);
   const [loadError, setLoadError] = useState('');
+  const [qConfig, setQConfig] = useState<QuestionConfig | null>(null);   // Admin-Fragen-CMS
   const topRef = useRef<HTMLDivElement>(null);
+
+  // Fragen-Overrides einmal laden (null = noch nicht da → alle Vorgaben zeigen)
+  useEffect(() => { taxonomyApi.questionsConfig().then(setQConfig).catch(() => setQConfig({})); }, []);
 
   useEffect(() => {
     if (!editId) return;
@@ -2314,7 +2314,7 @@ export function SubmitPage() {
         {step === 5 && <StepCategory state={state} setState={setState} />}
         {step === 6 && (
           <>
-            <StepDetails state={state} set={set} setState={setState} />
+            <StepDetails state={state} set={set} setState={setState} qConfig={qConfig} />
             <ReviewSubmit state={state} isEdit={isEdit} />
           </>
         )}

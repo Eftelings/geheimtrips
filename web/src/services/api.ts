@@ -385,6 +385,7 @@ export interface TaxTerm { slug: string; label: string }
 export interface TaxVocab { groups: TaxGroup[]; tags: TaxTag[]; merkmale: TaxTerm[]; vibes: TaxTerm[] }
 export const taxonomyApi = {
   vocab:       ()               => get<TaxVocab>('/taxonomy'),
+  questionsConfig: ()           => get<Record<string, Record<string, boolean>>>('/taxonomy/questions-config'),
   suggestions: (tagSlug: string) => get<{ merkmale: TaxTerm[]; vibes: TaxTerm[] }>(`/taxonomy/tag/${tagSlug}/suggestions`),
   resolve:     (tag: string, merkmale: string[], vibes: string[]) =>
                  post<{ tag: string; merkmale: string[]; vibes: string[] }>('/taxonomy/resolve', { tag, merkmale, vibes }),

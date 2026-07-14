@@ -22,6 +22,7 @@ const AdminCategories    = lz(() => import('./pages/admin/AdminCategories.js'), 
 const AdminTaxonomy      = lz(() => import('./pages/admin/AdminTaxonomy.js'), 'AdminTaxonomy');
 const AdminChangeRequests = lz(() => import('./pages/admin/AdminChangeRequests.js'), 'AdminChangeRequests');
 const AdminTaxonomyMod = lz(() => import('./pages/admin/AdminTaxonomyMod.js'), 'AdminTaxonomyMod');
+const AdminQuestions   = lz(() => import('./pages/admin/AdminQuestions.js'), 'AdminQuestions');
 const BusinessDashboardPage = lz(() => import('./pages/BusinessDashboardPage.js'), 'BusinessDashboardPage');
 const EntdeckenPage      = lz(() => import('./pages/EntdeckenPage.js'), 'EntdeckenPage');
 const FunnelPage         = lz(() => import('./pages/FunnelPage.js'), 'FunnelPage');
@@ -145,6 +146,7 @@ export function App() {
         <Route path="/admin/perks"   element={<RequireAdmin><AdminPerks /></RequireAdmin>} />
         <Route path="/admin/categories" element={<RequireAdmin><AdminCategories /></RequireAdmin>} />
         <Route path="/admin/taxonomy" element={<RequireAdmin><AdminTaxonomy /></RequireAdmin>} />
+        <Route path="/admin/questions" element={<RequireAdmin><AdminQuestions /></RequireAdmin>} />
         <Route path="/admin/change-requests" element={<RequireAdmin><AdminChangeRequests /></RequireAdmin>} />
         <Route path="/admin/taxonomy-mod" element={<RequireAdmin><AdminTaxonomyMod /></RequireAdmin>} />
 

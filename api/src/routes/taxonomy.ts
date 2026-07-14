@@ -44,6 +44,11 @@ async function ensureTables() {
     created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (tag_slug, vibe_slug))`);
   await db.run(sql`CREATE TABLE IF NOT EXISTS tax_aliases (
     alias_slug TEXT PRIMARY KEY, canonical_slug TEXT NOT NULL, kind TEXT NOT NULL)`);
+  // Fragen-CMS: pro Typ-Tag ein Override, welche Frage ein-/ausgeschaltet ist.
+  // Fehlt eine Zeile → es gilt die Vorgabe aus dem Code (Frage-Katalog im Frontend).
+  await db.run(sql`CREATE TABLE IF NOT EXISTS question_config (
+    tag_slug TEXT NOT NULL, question_id TEXT NOT NULL, enabled INTEGER NOT NULL,
+    PRIMARY KEY (tag_slug, question_id))`);
 }
 
 // ── Idempotenter Seed aus dem Konzept-Dokument (INSERT OR IGNORE, gebündelt) ───
@@ -110,6 +115,16 @@ router.get('/', async (c) => {
   const merkmale = await db.all(sql`SELECT slug, label FROM tax_merkmale WHERE is_approved = 1 ORDER BY label`).catch(() => []);
   const vibes = await db.all(sql`SELECT slug, label FROM tax_vibes WHERE is_approved = 1 ORDER BY label`).catch(() => []);
   return c.json({ groups, tags, merkmale, vibes });
+});
+
+// GET /taxonomy/questions-config — Overrides fürs Fragen-CMS: { [tagSlug]: { [questionId]: bool } }.
+// Nur explizite Overrides; das Frontend mischt sie mit den Code-Vorgaben.
+router.get('/questions-config', requireAuth, async (c) => {
+  const rows = await db.all<{ tag_slug: string; question_id: string; enabled: number }>(
+    sql`SELECT tag_slug, question_id, enabled FROM question_config`).catch(() => []);
+  const map: Record<string, Record<string, boolean>> = {};
+  for (const r of rows) { (map[r.tag_slug] ??= {})[r.question_id] = r.enabled === 1; }
+  return c.json(map);
 });
 
 // GET /taxonomy/tag/:slug/suggestions — gemappte Merkmale + Vibes für einen Tag (fürs Anlege-Formular)
