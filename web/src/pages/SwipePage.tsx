@@ -114,12 +114,12 @@ export function SwipePage() {
     if (!card) return;
     discoverApi.swipe(card.id, 'click', Date.now() - shownAt.current).catch(() => {});
     setFlyOut('up');
-    setTimeout(() => navigate(`/place/${card.id}`), 200);
+    setTimeout(() => navigate(`/ort/${card.id}`), 200);
   }
 
   function share() {
     if (!card) return;
-    const url = `${location.origin}/place/${card.id}`;
+    const url = `${location.origin}/ort/${card.id}`;
     if (navigator.share) navigator.share({ title: card.name, text: card.short, url }).catch(() => {});
     else { navigator.clipboard?.writeText(url).then(() => showToast('Link kopiert')).catch(() => {}); }
   }

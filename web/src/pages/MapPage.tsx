@@ -56,7 +56,7 @@ export function MapPage() {
           <div
             className="absolute bottom-4 left-4 right-4 z-10 bg-white rounded-2xl shadow-[var(--shadow-raised)] p-3 flex items-center gap-3 cursor-pointer active:scale-[0.99] transition-transform"
             style={{ animation: 'gtSlideUp 0.2s ease' }}
-            onClick={() => navigate(`/place/${active.id}`)}
+            onClick={() => navigate(`/ort/${active.id}`)}
           >
             <img src={active.hero} alt={active.name} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
             <div className="flex-1 min-w-0">

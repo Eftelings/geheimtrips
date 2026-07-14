@@ -19,7 +19,7 @@ export function PlaceCard({ place, showMatch, className = '' }: Props) {
 
   return (
     <div
-      onClick={() => navigate(`/place/${place.id}`)}
+      onClick={() => navigate(`/ort/${place.id}`)}
       className={`bg-white rounded-[var(--radius-card)] shadow-[var(--shadow-card)] overflow-hidden cursor-pointer active:scale-[0.98] transition-transform ${className}`}
     >
       <div className="relative aspect-[16/9] overflow-hidden">

@@ -451,7 +451,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
             {showMap && mapReady && orteBase.length > 0 && (
               <CollectionMap places={filteredPlaces} center={activeCenter} travel={travel}
                 radiusKm={radiusKm} reachActive={reachActive}
-                onOpen={id => navigate(`/place/${id}`)} />
+                onOpen={id => navigate(`/ort/${id}`)} />
             )}
 
             {orteBase.length === 0 ? (
@@ -546,7 +546,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
             {tripView === 'anreise' && showMap && mapReady && trips.length > 0 && (
               <CollectionMap places={tripMapPlaces} center={activeCenter} travel={travel}
                 radiusKm={radiusKm} reachActive={reachActive}
-                onOpen={id => navigate(`/place/${id}`)} />
+                onOpen={id => navigate(`/ort/${id}`)} />
             )}
 
             {/* Create */}

@@ -14,6 +14,7 @@ import { ReachLayer } from '../components/map/ReachLayer.js';
 import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagFilter.js';
 import type { TagSelection } from '../components/ui/TagFilter.js';
 import { SwipeDeck } from '../components/ui/SwipeDeck.js';
+import { useRequireAuth } from '../hooks/useRequireAuth.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
 const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
@@ -95,6 +96,7 @@ export function MobileEntdecken() {
   const navigate = useNavigate();
   const { places, loadPlaces, savedIds, visitedIds, funnelAnswers } = useAppStore();
   const vocab = useTaxVocab();
+  const { gate } = useRequireAuth();
 
   const [userCoords, setUserCoords] = useState<Coords | null>(() => entdeckenCache.userCoords ?? funnelAnswers?.coords ?? null);
   const [searchCenter, setSearchCenter] = useState<Coords | null>(entdeckenCache.searchCenter);
@@ -247,7 +249,7 @@ export function MobileEntdecken() {
     setTimeout(() => listRef.current?.querySelector(`[data-place-id="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
   }, []);
   // Swipe-Sheet über der Karte — nutzt direkt die auf der Karte gefilterten Orte (kein Seitenwechsel)
-  function goSwipe() { setSwipeOpen(true); setSwipeLow(false); }
+  function goSwipe() { gate(() => { setSwipeOpen(true); setSwipeLow(false); }, 'Melde dich an, um den Swipe-Modus zu nutzen.'); }
   // Swipe-Sheet ziehen: runter → mehr Karte (aktueller Ort sichtbar), hoch → wieder swipen
   function onSwipeSheetStart(e: React.TouchEvent) { swipeDrag.current = { startY: e.touches[0].clientY, moved: 0 }; }
   function onSwipeSheetMove(e: React.TouchEvent) {
@@ -349,7 +351,9 @@ export function MobileEntdecken() {
         </div>
         <div className="flex gap-1.5 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
           {MODES.map(m => (
-            <button key={m.id} onClick={() => setMode(m.id)}
+            <button key={m.id} onClick={() => (m.id === 'saved' || m.id === 'foryou')
+              ? gate(() => setMode(m.id), 'Melde dich an für persönliche Filter wie „Nur gemerkte" und „Für dich".')
+              : setMode(m.id)}
               className="text-[11px] font-semibold rounded-full px-3 py-1.5 flex-shrink-0 transition-colors"
               style={mode === m.id
                 ? { background: '#34254c', color: 'white' }

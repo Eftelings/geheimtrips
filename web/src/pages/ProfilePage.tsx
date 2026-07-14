@@ -202,7 +202,7 @@ export function ProfilePage() {
             <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Meine Orte ({myPlaces.length})</p>
             <div className="grid grid-cols-3 gap-1.5">
               {myPlaces.map(p => (
-                <button key={p.id} onClick={() => navigate(`/place/${p.id}`)} className="aspect-square rounded-xl overflow-hidden relative active:scale-95 transition-transform">
+                <button key={p.id} onClick={() => navigate(`/ort/${p.id}`)} className="aspect-square rounded-xl overflow-hidden relative active:scale-95 transition-transform">
                   <img src={p.hero} alt={p.name} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent flex items-end p-1.5">
                     <span className="text-white text-[9px] font-bold leading-tight text-left">{p.name}</span>

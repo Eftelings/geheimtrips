@@ -256,7 +256,7 @@ export function VisitedPage() {
                       const d = place.visitedAt ? new Date(place.visitedAt) : null;
                       return (
                         <div key={place.id} className="bg-white rounded-2xl shadow-[var(--shadow-card)] flex gap-3 p-3">
-                          <button onClick={() => navigate(`/place/${place.id}`)} className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
+                          <button onClick={() => navigate(`/ort/${place.id}`)} className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
                             <PlaceImage src={place.hero} category={place.category} alt={place.name} className="w-full h-full object-cover" iconClass="text-lg" />
                           </button>
                           <div className="flex-1 min-w-0">
@@ -314,7 +314,7 @@ export function VisitedPage() {
                 <div className="flex flex-col gap-2.5">
                   {favPlaces.map((place, i) => (
                     <FavCard key={place.id} place={place} rank={i + 1} stars={ratingFor(place.id)}
-                      onOpen={() => navigate(`/place/${place.id}`)} onRate={() => setRatingTarget(place)} />
+                      onOpen={() => navigate(`/ort/${place.id}`)} onRate={() => setRatingTarget(place)} />
                   ))}
                 </div>
               </SortableContext>

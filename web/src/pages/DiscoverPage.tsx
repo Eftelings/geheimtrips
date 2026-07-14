@@ -316,7 +316,7 @@ function DesktopHero({ places, cityLabel, onCta }: { places: Place[]; cityLabel:
       {/* Links: Orts-Bild — klickbar → Place-Detail */}
       <div
         className="relative flex-1 overflow-hidden bg-[var(--color-aubergine)] cursor-pointer group"
-        onClick={() => navigate(`/place/${place.id}`)}
+        onClick={() => navigate(`/ort/${place.id}`)}
       >
         <img
           key={place.id}
@@ -483,7 +483,7 @@ export function SpotlightCard({ places, onNavigate }: { places: Place[]; onNavig
               if (!p) return <div key={rank} className="flex-1" />;
               return (
                 <div key={p.id} className="flex-1 flex flex-col cursor-pointer group"
-                  onClick={() => onNavigate(`/place/${p.id}`)}>
+                  onClick={() => onNavigate(`/ort/${p.id}`)}>
 
                   {/* Label-Bereich: feste Höhe → alle Bilder starten auf gleicher Linie */}
                   <div className="flex flex-col items-center justify-end mb-1.5 px-1" style={{ height: '2.75rem' }}>
@@ -541,7 +541,7 @@ export function SpotlightCard({ places, onNavigate }: { places: Place[]; onNavig
           <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-1">Weitere Top-Orte</p>
           <div className="space-y-0.5">
             {restVisible.map((p, i) => (
-              <div key={p.id} onClick={() => onNavigate(`/place/${p.id}`)}
+              <div key={p.id} onClick={() => onNavigate(`/ort/${p.id}`)}
                 className="flex items-center gap-2.5 py-1.5 rounded-xl hover:bg-[var(--color-bg-soft)] -mx-2 px-2 cursor-pointer transition-colors group">
                 <span className="w-6 text-center text-[11px] font-black flex-shrink-0 text-[var(--color-lavender)]">
                   {i + 4}.
@@ -1228,7 +1228,7 @@ export function DiscoverPage() {
             <SectionHead title="Tipp des Tages" />
             <div
               className="relative rounded-[var(--radius-card)] overflow-hidden cursor-pointer aspect-[16/9] active:scale-[0.99] transition-transform shadow-[var(--shadow-raised)]"
-              onClick={() => navigate(`/place/${tippDesTages.id}`)}
+              onClick={() => navigate(`/ort/${tippDesTages.id}`)}
             >
               <img src={tippDesTages.hero} alt={tippDesTages.name} className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />

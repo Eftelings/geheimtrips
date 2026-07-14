@@ -2,24 +2,29 @@ import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { BrandLogo } from '../ui/BrandLogo.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
+import { useAuthGate } from '../../store/useAuthGate.js';
+import { useRequireAuth } from '../../hooks/useRequireAuth.js';
 import { notificationsApi } from '../../services/api.js';
 import { Avatar } from '../ui/Avatar.js';
 
+// `open: true` = öffentlich; alles andere braucht ein Konto (Klick → Login-Lightbox)
 const TABS = [
-  { to: '/',        icon: 'fa-compass',            label: 'Entdecken'   },
-  { to: '/people',  icon: 'fa-user-group',         label: 'Neue Leute'  },
-  { to: '/notifications', icon: 'fa-bell',         label: 'Postfach'    },
-  { to: '/game',    icon: 'fa-earth-europe',       label: 'Geheimquiz'  },
-  { to: '/saved',   icon: 'fa-bookmark',           label: 'Meine Orte'  },
-  { to: '/trips',   icon: 'fa-route',              label: 'Meine Trips' },
-  { to: '/visited', icon: 'fa-flag-checkered',     label: 'Besuchte Orte' },
-  { to: '/awards',  icon: 'fa-trophy',             label: 'Awards'      },
-  { to: '/ranking', icon: 'fa-medal',              label: 'Prämien'     },
-  { to: '/submit',  icon: 'fa-feather-pointed',    label: 'Einreichen'  },
+  { to: '/',            icon: 'fa-compass',         label: 'Entdecken',     open: true },
+  { to: '/leute',       icon: 'fa-user-group',      label: 'Neue Leute'    },
+  { to: '/postfach',    icon: 'fa-bell',            label: 'Postfach'      },
+  { to: '/geheimquiz',  icon: 'fa-earth-europe',    label: 'Geheimquiz'    },
+  { to: '/meine-orte',  icon: 'fa-bookmark',        label: 'Meine Orte'    },
+  { to: '/meine-trips', icon: 'fa-route',           label: 'Meine Trips'   },
+  { to: '/besucht',     icon: 'fa-flag-checkered',  label: 'Besuchte Orte' },
+  { to: '/awards',      icon: 'fa-trophy',          label: 'Awards'        },
+  { to: '/rangliste',   icon: 'fa-medal',           label: 'Prämien'       },
+  { to: '/einreichen',  icon: 'fa-feather-pointed', label: 'Einreichen'    },
 ];
 
 export function Sidebar() {
   const { user, logout } = useAuthStore();
+  const { gate } = useRequireAuth();
+  const openGate = useAuthGate(s => s.openGate);
   const navigate = useNavigate();
   const [notif, setNotif] = useState(0);
   useEffect(() => { if (user) notificationsApi.count().then(r => setNotif(r.count)).catch(() => {}); }, [user]);
@@ -32,10 +37,25 @@ export function Sidebar() {
         <BrandLogo size="lg" />
       </div>
 
-      {/* ── Profil-Card ──────────────────────────────────────── */}
+      {/* ── Profil-Card (ausgeloggt: Anmelde-Aufruf) ─────────── */}
+      {!user && (
+        <button
+          onClick={() => openGate()}
+          className="flex items-center gap-3 w-full px-3 py-3 rounded-2xl mb-5 text-left text-white"
+          style={{ background: 'linear-gradient(135deg, #4a3268, #34254c)' }}
+        >
+          <span className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
+            <i className="fa-solid fa-right-to-bracket" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold leading-tight">Anmelden</div>
+            <div className="text-xs text-white/60 truncate">Speichern, bewerten, einreichen</div>
+          </div>
+        </button>
+      )}
       {user && (
         <button
-          onClick={() => navigate('/profile')}
+          onClick={() => navigate('/profil')}
           className="flex items-center gap-3 w-full px-3 py-3 rounded-2xl bg-[var(--color-bg-soft)] hover:bg-[var(--color-bg-soft)]/80 transition-colors mb-5 text-left group"
         >
           <span className="relative flex-shrink-0">
@@ -56,11 +76,12 @@ export function Sidebar() {
 
       {/* ── Nav ──────────────────────────────────────────────── */}
       <nav className="flex flex-col gap-1 flex-1">
-        {TABS.map(({ to, icon, label }) => (
+        {TABS.map(({ to, icon, label, open }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
+            onClick={e => { if (!open && !user) { e.preventDefault(); gate(undefined, `Melde dich an, um „${label}" zu nutzen.`); } }}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 isActive

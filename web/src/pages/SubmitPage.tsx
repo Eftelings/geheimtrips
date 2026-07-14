@@ -183,7 +183,7 @@ function MiniRichText({
       sel?.removeAllRanges(); sel?.addRange(r);
     }
     const safe = p.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    document.execCommand('insertHTML', false, `<a href="/place/${p.id}" class="gt-place" data-place-id="${p.id}">${safe}</a>&nbsp;`);
+    document.execCommand('insertHTML', false, `<a href="/ort/${p.id}" class="gt-place" data-place-id="${p.id}">${safe}</a>&nbsp;`);
     savedRange.current = null;
     setLinkOpen(false); setLinkQuery('');
     sync();
@@ -1380,7 +1380,7 @@ function Step2({ state, setLocation }: {
           </p>
           <div className="space-y-1.5">
             {nearby.map(p => (
-              <button key={p.id} type="button" onClick={() => navigate(`/place/${p.id}`)}
+              <button key={p.id} type="button" onClick={() => navigate(`/ort/${p.id}`)}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-xl bg-white border border-[#E4DCF0] text-left hover:border-[#F99039] transition-colors">
                 {p.hero && <img src={p.hero} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />}
                 <span className="flex-1 min-w-0">
@@ -2243,7 +2243,7 @@ export function SubmitPage() {
           </div>
           <div className="flex flex-col gap-3">
             <button
-              onClick={() => navigate(`/place/${success}`)}
+              onClick={() => navigate(`/ort/${success}`)}
               className="py-3 px-6 rounded-2xl font-bold text-white text-sm"
               style={{ background: C.amber }}
             >

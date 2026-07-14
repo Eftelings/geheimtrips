@@ -55,7 +55,7 @@ export function AdminSubmissions() {
                 {p.lat && <p className="text-[10px] text-white/25 mb-3">📍 {p.lat.toFixed(4)}, {p.lng?.toFixed(4)}</p>}
                 {/* Ansehen / Bearbeiten vor der Freigabe */}
                 <div className="flex gap-2 mb-2">
-                  <button onClick={() => navigate(`/place/${p.id}`)}
+                  <button onClick={() => navigate(`/ort/${p.id}`)}
                     className="flex-1 bg-white/5 text-white/70 font-semibold py-2 rounded-xl text-xs hover:bg-white/10 transition-colors">
                     <i className="fa-solid fa-eye mr-1" /> Ansehen
                   </button>

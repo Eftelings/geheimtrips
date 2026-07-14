@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { db } from './db/index.js';
 import { users } from './db/schema.js';
 import { sql } from 'drizzle-orm';
+import { injectPlaceMeta, type SeoPlace } from './lib/seo.js';
 import authRouter from './routes/auth.js';
 import placesRouter from './routes/places.js';
 import tripsRouter from './routes/trips.js';
@@ -80,8 +81,64 @@ if (STATIC_DIR) {
     c.header('Cache-Control', 'public, max-age=31536000, immutable');
   });
   app.use('/*', serveStatic({ root: STATIC_DIR }));
-  // SPA-Fallback: alle übrigen Pfade auf index.html (React-Router übernimmt)
   const indexHtml = readFileSync(resolve(process.cwd(), STATIC_DIR, 'index.html'), 'utf8');
+
+  // ── SEO ──────────────────────────────────────────────────────────────────────
+  // Öffentliche Origin: hinter einem Proxy (Railway) terminiert TLS davor, c.req.url
+  // meldet dann http://. Deshalb x-forwarded-* auswerten; PUBLIC_ORIGIN übersteuert alles.
+  const publicOrigin = (c: { req: { url: string; header: (k: string) => string | undefined } }): string => {
+    const env = process.env.PUBLIC_ORIGIN;
+    if (env) return env.replace(/\/+$/, '');
+    const u = new URL(c.req.url);
+    const proto = c.req.header('x-forwarded-proto') ?? u.protocol.replace(':', '');
+    const host  = c.req.header('x-forwarded-host') ?? c.req.header('host') ?? u.host;
+    return `${proto}://${host}`;
+  };
+
+  app.get('/robots.txt', (c) => {
+    const origin = publicOrigin(c);
+    return c.text([
+      'User-agent: *',
+      'Allow: /',
+      'Disallow: /admin',
+      'Disallow: /api',
+      'Disallow: /profil',
+      'Disallow: /postfach',
+      '',
+      `Sitemap: ${origin}/sitemap.xml`,
+      '',
+    ].join('\n'));
+  });
+
+  app.get('/sitemap.xml', async (c) => {
+    const origin = publicOrigin(c);
+    const rows = await db.all<{ id: string; createdAt: string | null }>(
+      sql`SELECT id, created_at AS createdAt FROM places ORDER BY created_at DESC`,
+    ).catch(() => []);
+    const entries = [
+      `<url><loc>${origin}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+      ...rows.map(r =>
+        `<url><loc>${origin}/ort/${r.id}</loc>`
+        + (r.createdAt ? `<lastmod>${String(r.createdAt).slice(0, 10)}</lastmod>` : '')
+        + `<changefreq>weekly</changefreq><priority>0.8</priority></url>`),
+    ].join('');
+    return c.body(
+      `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${entries}</urlset>`,
+      200, { 'Content-Type': 'application/xml; charset=utf-8' },
+    );
+  });
+
+  // Ort-Detailseite: Meta-Tags serverseitig einsetzen (Google + Social/Bing sehen echten Inhalt)
+  app.get('/ort/:id', async (c) => {
+    const rows = await db.all<SeoPlace>(sql`
+      SELECT id, name, region, short, hero, lat, lng FROM places WHERE id = ${c.req.param('id')} LIMIT 1
+    `).catch(() => []);
+    const place = rows[0];
+    if (!place) return c.html(indexHtml, 404);
+    return c.html(injectPlaceMeta(indexHtml, place, publicOrigin(c)));
+  });
+
+  // SPA-Fallback: alle übrigen Pfade auf index.html (React-Router übernimmt)
   app.get('/*', (c) => c.html(indexHtml));
 } else {
   app.notFound((c) => c.json({ error: 'Route nicht gefunden.' }, 404));

@@ -70,7 +70,7 @@ export function ResultsPage() {
 
         {/* Swipe view */}
         {view === 'swipe' && matched.length > 0 && (
-          <SwipeDeck places={matched} onSave={toggleSave} savedIds={savedIds} onOpen={id => navigate(`/place/${id}`)} />
+          <SwipeDeck places={matched} onSave={toggleSave} savedIds={savedIds} onOpen={id => navigate(`/ort/${id}`)} />
         )}
 
         {/* Liste view */}

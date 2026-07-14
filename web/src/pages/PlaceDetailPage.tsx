@@ -15,6 +15,7 @@ import exifr from 'exifr';
 import { placesApi, businessApi, mediaApi } from '../services/api.js';
 import type { ParkingContributions, PlaceQuestion } from '../services/api.js';
 import { useAuthStore } from '../store/useAuthStore.js';
+import { useRequireAuth } from '../hooks/useRequireAuth.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { ReviewFlow } from '../components/ui/ReviewFlow.js';
 import type { ReviewSection } from '../components/ui/ReviewFlow.js';
@@ -1036,10 +1037,11 @@ export function PlaceDetailPage({ id: idProp, embedded, onOpenPlace, onClose }: 
   const id = idProp ?? routeId;
   // Im Overlay: Ort→Ort-Links (z.B. ähnliche Orte) im Overlay öffnen statt Seitenwechsel;
   // Zurück schließt das Overlay statt die Route zu wechseln.
-  const openPlace = (pid: string) => (onOpenPlace ? onOpenPlace(pid) : navigate(`/place/${pid}`));
+  const openPlace = (pid: string) => (onOpenPlace ? onOpenPlace(pid) : navigate(`/ort/${pid}`));
   const goBack = () => (embedded && onClose ? onClose() : navigate(-1));
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { gate } = useRequireAuth();
   const { places, savedIds, visitedIds, toggleSave, markVisited, trips, loadTrips, loadPlaces, funnelAnswers } = useAppStore();
 
   // State
@@ -1221,6 +1223,14 @@ export function PlaceDetailPage({ id: idProp, embedded, onOpenPlace, onClose }: 
     loadTrips();
     loadPlaces();   // andere Orte für die Karten-Marker / Suche (im Store 30s gecacht)
   }, [id]); // eslint-disable-line
+
+  // Seitentitel bei SPA-Navigation mitziehen (beim ersten Laden setzt ihn der Server samt OG-Tags)
+  useEffect(() => {
+    if (!place || embedded) return;
+    const prev = document.title;
+    document.title = `${place.name}${place.region ? ` – ${place.region}` : ''} · Geheimtrips.de`;
+    return () => { document.title = prev; };
+  }, [place?.id, place?.name, place?.region, embedded]); // eslint-disable-line
 
   // Echte Community-Fragen vom Backend laden (keine Dummy-Fragen mehr)
   async function loadQuestions(pid: string) {
@@ -1546,6 +1556,7 @@ export function PlaceDetailPage({ id: idProp, embedded, onOpenPlace, onClose }: 
   }
 
 async function handleVerifyToggle() {
+    if (!gate(undefined, 'Melde dich an, um „Ich war hier" zu markieren.')) return;
     if (isVisited) { setRatingOpen(true); return; }
     if (!place) return;
     setGpsLoading(true);
@@ -1579,6 +1590,7 @@ async function handleVerifyToggle() {
   async function handleAskQuestion() {
     const q = newQuestion.trim();
     if (!q || !place) return;
+    if (!gate(undefined, 'Melde dich an, um eine Frage zu diesem Ort zu stellen.')) return;
     setNewQuestion(''); setQaShowAll(true);
     try {
       await placesApi.askQuestion(place.id, q);
@@ -1711,7 +1723,7 @@ async function handleVerifyToggle() {
               {/* Andere Orte (orange) — Klick wechselt das Sheet auf diesen Ort */}
               {mapPlaces.map(p => (
                 <Marker key={p.id} position={[p.lat as number, p.lng as number]} icon={brandMarker}
-                  eventHandlers={{ click: () => navigate(`/place/${p.id}`) }} />
+                  eventHandlers={{ click: () => navigate(`/ort/${p.id}`) }} />
               ))}
               {/* Aktueller Ort (lila) zuletzt → liegt über den anderen */}
               <Marker position={[place.lat, place.lng]} icon={currentMarker} />
@@ -1964,7 +1976,7 @@ async function handleVerifyToggle() {
           )}
 
           {/* Foto/Video hinzufügen */}
-          <button onClick={() => fileInputRef.current?.click()} title="Foto oder Video hinzufügen"
+          <button onClick={() => gate(() => fileInputRef.current?.click(), 'Melde dich an, um Fotos zu diesem Ort hinzuzufügen.')} title="Foto oder Video hinzufügen"
             className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
             style={{ background: '#F1ECF4', color: '#71587A' }}>
             <i className="fa-solid fa-camera text-sm" />
@@ -1972,7 +1984,7 @@ async function handleVerifyToggle() {
 
           {/* Right: Trip + share + save */}
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={() => setAddTripOpen(true)} title="Zu Trip hinzufügen"
+            <button onClick={() => gate(() => setAddTripOpen(true), 'Melde dich an, um Orte zu einem Trip hinzuzufügen.')} title="Zu Trip hinzufügen"
               className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
               style={{ background: '#F1ECF4', color: '#71587A' }}>
               <i className="fa-solid fa-route text-sm" />
@@ -1982,7 +1994,7 @@ async function handleVerifyToggle() {
               style={{ background: '#F1ECF4', color: '#71587A' }}>
               <i className="fa-solid fa-share-nodes text-sm" />
             </button>
-            <button onClick={() => toggleSave(place.id)}
+            <button onClick={() => gate(() => toggleSave(place.id), 'Melde dich an, um diesen Geheimtrip zu speichern.')}
               className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
               style={{ background: isSaved ? 'var(--color-amber)' : '#F1ECF4', color: isSaved ? 'white' : '#71587A' }}>
               <i className={`${isSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark text-sm`} />
@@ -2162,7 +2174,7 @@ async function handleVerifyToggle() {
                 <p className="text-sm mt-1" style={{ color: '#71587a' }}>
                   Besuche den Ort und hinterlasse die erste Bewertung!
                 </p>
-                <button onClick={() => { setShowReviews(false); setRatingOpen(true); }}
+                <button onClick={() => gate(() => { setShowReviews(false); setRatingOpen(true); }, 'Melde dich an, um eine Rezension zu hinterlassen.')}
                   className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold text-white transition-all hover:brightness-110"
                   style={{ background: 'var(--color-amber)' }}>
                   <i className="fa-solid fa-star" /> Jetzt bewerten
@@ -2287,7 +2299,7 @@ async function handleVerifyToggle() {
                 <div className="rounded-3xl p-4 bg-white flex items-center gap-4 flex-wrap flex-1"
                   style={{ border: '1px solid #F1ECF4', boxShadow: '0 2px 10px rgba(52,37,76,0.05)' }}>
                   {place.author ? (
-                    <button onClick={() => navigate(`/author/${place.author!.id}`)}
+                    <button onClick={() => gate(() => navigate(`/author/${place.author!.id}`), 'Melde dich an, um das Profil der Entdecker:in zu sehen.')}
                       className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity">
                       <div className="w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden flex items-center justify-center text-base font-bold text-white"
                         style={{ background: place.author.avatarColor }}>
@@ -2308,7 +2320,7 @@ async function handleVerifyToggle() {
                     </button>
                   ) : place.submitter ? (
                     /* User-submitted place — auf Profil tippen */
-                    <button onClick={() => navigate(`/u/${place.submitter!.id}`)} className="flex items-center gap-3 flex-1 min-w-0 text-left active:scale-[0.99] transition-transform">
+                    <button onClick={() => gate(() => navigate(`/u/${place.submitter!.id}`), 'Melde dich an, um das Profil der Ersteller:in zu sehen.')} className="flex items-center gap-3 flex-1 min-w-0 text-left active:scale-[0.99] transition-transform">
                       <div className="w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden flex items-center justify-center text-base font-bold text-white"
                         style={{ background: '#71587A' }}>
                         {place.submitter.avatarUrl
@@ -2338,7 +2350,7 @@ async function handleVerifyToggle() {
                   {/* Änderungen vorschlagen — nur für Personen, die den Ort besucht haben */}
                   {!place.approvedClaim && isVisited && (
                     <div className="flex gap-2 flex-shrink-0">
-                      <button onClick={() => { setSuggestOpen(true); setSuggestCategory(null); setSuggestText(''); setSuggestSent(false); }}
+                      <button onClick={() => gate(() => { setSuggestOpen(true); setSuggestCategory(null); setSuggestText(''); setSuggestSent(false); }, 'Melde dich an, um Änderungen vorzuschlagen.')}
                         title="Änderungen vorschlagen"
                         className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:brightness-95"
                         style={{ background: '#F1ECF4', color: '#71587A' }}>
@@ -2386,7 +2398,7 @@ async function handleVerifyToggle() {
               {/* Änderungen vorschlagen (bei Business-Ort) — nur für Besucher:innen */}
               {place.approvedClaim && isVisited && (
                 <div className="flex justify-end">
-                  <button onClick={() => { setSuggestOpen(true); setSuggestCategory(null); setSuggestText(''); setSuggestSent(false); }}
+                  <button onClick={() => gate(() => { setSuggestOpen(true); setSuggestCategory(null); setSuggestText(''); setSuggestSent(false); }, 'Melde dich an, um Änderungen vorzuschlagen.')}
                     title="Änderungen vorschlagen"
                     className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:brightness-95"
                     style={{ background: '#F1ECF4', color: '#71587A' }}>
@@ -2707,7 +2719,7 @@ async function handleVerifyToggle() {
                     </p>
                     <div className="flex items-center gap-5 flex-wrap">
                       <VisitedToggle isVisited={isVisited} gpsLoading={gpsLoading} onToggle={handleVerifyToggle} />
-                      <button onClick={async () => { await markVisited(place.id); setRatingOpen(true); showToast('+15 Punkte!'); }}
+                      <button onClick={() => gate(async () => { await markVisited(place.id); setRatingOpen(true); showToast('+15 Punkte!'); }, 'Melde dich an, um deinen Besuch zu markieren.')}
                         className="text-white/60 font-semibold text-sm hover:text-white transition-colors">
                         Ich war kürzlich hier →
                       </button>

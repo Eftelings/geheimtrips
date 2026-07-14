@@ -832,7 +832,7 @@ export function TripDetailPage() {
                         <div key={tp.id}>
                           <StopCard tp={tp} index={globalIdx} editable={editable}
                             isActive={activeStop === tp.placeId}
-                            onOpen={() => navigate(`/place/${tp.placeId}`)}
+                            onOpen={() => navigate(`/ort/${tp.placeId}`)}
                             onRemove={() => removeStop(tp.placeId)} />
                           {/* Zwischentext (Notiz) zum Stopp */}
                           <NoteBlock text={tp.notes ?? ''} editable={editable}

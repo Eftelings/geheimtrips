@@ -56,7 +56,7 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange }: { places: Plac
   };
   const share = () => {
     if (!card) return;
-    const url = `${location.origin}/place/${card.id}`;
+    const url = `${location.origin}/ort/${card.id}`;
     if (navigator.share) navigator.share({ title: card.name, text: card.short, url }).catch(() => {});
     else navigator.clipboard?.writeText(url).then(() => showToast('Link kopiert')).catch(() => {});
   };

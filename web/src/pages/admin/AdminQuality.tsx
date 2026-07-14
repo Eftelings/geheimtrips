@@ -56,7 +56,7 @@ export function AdminQuality() {
       ) : (
         <div className="grid gap-2">
           {sorted.map(r => (
-            <button key={r.id} onClick={() => navigate(`/place/${r.id}`)}
+            <button key={r.id} onClick={() => navigate(`/ort/${r.id}`)}
               className="bg-[#1a1228] border border-white/8 rounded-2xl p-4 flex items-center gap-4 text-left hover:border-white/20 transition-colors">
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-white truncate">{r.name}</div>

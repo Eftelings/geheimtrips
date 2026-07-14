@@ -1,6 +1,8 @@
 import { useEffect, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore, GATE_ENABLED } from './store/useAuthStore.js';
+import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
+import { useAuthStore } from './store/useAuthStore.js';
+import { useAuthGate } from './store/useAuthGate.js';
+import { AuthGateModal } from './components/ui/AuthGateModal.js';
 import { CookieConsent } from './components/ui/CookieConsent.js';
 import React from 'react';
 
@@ -49,9 +51,13 @@ const ResetPasswordPage  = lz(() => import('./pages/ResetPasswordPage.js'), 'Res
 const SubmitPage         = lz(() => import('./pages/SubmitPage.js'), 'SubmitPage');
 const GeoGamePage        = lz(() => import('./pages/game/GeoGamePage.js'), 'GeoGamePage');
 
+// Öffentlich sichtbar, aber Aktion braucht Konto → statt Redirect auf die Login-Seite
+// öffnen wir das Login-Lightbox und schicken zurück auf die (öffentliche) Startseite.
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, hydrated } = useAuthStore();
-  const location = useLocation();
+  const openGate = useAuthGate(s => s.openGate);
+
+  useEffect(() => { if (hydrated && !user) openGate(); }, [hydrated, user, openGate]);
 
   if (!hydrated) return (
     <div className="min-h-dvh flex items-center justify-center bg-[var(--color-bg)]">
@@ -59,11 +65,21 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  if (GATE_ENABLED && !user) {
-    return <Navigate to="/gate" state={{ from: location }} replace />;
-  }
+  if (!user) return <Navigate to="/" replace />;
 
   return <>{children}</>;
+}
+
+// /place/:id → /ort/:id (deutsche, SEO-freundliche URL; alte Links leiten weiter)
+function PlaceRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/ort/${id ?? ''}`} replace />;
+}
+
+// Alte englische Route → deutsche Route, Query-String bleibt erhalten (z.B. ?edit=…)
+function RedirectTo({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
 }
 
 function RequireAdmin({ children }: { children: React.ReactNode }) {
@@ -105,33 +121,49 @@ export function App() {
   return (
     <Suspense fallback={PageFallback}>
       <Routes>
-        <Route path="/gate"    element={<GatePage />} />
+        {/* Öffentlich zugänglich (crawlbar) */}
+        <Route path="/anmelden" element={<GatePage />} />
+        <Route path="/gate"     element={<RedirectTo to="/anmelden" />} />
         <Route path="/legal"   element={<LegalPage />} />
         <Route path="/reset"   element={<ResetPasswordPage />} />
+        <Route path="/" element={<EntdeckenPage />} />
+        <Route path="/ort/:id"   element={<PlaceDetailPage />} />
+        <Route path="/place/:id" element={<PlaceRedirect />} />
 
-        <Route path="/" element={<RequireAuth><EntdeckenPage /></RequireAuth>} />
+        {/* Konto nötig — Seite ist sichtbar, aber der Zugriff öffnet das Login-Lightbox */}
         <Route path="/funnel/*" element={<RequireAuth><FunnelPage /></RequireAuth>} />
         <Route path="/onboarding" element={<RequireAuth><OnboardingPage /></RequireAuth>} />
         <Route path="/swipe"      element={<RequireAuth><SwipePage /></RequireAuth>} />
         <Route path="/finder"     element={<RequireAuth><FinderPage /></RequireAuth>} />
         <Route path="/trip-wizard" element={<RequireAuth><TripWizardPage /></RequireAuth>} />
         <Route path="/results"  element={<RequireAuth><ResultsPage /></RequireAuth>} />
-        <Route path="/place/:id"  element={<RequireAuth><PlaceDetailPage /></RequireAuth>} />
         <Route path="/author/:id" element={<RequireAuth><AuthorPage /></RequireAuth>} />
         <Route path="/u/:id"      element={<RequireAuth><UserProfilePage /></RequireAuth>} />
-        <Route path="/saved"     element={<RequireAuth><SavedPage /></RequireAuth>} />
-        <Route path="/visited"   element={<RequireAuth><VisitedPage /></RequireAuth>} />
-        <Route path="/trips"     element={<RequireAuth><SavedPage initialTab="trips" /></RequireAuth>} />
-        <Route path="/trips/create" element={<RequireAuth><TripCreatePage /></RequireAuth>} />
+
+        <Route path="/meine-orte"  element={<RequireAuth><SavedPage /></RequireAuth>} />
+        <Route path="/saved"       element={<RedirectTo to="/meine-orte" />} />
+        <Route path="/besucht"     element={<RequireAuth><VisitedPage /></RequireAuth>} />
+        <Route path="/visited"     element={<RedirectTo to="/besucht" />} />
+        <Route path="/meine-trips" element={<RequireAuth><SavedPage initialTab="trips" /></RequireAuth>} />
+        <Route path="/trips"       element={<RedirectTo to="/meine-trips" />} />
+        <Route path="/trips/erstellen" element={<RequireAuth><TripCreatePage /></RequireAuth>} />
+        <Route path="/trips/create"    element={<RedirectTo to="/trips/erstellen" />} />
         <Route path="/trips/:id" element={<RequireAuth><TripDetailPage /></RequireAuth>} />
-        <Route path="/map"       element={<RequireAuth><MapPage /></RequireAuth>} />
-        <Route path="/ranking"  element={<RequireAuth><RankingPage /></RequireAuth>} />
+        <Route path="/karte"    element={<RequireAuth><MapPage /></RequireAuth>} />
+        <Route path="/map"      element={<RedirectTo to="/karte" />} />
+        <Route path="/rangliste" element={<RequireAuth><RankingPage /></RequireAuth>} />
+        <Route path="/ranking"   element={<RedirectTo to="/rangliste" />} />
         <Route path="/awards"   element={<RequireAuth><AwardsPage /></RequireAuth>} />
-        <Route path="/profile"  element={<RequireAuth><ProfilePage /></RequireAuth>} />
-        <Route path="/notifications" element={<RequireAuth><NotificationInboxPage /></RequireAuth>} />
-        <Route path="/people"    element={<RequireAuth><MeetPeoplePage /></RequireAuth>} />
-        <Route path="/submit"    element={<RequireAuth><SubmitPage /></RequireAuth>} />
-        <Route path="/game"      element={<RequireAuth><GeoGamePage /></RequireAuth>} />
+        <Route path="/profil"   element={<RequireAuth><ProfilePage /></RequireAuth>} />
+        <Route path="/profile"  element={<RedirectTo to="/profil" />} />
+        <Route path="/postfach" element={<RequireAuth><NotificationInboxPage /></RequireAuth>} />
+        <Route path="/notifications" element={<RedirectTo to="/postfach" />} />
+        <Route path="/leute"    element={<RequireAuth><MeetPeoplePage /></RequireAuth>} />
+        <Route path="/people"   element={<RedirectTo to="/leute" />} />
+        <Route path="/einreichen" element={<RequireAuth><SubmitPage /></RequireAuth>} />
+        <Route path="/submit"     element={<RedirectTo to="/einreichen" />} />
+        <Route path="/geheimquiz" element={<RequireAuth><GeoGamePage /></RequireAuth>} />
+        <Route path="/game"       element={<RedirectTo to="/geheimquiz" />} />
         <Route path="/business"  element={<RequireAuth><BusinessDashboardPage /></RequireAuth>} />
 
         {/* Admin Panel */}
@@ -160,6 +192,7 @@ export function AppWithConsent() {
   return (
     <>
       <App />
+      <AuthGateModal />
       <CookieConsent />
     </>
   );

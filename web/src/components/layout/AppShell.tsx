@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { BottomNav } from './BottomNav.js';
 import { Sidebar } from './Sidebar.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
+import { useAuthGate } from '../../store/useAuthGate.js';
+import { useRequireAuth } from '../../hooks/useRequireAuth.js';
 import { notificationsApi } from '../../services/api.js';
 import { Avatar } from '../ui/Avatar.js';
 import { BrandLogo } from '../ui/BrandLogo.js';
@@ -24,6 +26,8 @@ interface Props {
 export function AppShell({ children, showBack, title, headerRight, noHeader, bare }: Props) {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { gate } = useRequireAuth();
+  const openGate = useAuthGate(s => s.openGate);
   const [notif, setNotif] = useState(0);
 
   useEffect(() => {
@@ -52,10 +56,10 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
               </button>
             ) : (
               <div className="flex items-center gap-1">
-                <button onClick={() => navigate('/submit')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Ort einreichen">
+                <button onClick={() => gate(() => navigate('/einreichen'), 'Melde dich an, um einen Geheimtrip einzureichen.')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Ort einreichen">
                   <i className="fa-solid fa-feather-pointed text-lg" />
                 </button>
-                <button onClick={() => navigate('/awards')} className="w-9 h-9 flex items-center justify-center text-[var(--color-amber)]" aria-label="Awards">
+                <button onClick={() => gate(() => navigate('/awards'), 'Melde dich an, um deine Awards zu sehen.')} className="w-9 h-9 flex items-center justify-center text-[var(--color-amber)]" aria-label="Awards">
                   <i className="fa-solid fa-trophy text-lg" />
                 </button>
               </div>
@@ -71,19 +75,23 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
             {/* Rechts: Fernglas (Fragen-Funnel → neue Orte) + Profil (Postfach liegt jetzt im Profil) */}
             <div className="flex items-center gap-1 justify-end">
               {headerRight ?? (
-                user && (
-                  <>
-                    <button onClick={() => navigate('/funnel')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Neue Orte entdecken">
-                      <i className="fa-solid fa-binoculars text-lg" />
-                    </button>
-                    <button onClick={() => navigate('/profile')} aria-label="Profil" className="relative">
+                <>
+                  <button onClick={() => gate(() => navigate('/funnel'), 'Melde dich an, um passende neue Orte zu finden.')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Neue Orte entdecken">
+                    <i className="fa-solid fa-binoculars text-lg" />
+                  </button>
+                  {user ? (
+                    <button onClick={() => navigate('/profil')} aria-label="Profil" className="relative">
                       <Avatar name={user.name} src={user.avatarUrl} size={28} />
                       {notif > 0 && (
                         <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--color-amber)] border-2 border-[var(--color-bg)]" />
                       )}
                     </button>
-                  </>
-                )
+                  ) : (
+                    <button onClick={() => openGate()} className="text-xs font-bold text-[var(--color-amber)] px-2.5 py-1.5 rounded-full" style={{ background: 'rgba(249,144,57,0.12)' }}>
+                      Anmelden
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </header>
