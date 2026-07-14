@@ -11,6 +11,7 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/seed/index.ts",
     "db:reset": "tsx src/seed/reset.ts",
+    "optimize-images": "tsx src/scripts/optimize-images.ts",
     "make-admin": "tsx src/seed/make-admin.ts",
     "db:studio": "drizzle-kit studio"
   },

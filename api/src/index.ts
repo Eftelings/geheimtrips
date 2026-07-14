@@ -64,6 +64,11 @@ api.route('/people', peopleRouter);
 api.route('/taxonomy', taxonomyRouter);
 app.route('/api', api);
 
+// Alt-Bestand: frühe Uploads wurden als „/uploads/x.jpg" (ohne /api) gespeichert.
+// Ohne diesen Mount fallen sie in den SPA-Fallback und liefern index.html statt des
+// Bildes aus (HTTP 200, text/html) → Bild kaputt. Deshalb zusätzlich am Root bedienen.
+app.route('/uploads', serveRouter);
+
 api.notFound((c) => c.json({ error: 'Route nicht gefunden.' }, 404));
 app.onError((err, c) => {
   console.error(err);

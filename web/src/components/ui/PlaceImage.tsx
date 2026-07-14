@@ -9,16 +9,21 @@ const CAT_ICON: Record<string, string> = {
  * Ortsbild mit Marken-Platzhalter: Ohne hochgeladenes Bild wird KEIN Stock-Foto
  * erfunden, sondern ein dezenter Aubergine-Verlauf mit Kategorie-Icon gezeigt.
  */
-export function PlaceImage({ src, category, alt = '', className = '', style, iconClass = 'text-2xl' }: {
+export function PlaceImage({ src, category, alt = '', className = '', style, iconClass = 'text-2xl', eager = false }: {
   src?: string | null;
   category?: string;
   alt?: string;
   className?: string;
   style?: CSSProperties;
   iconClass?: string;
+  /** Nur fürs LCP-Bild („above the fold") setzen — alles andere lädt faul nach. */
+  eager?: boolean;
 }) {
   if (src) {
-    return <img src={src} alt={alt} className={className} style={style} />;
+    // Listen/Karten rendern viele Bilder auf einmal: faul laden, damit sie dem
+    // sichtbaren Bild nicht die Bandbreite wegnehmen.
+    return <img src={src} alt={alt} className={className} style={style}
+      loading={eager ? 'eager' : 'lazy'} decoding="async" />;
   }
   return (
     <div className={`flex items-center justify-center ${className}`}

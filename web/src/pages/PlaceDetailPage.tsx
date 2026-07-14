@@ -898,7 +898,7 @@ function ImageLightbox({
               style={{ opacity: i === idx ? 1 : 0.45, outline: i === idx ? '2px solid white' : 'none', outlineOffset: 2 }}>
               {isVideoUrl(p.url)
                 ? <video src={p.url} muted playsInline className="w-full h-full object-cover" />
-                : <img src={p.url} alt="" className="w-full h-full object-cover" />}
+                : <img src={p.url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
             </button>
           ))}
         </div>
@@ -2486,11 +2486,11 @@ async function handleVerifyToggle() {
                     <div key={i} className="rounded-2xl overflow-hidden border border-[var(--color-bg-soft)] bg-white shadow-[var(--shadow-card)]">
                       {h.photos.length > 0 && (
                         h.photos.length === 1 ? (
-                          <img src={h.photos[0]} alt={h.title} className="w-full aspect-[16/10] object-cover" />
+                          <img src={h.photos[0]} alt={h.title} loading="lazy" decoding="async" className="w-full aspect-[16/10] object-cover" />
                         ) : (
                           <div className="flex overflow-x-auto scrollbar-none snap-x" style={{ scrollbarWidth: 'none' }}>
                             {h.photos.map((src, j) => (
-                              <img key={j} src={src} alt="" className="h-44 w-auto flex-shrink-0 object-cover snap-start" />
+                              <img key={j} src={src} alt="" loading="lazy" decoding="async" className="h-44 w-auto flex-shrink-0 object-cover snap-start" />
                             ))}
                           </div>
                         )
@@ -2982,7 +2982,7 @@ async function handleVerifyToggle() {
                   {similar.map(p => (
                     <button key={p.id} onClick={() => openPlace(p.id)} className="flex items-center gap-3 text-left group">
                       <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
-                        <img src={p.hero} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <img src={p.hero} alt={p.name} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-[var(--color-aubergine)] text-sm truncate">{p.name}</p>
@@ -3466,7 +3466,7 @@ async function handleVerifyToggle() {
                       className="aspect-square rounded-xl overflow-hidden cursor-pointer relative"
                       style={{ outline: suggestPhoto === photo.url ? '3px solid #71587a' : '2px solid transparent' }}
                       onClick={() => setSuggestPhoto(p => p === photo.url ? null : photo.url)}>
-                      <img src={photo.url} className="w-full h-full object-cover" alt="" />
+                      <img src={photo.url} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
                       {suggestPhoto === photo.url && (
                         <div className="absolute inset-0 flex items-center justify-center"
                           style={{ background: 'rgba(113,88,122,0.25)' }}>
