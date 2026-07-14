@@ -498,15 +498,22 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
                     return (
                       <div key={p.id} className="flex flex-col gap-1.5">
                         <PlaceCard place={p} />
-                        <button onClick={() => setEditTagsPlace(p)}
-                          className="flex flex-wrap items-center gap-1 text-left px-0.5">
-                          {tags.map(t => (
-                            <span key={t} className="bg-[var(--color-amber)]/15 text-[var(--color-amber)] text-[10px] font-bold px-2 py-0.5 rounded-full">{t}</span>
-                          ))}
-                          <span className="text-[10px] font-semibold text-[var(--color-lavender)] inline-flex items-center gap-1 px-1.5 py-0.5">
-                            <i className="fa-solid fa-tag text-[9px]" /> {tags.length ? 'bearbeiten' : 'Tag'}
-                          </span>
-                        </button>
+                        {orteView === 'beigetragen' ? (
+                          <p className="px-1 text-[11px] font-semibold text-[var(--color-lavender)] inline-flex items-center gap-1.5">
+                            <i className="fa-regular fa-eye text-[10px]" />
+                            {(p.views ?? 0).toLocaleString('de')} {(p.views ?? 0) === 1 ? 'Aufruf' : 'Aufrufe'}
+                          </p>
+                        ) : (
+                          <button onClick={() => setEditTagsPlace(p)}
+                            className="flex flex-wrap items-center gap-1 text-left px-0.5">
+                            {tags.map(t => (
+                              <span key={t} className="bg-[var(--color-amber)]/15 text-[var(--color-amber)] text-[10px] font-bold px-2 py-0.5 rounded-full">{t}</span>
+                            ))}
+                            <span className="text-[10px] font-semibold text-[var(--color-lavender)] inline-flex items-center gap-1 px-1.5 py-0.5">
+                              <i className="fa-solid fa-tag text-[9px]" /> {tags.length ? 'bearbeiten' : 'Tag'}
+                            </span>
+                          </button>
+                        )}
                       </div>
                     );
                   })}

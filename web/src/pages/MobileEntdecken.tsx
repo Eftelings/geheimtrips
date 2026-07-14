@@ -105,7 +105,7 @@ export function MobileEntdecken() {
   const [mode, setMode] = useState<Mode>(entdeckenCache.mode);
   const [tagSel, setTagSel] = useState<TagSelection>(entdeckenCache.tagSel);
   const [selectedId, setSelectedId] = useState<string | null>(entdeckenCache.selectedId);
-  const [panel, setPanel] = useState<null | 'loc' | 'cat' | 'transport'>(null);
+  const [panel, setPanel] = useState<null | 'cat' | 'reach'>(null);
 
   // Standort-Suche (Adresse → Suchzentrum)
   const [searchQuery, setSearchQuery] = useState('');
@@ -326,23 +326,25 @@ export function MobileEntdecken() {
           transition: 'transform .32s cubic-bezier(.32,.72,0,1), opacity .28s ease',
         }}>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => setPanel(panel === 'loc' ? null : 'loc')} className={toolBtn}
-            style={{ ...toolShadow, color: searchCenter ? '#F99039' : '#34254c' }} aria-label="Standort">
-            <i className="fa-solid fa-location-dot" />
-          </button>
           <button onClick={() => setPanel(panel === 'cat' ? null : 'cat')} className={toolBtn}
             style={{ ...toolShadow, color: catActive ? '#F99039' : '#34254c' }} aria-label="Filter">
             <i className="fa-solid fa-filter" />
           </button>
-          <button onClick={() => setPanel(panel === 'transport' ? null : 'transport')}
-            className="flex-1 flex items-center gap-2 bg-white rounded-xl h-10 px-3" style={toolShadow}>
-            <i className={`fa-solid ${T_ICON[reach.travelMode]} text-sm`} style={{ color: '#F99039' }} />
-            <i className="fa-solid fa-chevron-down text-[10px]" style={{ color: '#b9a8c4' }} />
-            <span className="w-px h-4 bg-[var(--color-bg-soft)]" />
-            <span className="text-xs font-semibold text-[var(--color-aubergine)]">
+          {/* Standort + Reichweite in einer Leiste: tippen öffnet beides; geschlossen zeigt sie Ort + Radius */}
+          <button onClick={() => setPanel(panel === 'reach' ? null : 'reach')}
+            className="flex-1 min-w-0 flex items-center gap-2 bg-white rounded-xl h-10 px-3" style={toolShadow}>
+            <i className="fa-solid fa-location-dot text-sm flex-shrink-0" style={{ color: searchCenter ? '#F99039' : '#34254c' }} />
+            <span className="text-xs font-semibold text-[var(--color-aubergine)] truncate flex-1 text-left">
+              {searchLabel ?? (userCoords ? 'Mein Standort' : 'Standort wählen')}
+            </span>
+            <span className="w-px h-4 bg-[var(--color-bg-soft)] flex-shrink-0" />
+            <i className={`fa-solid ${T_ICON[reach.travelMode]} text-sm flex-shrink-0`} style={{ color: '#F99039' }} />
+            <span className="text-xs font-semibold text-[var(--color-aubergine)] whitespace-nowrap flex-shrink-0">
               {reach.travelMode === 'radius' ? `${radiusKm} km` : `${reach.travelMinutes} Min`}
             </span>
-            {reach.isoLoading && <i className="fa-solid fa-circle-notch fa-spin text-[10px] ml-auto" style={{ color: '#b9a8c4' }} />}
+            {reach.isoLoading
+              ? <i className="fa-solid fa-circle-notch fa-spin text-[10px] flex-shrink-0" style={{ color: '#b9a8c4' }} />
+              : <i className="fa-solid fa-chevron-down text-[10px] flex-shrink-0" style={{ color: '#b9a8c4' }} />}
           </button>
         </div>
         <div className="flex gap-1.5 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
@@ -364,48 +366,55 @@ export function MobileEntdecken() {
           <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
           <div className="fixed left-3 right-3 z-40 bg-white rounded-2xl p-3.5"
             style={{ top: '108px', boxShadow: '0 14px 40px rgba(52,37,76,0.25)', maxHeight: '58vh', overflowY: 'auto' }}>
-            {panel === 'loc' && (
-              <div>
-                <div className="flex items-center gap-2 bg-[var(--color-bg-soft)] rounded-xl px-3 h-10 mb-2">
-                  <i className="fa-solid fa-magnifying-glass text-[var(--color-lavender)] text-sm" />
-                  <input autoFocus value={searchQuery} onChange={e => onSearchInput(e.target.value)}
-                    placeholder="Stadt oder Adresse…"
-                    className="flex-1 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]" />
-                </div>
-                <p className="text-[11px] text-[var(--color-lavender)] mb-2 px-1">
-                  <i className="fa-solid fa-hand-pointer text-[var(--color-amber)] mr-1.5" />Tipp: lange auf die Karte drücken, um direkt einen Startpunkt zu setzen.
-                </p>
-                {geoSug.length > 0 ? geoSug.map((s, i) => (
-                  <button key={i} onClick={() => pickCenter(s)}
-                    className="w-full flex items-start gap-3 px-2 py-2 text-left rounded-xl hover:bg-[var(--color-bg-soft)]">
-                    <i className="fa-solid fa-location-dot text-[var(--color-amber)] mt-0.5" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{s.displayName}</p>
-                      <p className="text-xs text-[var(--color-lavender)] truncate">{s.fullAddress}</p>
-                    </div>
-                  </button>
-                )) : (
-                  <div className="flex items-center justify-between px-1 py-1.5">
-                    <span className="text-xs text-[var(--color-lavender)]">
-                      <i className="fa-solid fa-location-crosshairs text-[var(--color-amber)] mr-1.5" />
-                      {searchLabel ?? (userCoords ? 'Mein Standort' : 'Kein Standort')}
-                    </span>
-                    {searchCenter && (
-                      <button onClick={resetToGps} className="text-xs font-semibold" style={{ color: '#7c3aed' }}>
-                        <i className="fa-solid fa-location-arrow mr-1" />GPS
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
             {panel === 'cat' && <TagFilter value={tagSel} onChange={setTagSel} />}
-            {panel === 'transport' && (
-              <ReachControls
-                travelMode={reach.travelMode} setTravelMode={reach.setTravelMode}
-                travelMinutes={reach.travelMinutes} setTravelMinutes={reach.setTravelMinutes}
-                radiusKm={radiusKm} setRadiusKm={setRadiusKm}
-                iso={reach.iso} isoLoading={reach.isoLoading} />
+            {panel === 'reach' && (
+              <div className="space-y-3">
+                {/* Standort */}
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-2 px-0.5">Standort</p>
+                  <div className="flex items-center gap-2 bg-[var(--color-bg-soft)] rounded-xl px-3 h-10 mb-2">
+                    <i className="fa-solid fa-magnifying-glass text-[var(--color-lavender)] text-sm" />
+                    <input value={searchQuery} onChange={e => onSearchInput(e.target.value)}
+                      placeholder="Stadt oder Adresse…"
+                      className="flex-1 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]" />
+                  </div>
+                  <p className="text-[11px] text-[var(--color-lavender)] mb-2 px-1">
+                    <i className="fa-solid fa-hand-pointer text-[var(--color-amber)] mr-1.5" />Tipp: lange auf die Karte drücken, um direkt einen Startpunkt zu setzen.
+                  </p>
+                  {geoSug.length > 0 ? geoSug.map((s, i) => (
+                    <button key={i} onClick={() => pickCenter(s)}
+                      className="w-full flex items-start gap-3 px-2 py-2 text-left rounded-xl hover:bg-[var(--color-bg-soft)]">
+                      <i className="fa-solid fa-location-dot text-[var(--color-amber)] mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{s.displayName}</p>
+                        <p className="text-xs text-[var(--color-lavender)] truncate">{s.fullAddress}</p>
+                      </div>
+                    </button>
+                  )) : (
+                    <div className="flex items-center justify-between px-1 py-1.5">
+                      <span className="text-xs text-[var(--color-lavender)]">
+                        <i className="fa-solid fa-location-crosshairs text-[var(--color-amber)] mr-1.5" />
+                        {searchLabel ?? (userCoords ? 'Mein Standort' : 'Kein Standort')}
+                      </span>
+                      {searchCenter && (
+                        <button onClick={resetToGps} className="text-xs font-semibold" style={{ color: '#7c3aed' }}>
+                          <i className="fa-solid fa-location-arrow mr-1" />GPS
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="h-px bg-[var(--color-bg-soft)]" />
+                {/* Reichweite (Radius bzw. Reisezeit) */}
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-2 px-0.5">Reichweite</p>
+                  <ReachControls
+                    travelMode={reach.travelMode} setTravelMode={reach.setTravelMode}
+                    travelMinutes={reach.travelMinutes} setTravelMinutes={reach.setTravelMinutes}
+                    radiusKm={radiusKm} setRadiusKm={setRadiusKm}
+                    iso={reach.iso} isoLoading={reach.isoLoading} />
+                </div>
+              </div>
             )}
           </div>
         </>

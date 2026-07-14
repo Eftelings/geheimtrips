@@ -2416,6 +2416,21 @@ async function handleVerifyToggle() {
               </section>
             )}
 
+            {/* Nur für die/den Ersteller:in: wie oft wurde dieser Geheimtrip aufgerufen */}
+            {!!user && user.id === place.submittedBy && (
+              <section className="rounded-2xl p-3.5 flex items-center gap-3" style={{ background: '#F1ECF4' }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#E2D7EB' }}>
+                  <i className="fa-regular fa-eye text-sm" style={{ color: '#71587A' }} />
+                </div>
+                <div>
+                  <p className="text-[15px] font-bold text-[var(--color-aubergine)] leading-none">
+                    {(place.views ?? 0).toLocaleString('de')} {(place.views ?? 0) === 1 ? 'Aufruf' : 'Aufrufe'}
+                  </p>
+                  <p className="text-[11px] text-[var(--color-lavender)] mt-0.5">So oft wurde dein Geheimtrip geöffnet · nur du siehst das</p>
+                </div>
+              </section>
+            )}
+
             {/* Story */}
             {place.long && (
               <section>

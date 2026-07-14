@@ -3,7 +3,8 @@ import { db } from '../db/index.js';
 import { places, savedPlaces, visitedPlaces, ratings, placeMedia, authors, businessClaims, placeContributions, users, photoLikes, favoritePlaces } from '../db/schema.js';
 import { isUserLocalHero, W_REVIEW } from '../lib/ranking.js';
 import { eq, and, inArray, sql, count, asc } from 'drizzle-orm';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, JWT_SECRET } from '../middleware/auth.js';
+import { jwtVerify } from 'jose';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { cleanRichText, cleanPlainText } from '../lib/sanitize.js';
@@ -85,6 +86,9 @@ db.run(sql`UPDATE places SET tag_slugs_json = json_array(tag_slug)
 
 // Must-see-Highlights (Erlebnis-Orte): [{ title, description, photos: string[] }]
 db.run(sql`ALTER TABLE places ADD COLUMN highlights_json TEXT DEFAULT '[]'`).catch(() => {});
+
+// Aufruf-Zähler der Detailseite (für „so oft wurde dein Geheimtrip aufgerufen")
+db.run(sql`ALTER TABLE places ADD COLUMN views INTEGER NOT NULL DEFAULT 0`).catch(() => {});
 
 // Änderungsanfragen zu Orten — gehen an Admins, Ersteller:in und (falls vorhanden) Business.
 db.run(sql`
@@ -471,6 +475,21 @@ router.patch('/:id', requireAuth,
 router.get('/:id', async (c) => {
   const place = await db.select().from(places).where(eq(places.id, c.req.param('id'))).get();
   if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+
+  // Aufruf zählen (best-effort, blockiert die Antwort nicht) — eigene Aufrufe der/des
+  // Ersteller:in zählen nicht, sonst wäre die Zahl für sie:ihn irreführend.
+  const authHeader = c.req.header('Authorization');
+  void (async () => {
+    let viewerId: number | null = null;
+    if (authHeader?.startsWith('Bearer ')) {
+      try { viewerId = ((await jwtVerify(authHeader.slice(7), JWT_SECRET)).payload as { userId?: number }).userId ?? null; }
+      catch { /* anonym/ungültig → trotzdem zählen */ }
+    }
+    if (viewerId !== place.submittedBy) {
+      await db.run(sql`UPDATE places SET views = COALESCE(views, 0) + 1 WHERE id = ${place.id}`).catch(() => {});
+    }
+  })();
+
   let author = null;
   if (place.authorId) {
     author = await db.select().from(authors).where(eq(authors.id, place.authorId)).get();
