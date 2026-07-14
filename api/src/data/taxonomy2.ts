@@ -15,6 +15,7 @@ export const T2_GROUPS: T2Group[] = [
   { slug: 'kultur',    label: 'Kultur, Geschichte & Architektur', icon: 'fa-landmark',        color: '#8A6FB3' },
   { slug: 'natur',     label: 'Natur, Outdoor & Landschaft',      icon: 'fa-leaf',            color: '#5B8F6E' },
   { slug: 'freizeit',  label: 'Freizeit, Action & Entertainment', icon: 'fa-ticket',          color: '#F99039' },
+  { slug: 'urbanes',   label: 'Urbanes, Architektur & Lifestyle', icon: 'fa-city',            color: '#4A7FB5' },
   { slug: 'kulinarik', label: 'Kulinarik & Übernachten',          icon: 'fa-mug-hot',         color: '#D97757' },
 ];
 
@@ -43,7 +44,10 @@ export const T2_TAGS: T2Tag[] = [
   { label: 'Denkmal', groups: ['kultur'] },
   { label: 'Mahnmal', groups: ['kultur'] },
   { label: 'Archäologische Stätte', groups: ['kultur'] },
-  { label: 'Historische Altstadt / Viertel', groups: ['kultur'] },
+  // „Historische Altstadt / Viertel" ist zu „Stadt" (Gruppe Urbanes) zusammengeführt —
+  // die Ausprägung (Altstadt, Szeneviertel, Platz …) ist jetzt ein Merkmal, kein eigener Tag.
+  { label: 'Stadt', groups: ['urbanes'] },
+  { label: 'Dorf',  groups: ['urbanes'] },
   { label: 'Industriedenkmal & Zeche', groups: ['kultur'] },
   { label: 'Bergwerk', groups: ['kultur'] },
   { label: 'Turm', groups: ['kultur'] },
@@ -162,7 +166,8 @@ export const T2_MAP: Record<string, { m: string[]; v: string[] }> = {
   'Denkmal': { m: ['Architektur', 'Zweiter Weltkrieg', 'Kalter Krieg', 'Erster Weltkrieg', 'Völkermord', 'Freiheit', 'Herrscher', 'Regionalgeschichte', 'Schlacht'], v: [] },
   'Mahnmal': { m: ['Architektur', 'Zweiter Weltkrieg', 'Kalter Krieg', 'Erster Weltkrieg', 'Völkermord', 'Freiheit', 'Herrscher', 'Regionalgeschichte', 'Schlacht'], v: [] },
   'Archäologische Stätte': { m: ['Mittelalter', 'Römer', 'Kelten', 'Perser', 'Ägypter', 'Aussichtsplattform', 'Romantik', 'Ausgrabung', 'Menschheitsgeschichte', 'Dinosaurier'], v: [] },
-  'Historische Altstadt / Viertel': { m: ['Mittelalter', 'Regionalgeschichte', 'Architektur', 'Outdoor'], v: [] },
+  'Stadt': { m: ['Altstadt', 'Szeneviertel', 'Platz', 'Marktplatz', 'Fußgängerzone', 'Hafenviertel', 'Fachwerk', 'Streetart', 'Architektur', 'Mittelalter', 'Regionalgeschichte', 'Outdoor'], v: [] },
+  'Dorf':  { m: ['Fachwerk', 'Marktplatz', 'Handwerk', 'Architektur', 'Mittelalter', 'Regionalgeschichte', 'Outdoor'], v: [] },
   'Industriedenkmal & Zeche': { m: ['Bergbau', 'Stahl & Eisen', 'Energie & Strom', 'Architektur', 'Aussichtsplattform'], v: [] },
   'Turm': { m: ['Aussichtsplattform', 'Architektur', 'Sehenswürdigkeit', 'Wolkenkratzer', 'Mittelalter'], v: [] },
   'Brücke': { m: ['Architektur', 'Aussichtsplattform', 'Eisenbahn', 'Straßenbahn', 'Mittelalter', 'Moderne', 'Sehenswürdigkeit'], v: [] },

@@ -95,6 +95,30 @@ async function seedTaxonomy() {
     WHERE vibe_json LIKE '%klassisches-kaffeehaus%'`).catch(() => {});
   await db.run(sql`DELETE FROM tax_tag_vibe WHERE vibe_slug = 'klassisches-kaffeehaus'`).catch(() => {});
   await db.run(sql`DELETE FROM tax_vibes WHERE slug = 'klassisches-kaffeehaus'`).catch(() => {});
+
+  // „Historische Altstadt / Viertel" → „Stadt" (Gruppe Urbanes). Die Ausprägung wandert
+  // ins Merkmal „Altstadt". Idempotent: läuft nur, solange der Alt-Tag noch existiert.
+  const OLD = 'historische-altstadt-viertel', NEW = 'stadt';
+  const oldExists = await db.all(sql`SELECT slug FROM tax_tags WHERE slug = ${OLD}`).catch(() => []);
+  if (oldExists.length) {
+    await db.run(sql`UPDATE places SET tag_slug = ${NEW} WHERE tag_slug = ${OLD}`).catch(() => {});
+    const rows = await db.all<{ id: string; tag_slugs_json: string | null }>(sql`
+      SELECT id, tag_slugs_json FROM places WHERE tag_slugs_json LIKE ${'%"' + OLD + '"%'}`).catch(() => []);
+    for (const r of rows) {
+      try {
+        const list = JSON.parse(r.tag_slugs_json ?? '[]') as string[];
+        const next = [...new Set(list.map(s => (s === OLD ? NEW : s)))];
+        await db.run(sql`UPDATE places SET tag_slugs_json = ${JSON.stringify(next)} WHERE id = ${r.id}`);
+      } catch { /* ignore */ }
+    }
+    await db.run(sql`DELETE FROM tax_tag_merkmal WHERE tag_slug = ${OLD}`).catch(() => {});
+    await db.run(sql`DELETE FROM tax_tag_vibe    WHERE tag_slug = ${OLD}`).catch(() => {});
+    await db.run(sql`DELETE FROM tax_tag_group   WHERE tag_slug = ${OLD}`).catch(() => {});
+    await db.run(sql`DELETE FROM tax_tags        WHERE slug     = ${OLD}`).catch(() => {});
+    await db.run(sql`INSERT OR REPLACE INTO tax_aliases (alias_slug, canonical_slug, kind)
+      VALUES (${OLD}, ${NEW}, 'tag')`).catch(() => {});
+    console.log('Taxonomie: „Historische Altstadt / Viertel" → „Stadt" zusammengeführt.');
+  }
 }
 
 (async () => {

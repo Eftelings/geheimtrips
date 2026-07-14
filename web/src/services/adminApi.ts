@@ -191,7 +191,24 @@ export const adminApi = {
   taxDeleteVibe:     (slug: string) => del<{ ok: boolean }>(`/tax/vibe/${encodeURIComponent(slug)}`),
   taxLink:           (tagSlug: string, merkmalSlug: string, approve: boolean) => post<{ ok: boolean }>('/tax/link', { tagSlug, merkmalSlug, approve }),
   taxMerge:          (aliasSlug: string, canonicalSlug: string, kind: 'merkmal' | 'vibe') => post<{ ok: boolean }>('/tax/merge', { aliasSlug, canonicalSlug, kind }),
+  // Live-Taxonomie verwalten (das, was die App wirklich nutzt)
+  taxAll:        ()  => get<TaxAll>('/tax/all'),
+  taxAddGroup:   (label: string, icon?: string, color?: string) => post<{ ok: boolean; slug: string }>('/tax/group', { label, icon, color }),
+  taxEditGroup:  (slug: string, d: { label?: string; icon?: string; color?: string }) => patch<{ ok: boolean }>('/tax/group', { slug, ...d }),
+  taxAddTag:     (label: string, group: string) => post<{ ok: boolean; slug: string }>('/tax/tag', { label, group }),
+  taxEditTag:    (slug: string, d: { label?: string; group?: string }) => patch<{ ok: boolean }>('/tax/tag', { slug, ...d }),
+  taxMergeTag:   (from: string, to: string) => post<{ ok: boolean }>('/tax/tag/merge', { from, to }),
+  taxDeleteTag:  (slug: string) => del<{ ok: boolean }>(`/tax/tag/${encodeURIComponent(slug)}`),
+  taxRenameTerm: (kind: 'merkmal' | 'vibe', slug: string, label: string) => patch<{ ok: boolean }>('/tax/term', { kind, slug, label }),
 };
+
+/** Komplettes Live-Vokabular (das, was Picker/Filter/Fragen wirklich nutzen). */
+export interface TaxAll {
+  groups:   { slug: string; label: string; icon: string | null; color: string | null; sort: number }[];
+  tags:     { slug: string; label: string; groupSlug: string | null; usage: number }[];
+  merkmale: { slug: string; label: string; isApproved: number; usage: number }[];
+  vibes:    { slug: string; label: string; isApproved: number; usage: number }[];
+}
 
 export interface TaxPending {
   merkmale: { slug: string; label: string; createdAt: string; byName: string | null }[];

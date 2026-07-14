@@ -853,6 +853,165 @@ router.post('/tax/merge', zValidator('json', z.object({ aliasSlug: z.string(), c
   return c.json({ ok: true });
 });
 
+// ─── Live-Taxonomie verwalten (tax_groups / tax_tags / tax_merkmale / tax_vibes) ──
+// WICHTIG zum Datenmodell:
+//  · Orte speichern TAGS als Slug (places.tag_slug / tag_slugs_json)  → Tag umbenennen = nur Label, keine Migration
+//  · Orte speichern MERKMALE/VIBES als LABEL (attributes_json)        → Umbenennen MUSS die Orte mitziehen
+const taxSlugify = (s: string) => s.toLowerCase()
+  .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+  .replace(/&/g, ' und ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+/** Merkmal/Vibe-Label an allen Orten umschreiben (sie speichern Labels, nicht Slugs). */
+async function renameTermOnPlaces(kind: 'merkmal' | 'vibe', oldLabel: string, newLabel: string) {
+  const key = kind === 'merkmal' ? 'merkmale' : 'vibes';
+  const rows = await db.all<{ id: string; attributes_json: string | null }>(sql`
+    SELECT id, attributes_json FROM places WHERE attributes_json LIKE ${'%' + oldLabel + '%'}`).catch(() => []);
+  for (const r of rows) {
+    let attrs: Record<string, unknown>;
+    try { attrs = JSON.parse(r.attributes_json ?? '{}'); } catch { continue; }
+    const list = attrs[key];
+    if (!Array.isArray(list) || !list.includes(oldLabel)) continue;
+    attrs[key] = list.map(x => (x === oldLabel ? newLabel : x));
+    await db.run(sql`UPDATE places SET attributes_json = ${JSON.stringify(attrs)} WHERE id = ${r.id}`).catch(() => {});
+  }
+}
+
+// Komplettes Live-Vokabular inkl. Nutzungszahlen
+router.get('/tax/all', async (c) => {
+  const groups = await db.all(sql`SELECT slug, label, icon, color, sort FROM tax_groups ORDER BY sort, label`).catch(() => []);
+  const tags = await db.all(sql`
+    SELECT t.slug, t.label, t.is_approved AS isApproved,
+           (SELECT group_slug FROM tax_tag_group g WHERE g.tag_slug = t.slug LIMIT 1) AS groupSlug,
+           (SELECT count(*) FROM places p WHERE p.tag_slug = t.slug) AS usage
+    FROM tax_tags t ORDER BY t.label`).catch(() => []);
+  const terms = async (table: 'tax_merkmale' | 'tax_vibes', key: 'merkmale' | 'vibes') => {
+    const rows = await db.all<{ slug: string; label: string; isApproved: number }>(
+      sql`SELECT slug, label, is_approved AS isApproved FROM ${sql.raw(table)} ORDER BY label`).catch(() => []);
+    const places = await db.all<{ attributes_json: string | null }>(
+      sql`SELECT attributes_json FROM places`).catch(() => []);
+    const counts = new Map<string, number>();
+    for (const p of places) {
+      try {
+        const list = (JSON.parse(p.attributes_json ?? '{}') as Record<string, unknown>)[key];
+        if (Array.isArray(list)) for (const l of list) counts.set(String(l), (counts.get(String(l)) ?? 0) + 1);
+      } catch { /* ignore */ }
+    }
+    return rows.map(r => ({ ...r, usage: counts.get(r.label) ?? 0 }));
+  };
+  return c.json({ groups, tags, merkmale: await terms('tax_merkmale', 'merkmale'), vibes: await terms('tax_vibes', 'vibes') });
+});
+
+// Hauptkategorie anlegen / umbenennen (Orte referenzieren Gruppen nie direkt → gefahrlos)
+router.post('/tax/group', zValidator('json', z.object({
+  label: z.string().min(2).max(60), icon: z.string().max(40).optional(), color: z.string().max(20).optional(),
+})), async (c) => {
+  const { label, icon, color } = c.req.valid('json');
+  const slug = taxSlugify(label);
+  if (!slug) return c.json({ error: 'Ungültiger Name.' }, 400);
+  const max = await db.all<{ m: number }>(sql`SELECT COALESCE(max(sort), -1) AS m FROM tax_groups`).catch(() => [{ m: -1 }]);
+  await db.run(sql`INSERT OR IGNORE INTO tax_groups (slug, label, icon, color, sort)
+    VALUES (${slug}, ${label.trim()}, ${icon ?? 'fa-tag'}, ${color ?? '#8A6FB3'}, ${Number(max[0]?.m ?? -1) + 1})`);
+  return c.json({ ok: true, slug });
+});
+
+router.patch('/tax/group', zValidator('json', z.object({
+  slug: z.string().min(1), label: z.string().min(2).max(60).optional(),
+  icon: z.string().max(40).optional(), color: z.string().max(20).optional(),
+})), async (c) => {
+  const { slug, label, icon, color } = c.req.valid('json');
+  await db.run(sql`UPDATE tax_groups SET
+    label = COALESCE(${label ?? null}, label),
+    icon  = COALESCE(${icon ?? null}, icon),
+    color = COALESCE(${color ?? null}, color)
+    WHERE slug = ${slug}`);
+  return c.json({ ok: true });
+});
+
+// Typ-Tag anlegen / umbenennen / Gruppe wechseln (Label-Änderung ist gefahrlos: Orte halten den Slug)
+router.post('/tax/tag', zValidator('json', z.object({
+  label: z.string().min(2).max(60), group: z.string().min(1),
+})), async (c) => {
+  const { label, group } = c.req.valid('json');
+  const slug = taxSlugify(label);
+  if (!slug) return c.json({ error: 'Ungültiger Name.' }, 400);
+  await db.run(sql`INSERT OR IGNORE INTO tax_tags (slug, label, is_approved) VALUES (${slug}, ${label.trim()}, 1)`);
+  await db.run(sql`INSERT OR IGNORE INTO tax_tag_group (tag_slug, group_slug) VALUES (${slug}, ${group})`);
+  return c.json({ ok: true, slug });
+});
+
+router.patch('/tax/tag', zValidator('json', z.object({
+  slug: z.string().min(1), label: z.string().min(2).max(60).optional(), group: z.string().min(1).optional(),
+})), async (c) => {
+  const { slug, label, group } = c.req.valid('json');
+  if (label) await db.run(sql`UPDATE tax_tags SET label = ${label.trim()} WHERE slug = ${slug}`);
+  if (group) {
+    await db.run(sql`DELETE FROM tax_tag_group WHERE tag_slug = ${slug}`);
+    await db.run(sql`INSERT OR IGNORE INTO tax_tag_group (tag_slug, group_slug) VALUES (${slug}, ${group})`);
+  }
+  return c.json({ ok: true });
+});
+
+// Zwei Typ-Tags zusammenlegen: Orte ziehen um (tag_slug + tag_slugs_json), dann fällt der alte weg
+router.post('/tax/tag/merge', zValidator('json', z.object({
+  from: z.string().min(1), to: z.string().min(1),
+})), async (c) => {
+  const { from, to } = c.req.valid('json');
+  if (from === to) return c.json({ error: 'Gleiche Tags.' }, 400);
+  const target = await db.all(sql`SELECT slug FROM tax_tags WHERE slug = ${to}`).catch(() => []);
+  if (!target.length) return c.json({ error: 'Ziel-Tag unbekannt.' }, 400);
+
+  await db.run(sql`UPDATE places SET tag_slug = ${to} WHERE tag_slug = ${from}`);
+  // tag_slugs_json ist eine JSON-Liste → Slug darin ersetzen, danach evtl. Dubletten bereinigen
+  const rows = await db.all<{ id: string; tag_slugs_json: string | null }>(sql`
+    SELECT id, tag_slugs_json FROM places WHERE tag_slugs_json LIKE ${'%"' + from + '"%'}`).catch(() => []);
+  for (const r of rows) {
+    try {
+      const list = JSON.parse(r.tag_slugs_json ?? '[]') as string[];
+      const next = [...new Set(list.map(s => (s === from ? to : s)))];
+      await db.run(sql`UPDATE places SET tag_slugs_json = ${JSON.stringify(next)} WHERE id = ${r.id}`);
+    } catch { /* ignore */ }
+  }
+  // Verknüpfungen übernehmen, dann alten Tag entfernen
+  await db.run(sql`INSERT OR IGNORE INTO tax_tag_merkmal (tag_slug, merkmal_slug, is_approved) SELECT ${to}, merkmal_slug, 1 FROM tax_tag_merkmal WHERE tag_slug = ${from}`);
+  await db.run(sql`INSERT OR IGNORE INTO tax_tag_vibe   (tag_slug, vibe_slug,    is_approved) SELECT ${to}, vibe_slug,    1 FROM tax_tag_vibe   WHERE tag_slug = ${from}`);
+  await db.run(sql`DELETE FROM tax_tag_merkmal WHERE tag_slug = ${from}`);
+  await db.run(sql`DELETE FROM tax_tag_vibe    WHERE tag_slug = ${from}`);
+  await db.run(sql`DELETE FROM tax_tag_group   WHERE tag_slug = ${from}`);
+  await db.run(sql`DELETE FROM tax_tags        WHERE slug     = ${from}`);
+  await db.run(sql`INSERT OR REPLACE INTO tax_aliases (alias_slug, canonical_slug, kind) VALUES (${from}, ${to}, 'tag')`).catch(() => {});
+  return c.json({ ok: true });
+});
+
+router.delete('/tax/tag/:slug', async (c) => {
+  const slug = c.req.param('slug');
+  const used = await db.all<{ n: number }>(sql`SELECT count(*) AS n FROM places WHERE tag_slug = ${slug}`).catch(() => [{ n: 0 }]);
+  if (Number(used[0]?.n ?? 0) > 0) {
+    return c.json({ error: 'Tag wird noch von Orten genutzt — bitte erst zusammenlegen.' }, 400);
+  }
+  await db.run(sql`DELETE FROM tax_tag_merkmal WHERE tag_slug = ${slug}`);
+  await db.run(sql`DELETE FROM tax_tag_vibe    WHERE tag_slug = ${slug}`);
+  await db.run(sql`DELETE FROM tax_tag_group   WHERE tag_slug = ${slug}`);
+  await db.run(sql`DELETE FROM tax_tags        WHERE slug     = ${slug}`);
+  return c.json({ ok: true });
+});
+
+// Merkmal/Vibe umbenennen — Slug bleibt stabil (Verknüpfungen intakt), Orte werden mitgezogen
+router.patch('/tax/term', zValidator('json', z.object({
+  kind: z.enum(['merkmal', 'vibe']), slug: z.string().min(1), label: z.string().min(2).max(60),
+})), async (c) => {
+  const { kind, slug, label } = c.req.valid('json');
+  const table = kind === 'merkmal' ? 'tax_merkmale' : 'tax_vibes';
+  const cur = await db.all<{ label: string }>(sql`SELECT label FROM ${sql.raw(table)} WHERE slug = ${slug}`).catch(() => []);
+  if (!cur.length) return c.json({ error: 'Nicht gefunden.' }, 404);
+  const oldLabel = cur[0].label;
+  const newLabel = label.trim();
+  if (oldLabel === newLabel) return c.json({ ok: true });
+
+  await db.run(sql`UPDATE ${sql.raw(table)} SET label = ${newLabel} WHERE slug = ${slug}`);
+  await renameTermOnPlaces(kind, oldLabel, newLabel);   // Orte halten Labels → mitziehen
+  return c.json({ ok: true });
+});
+
 // ─── Authors ──────────────────────────────────────────────────────────────────
 
 router.get('/authors', async (c) => {
