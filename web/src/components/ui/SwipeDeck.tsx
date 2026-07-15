@@ -146,8 +146,10 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange, onDragToList }: 
         </div>
       </div>
 
-      {/* Entscheidungs-Buttons als Layer über dem Bild (etwas höher), abgerundete Brand-Rechtecke */}
-      <div className="absolute left-0 right-0 z-30 flex items-stretch gap-2 px-4" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 30px)' }}>
+      {/* Entscheidungs-Buttons als Layer über dem Bild (etwas höher), abgerundete Brand-Rechtecke.
+          Beim Ziehen (hoch = Detail, runter = Liste) faden sie aus. */}
+      <div className="absolute left-0 right-0 z-30 flex items-stretch gap-2 px-4"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 30px)', opacity: 1 - Math.max(detailOp, listOp), transition: drag ? 'none' : 'opacity .2s ease' }}>
         <button onClick={() => decide('nope')} aria-label="Nein"
           className="flex-1 h-12 rounded-2xl bg-white/95 backdrop-blur shadow-lg flex items-center justify-center gap-2 text-[#E5484D] font-bold text-sm active:scale-95 transition-transform">
           <i className="fa-solid fa-xmark text-lg" />Nein
