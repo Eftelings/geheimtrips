@@ -564,7 +564,8 @@ export function MobileEntdecken() {
       {/* ── Orts-Overlay als ziehbares Sheet: Karte bleibt dahinter, Griff runterziehen schließt. ──
            Aus dem Swipe-Modus (hochziehen) fährt es nahtlos über die Karte; runterziehen führt zurück. */}
       {placeOpen && (
-        <div className="fixed inset-0 z-[55]" style={{ background: `rgba(20,12,32,${detailIn ? 0.35 : 0})`, transition: 'background .3s ease' }}
+        <div className="fixed inset-0 z-[55]"
+          style={{ background: `rgba(20,12,32,${detailIn ? 0.35 : 0})`, backdropFilter: detailIn ? 'blur(3px)' : 'none', WebkitBackdropFilter: detailIn ? 'blur(3px)' : 'none', transition: 'background .3s ease, backdrop-filter .3s ease' }}
           onClick={closeDetail}>
           <div className="absolute inset-x-0 bottom-0 flex flex-col rounded-t-[1.5rem] overflow-hidden bg-[var(--color-bg)]"
             onClick={e => e.stopPropagation()}
