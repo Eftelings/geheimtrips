@@ -330,6 +330,7 @@ function priceIcon(label: string): string {
 
 // ─── Praktisches: Öffnungsstatus, Kontakt, Links, Tickets (neues Feld-Modell) ──
 function PlaceExtras({ place, className = '' }: { place: Place; className?: string }) {
+  const [hoursOpen, setHoursOpen] = useState(false);   // mobil kompakt: nur „heute", Rest aufklappbar
   const answers = ((place.attributes as Record<string, unknown> | undefined)?.answers ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '');
   const rawHours = answers.opening_hours;
@@ -338,6 +339,8 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
   const open = isOpenNow(hours);
   const phone = str(answers.phone), email = str(answers.email);
   const menuUrl = str(answers.menu_url), rsvUrl = str(answers.reservation_url), ticketUrl = str(answers.ticket_url);
+  const rawWeb = str(answers.website);
+  const website = rawWeb ? (/^https?:\/\//.test(rawWeb) ? rawWeb : `https://${rawWeb}`) : '';
   const tp = answers.ticket_prices && typeof answers.ticket_prices === 'object' ? answers.ticket_prices as Record<string, string> : null;
   const priceRows = tp ? ([['adult', 'Erwachsene'], ['child', 'Kinder'], ['reduced', 'Ermäßigte'], ['senior', 'Senioren']] as const)
     .filter(([k]) => str(tp[k])).map(([k, label]) => ({ label, amount: str(tp[k]) })) : [];
@@ -347,6 +350,7 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
   const links: { href: string; icon: string; label: string }[] = [];
   if (menuUrl)   links.push({ href: menuUrl,          icon: 'fa-book-open',      label: 'Speisekarte' });
   if (rsvUrl)    links.push({ href: rsvUrl,           icon: 'fa-calendar-check', label: 'Reservieren' });
+  if (website)   links.push({ href: website,          icon: 'fa-globe',          label: 'Website' });
   if (ticketUrl) links.push({ href: ticketUrl,        icon: 'fa-ticket',         label: 'Tickets' });
   if (phone)     links.push({ href: `tel:${phone}`,   icon: 'fa-phone',          label: 'Anrufen' });
   if (email)     links.push({ href: `mailto:${email}`, icon: 'fa-envelope',      label: 'E-Mail' });
@@ -369,13 +373,28 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
           {alwaysOpen ? (
             <p className="text-sm text-[var(--color-aubergine)]">Durchgehend geöffnet (rund um die Uhr)</p>
           ) : (
-          <div className="space-y-0.5">
-            {daysWithHours.map(([k, label]) => (
-              <div key={k} className="flex justify-between text-sm" style={k === todayKey ? { fontWeight: 700, color: '#34254C' } : { color: '#71587A' }}>
-                <span>{label}</span><span>{hours![k].closed ? 'geschlossen' : `${hours![k].open}–${hours![k].close}`}</span>
+          <>
+            {/* Kompakt (v.a. mobil): heute prominent, Rest aufklappbar */}
+            {(() => {
+              const td = hours?.[todayKey];
+              const txt = !td ? 'Heute keine Angabe' : td.closed ? 'Heute geschlossen' : `Heute ${td.open}–${td.close} Uhr`;
+              return <p className="text-sm font-semibold text-[var(--color-aubergine)]">{txt}</p>;
+            })()}
+            <button type="button" onClick={() => setHoursOpen(v => !v)}
+              className="text-[11px] font-bold text-[var(--color-amber)] mt-1 inline-flex items-center gap-1">
+              {hoursOpen ? 'Weniger' : 'Alle Öffnungszeiten'}
+              <i className={`fa-solid fa-chevron-${hoursOpen ? 'up' : 'down'} text-[8px]`} />
+            </button>
+            {hoursOpen && (
+              <div className="space-y-0.5 mt-1.5">
+                {daysWithHours.map(([k, label]) => (
+                  <div key={k} className="flex justify-between text-sm" style={k === todayKey ? { fontWeight: 700, color: '#34254C' } : { color: '#71587A' }}>
+                    <span>{label}</span><span>{hours![k].closed ? 'geschlossen' : `${hours![k].open}–${hours![k].close}`}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
           )}
         </div>
       )}
@@ -436,10 +455,6 @@ const WEEKDAY_LABELS: Record<string, string> = {
 };
 
 function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmount, rating, reviews, website, openingHours, weekHours, hoursSchedule, hoursUrl, prices, pricesUrl, specialInfo, isOfficiallyManaged, parking, parkingContribs, merkmale, vibes }: AebProps) {
-  const todayHours = hoursSchedule ? getTodayHours(hoursSchedule) : null;
-  const hasWeekHours = !!weekHours && Object.keys(weekHours).length > 0;
-  const todayKey = WEEKDAY_KEYS[new Date().getDay()];
-  const todayWeekText = hasWeekHours ? (weekHours![todayKey] ?? null) : null;
   const externalLink = (
     <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" style={{ color: 'rgba(255,255,255,0.55)' }} />
   );
@@ -447,9 +462,9 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
   const btnStyle = { background: '#71587a', color: 'white' };
 
   return (
-    <div className={`rounded-3xl p-5 ${className}`} style={{ background: '#F1ECF4' }}>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-lavender)]">Auf einen Blick</p>
+    <div className={`rounded-2xl p-4 border border-[var(--color-bg-soft)] bg-white ${className}`}>
+      <div className="flex items-center justify-between mb-3.5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)]">Auf einen Blick</p>
         {isOfficiallyManaged && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
             style={{ background: '#e8f5e9', color: '#2e7d32' }}>
@@ -460,27 +475,15 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
       </div>
       <div className="flex flex-col gap-3.5">
 
-        {/* Merkmale */}
-        {merkmale && merkmale.length > 0 && (
+        {/* Merkmale & Vibes — zusammengeführt in einer Zeile (Vibes orange abgesetzt) */}
+        {((merkmale?.length ?? 0) > 0 || (vibes?.length ?? 0) > 0) && (
           <div className="flex items-start gap-3">
-            <i className="fa-solid fa-tags text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
+            <i className="fa-solid fa-tags text-[var(--color-amber)] mt-0.5 w-4 text-sm flex-shrink-0" />
             <div className="min-w-0">
-              <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-1.5">Merkmale</p>
+              <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-1.5">Merkmale &amp; Vibes</p>
               <div className="flex flex-wrap gap-1.5">
-                {merkmale.map(m => <span key={m} className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'white', color: '#71587a' }}>{m}</span>)}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Vibe */}
-        {vibes && vibes.length > 0 && (
-          <div className="flex items-start gap-3">
-            <i className="fa-solid fa-wand-magic-sparkles text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
-            <div className="min-w-0">
-              <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-1.5">Vibe</p>
-              <div className="flex flex-wrap gap-1.5">
-                {vibes.map(v => <span key={v} className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#8A6FB3', color: 'white' }}>{v}</span>)}
+                {(merkmale ?? []).map(m => <span key={`m-${m}`} className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'var(--color-bg-soft)', color: '#71587a' }}>{m}</span>)}
+                {(vibes ?? []).map(v => <span key={`v-${v}`} className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(249,144,57,0.15)', color: '#C96442' }}>{v}</span>)}
               </div>
             </div>
           </div>
@@ -488,7 +491,7 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
 
         {/* Budget */}
         <div className="flex items-start gap-3">
-          <i className="fa-solid fa-coins text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
+          <i className="fa-solid fa-coins text-[var(--color-amber)] mt-0.5 w-4 text-sm flex-shrink-0" />
           <div className="min-w-0">
             <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-0.5">Budget</p>
             <p className="text-sm font-semibold text-[var(--color-aubergine)]">{costLabel}</p>
@@ -498,7 +501,7 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
         {/* Eintritt (from submission answers) */}
         {entranceFee && entranceFee !== 'Nicht bekannt' && (
           <div className="flex items-start gap-3">
-            <i className={`fa-solid ${entranceFee === 'Kostenlos' ? 'fa-circle-check' : entranceFee === 'Kostenpflichtig' ? 'fa-euro-sign' : 'fa-ticket-simple'} text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0`} />
+            <i className={`fa-solid ${entranceFee === 'Kostenlos' ? 'fa-circle-check' : entranceFee === 'Kostenpflichtig' ? 'fa-euro-sign' : 'fa-ticket-simple'} text-[var(--color-amber)] mt-0.5 w-4 text-sm flex-shrink-0`} />
             <div className="min-w-0">
               <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-0.5">Eintritt</p>
               <p className="text-sm font-semibold"
@@ -514,7 +517,7 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
 
         {/* Bewertung */}
         <div className="flex items-start gap-3">
-          <i className="fa-solid fa-star text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
+          <i className="fa-solid fa-star text-[var(--color-amber)] mt-0.5 w-4 text-sm flex-shrink-0" />
           <div className="min-w-0">
             <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-0.5">Bewertung</p>
             <p className="text-sm font-semibold text-[var(--color-aubergine)]">{rating} ★ ({reviews} Bew.)</p>
@@ -524,7 +527,7 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
         {/* Website — button */}
         {website && (
           <div className="flex items-start gap-3">
-            <i className="fa-solid fa-globe text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
+            <i className="fa-solid fa-globe text-[var(--color-amber)] mt-0.5 w-4 text-sm flex-shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-1.5">Website</p>
               <a href={website.startsWith('http') ? website : `https://${website}`}
@@ -535,65 +538,12 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
           </div>
         )}
 
-        {/* Öffnungszeiten — heute */}
-        {(hoursSchedule || openingHours || hasWeekHours) && (
-          <div className="flex items-start gap-3">
-            <i className="fa-solid fa-clock text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
-            <div className="min-w-0">
-              <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-0.5">Öffnungszeiten</p>
-              {todayHours === 'closed' ? (
-                <p className="text-sm font-semibold" style={{ color: '#C96442' }}>Heute geschlossen</p>
-              ) : todayHours ? (
-                <>
-                  <p className="text-sm font-semibold text-[var(--color-aubergine)]">
-                    Heute: {todayHours.open} – {todayHours.close} Uhr
-                  </p>
-                  {todayHours.lastEntry && (
-                    <p className="text-xs mt-0.5" style={{ color: '#71587a' }}>
-                      Letzter Einlass: {todayHours.lastEntry} Uhr
-                    </p>
-                  )}
-                </>
-              ) : hasWeekHours ? (
-                <>
-                  <p className="text-sm font-semibold"
-                    style={{ color: todayWeekText?.toLowerCase().includes('geschlossen') ? '#C96442' : 'var(--color-aubergine)' }}>
-                    Heute: {todayWeekText || 'keine Angabe'}
-                  </p>
-                  <details className="mt-1">
-                    <summary className="text-xs cursor-pointer select-none" style={{ color: '#71587a' }}>
-                      Alle Wochentage
-                    </summary>
-                    <div className="mt-1.5 flex flex-col gap-0.5">
-                      {(['mo', 'di', 'mi', 'do', 'fr', 'sa', 'so'] as const).map(k => (
-                        <div key={k} className="flex items-baseline gap-2 text-xs">
-                          <span className="w-20 flex-shrink-0"
-                            style={{ color: k === todayKey ? 'var(--color-amber)' : '#9A8FAA', fontWeight: k === todayKey ? 700 : 500 }}>
-                            {WEEKDAY_LABELS[k]}
-                          </span>
-                          <span className="text-[var(--color-aubergine)]">{weekHours![k] || '—'}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                </>
-              ) : (
-                <p className="text-sm font-semibold text-[var(--color-aubergine)]">{openingHours}</p>
-              )}
-              {hoursUrl && (
-                <a href={hoursUrl.startsWith('http') ? hoursUrl : `https://${hoursUrl}`}
-                  target="_blank" rel="noopener noreferrer" className={`${btnCls} mt-1.5`} style={btnStyle}>
-                  Alle Zeiten {externalLink}
-                </a>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Öffnungszeiten: bewusst NICHT mehr hier — dafür gibt es jetzt das eigene Widget (PlaceExtras). */}
 
         {/* Eintrittspreis — mit Icons */}
         {prices && prices.length > 0 && (
           <div className="flex items-start gap-3">
-            <i className="fa-solid fa-ticket text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
+            <i className="fa-solid fa-ticket text-[var(--color-amber)] mt-0.5 w-4 text-sm flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-2">Eintrittspreis</p>
               <div className="flex flex-col gap-1.5">
@@ -627,7 +577,7 @@ function AtAGlanceBox({ className = '', costLabel, entranceFee, entranceFeeAmoun
         {/* Parking */}
         {(parking || (parkingContribs && parkingContribs.total > 0)) && (
           <div className="flex items-start gap-3">
-            <i className="fa-solid fa-square-parking text-[var(--color-lavender)] mt-0.5 w-4 text-sm flex-shrink-0" />
+            <i className="fa-solid fa-square-parking text-[var(--color-amber)] mt-0.5 w-4 text-sm flex-shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] text-[var(--color-lavender)] uppercase tracking-wider leading-none mb-0.5">Parkmöglichkeiten</p>
               {parking === 'free'    && <p className="text-sm font-semibold text-[var(--color-aubergine)]">Kostenlos <span className="text-[11px] font-normal text-[var(--color-lavender)]">(lt. Angabe)</span></p>}
@@ -2428,20 +2378,7 @@ async function handleVerifyToggle() {
               </section>
             )}
 
-            {/* Nur für die/den Ersteller:in: wie oft wurde dieser Geheimtrip aufgerufen */}
-            {!!user && user.id === place.submittedBy && (
-              <section className="rounded-2xl p-3.5 flex items-center gap-3" style={{ background: '#F1ECF4' }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#E2D7EB' }}>
-                  <i className="fa-regular fa-eye text-sm" style={{ color: '#71587A' }} />
-                </div>
-                <div>
-                  <p className="text-[15px] font-bold text-[var(--color-aubergine)] leading-none">
-                    {(place.views ?? 0).toLocaleString('de')} {(place.views ?? 0) === 1 ? 'Aufruf' : 'Aufrufe'}
-                  </p>
-                  <p className="text-[11px] text-[var(--color-lavender)] mt-0.5">So oft wurde dein Geheimtrip geöffnet · nur du siehst das</p>
-                </div>
-              </section>
-            )}
+            {/* Aufrufzahl steht bewusst NICHT mehr auf dem Ort — sie liegt jetzt in „Meine Orte". */}
 
             {/* Story */}
             {place.long && (
