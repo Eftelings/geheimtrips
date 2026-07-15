@@ -293,22 +293,32 @@ function NearbyMapSection({ places, userCoords, centerOverride, mode, radiusKm, 
 function DesktopHero({ places, cityLabel, onCta }: { places: Place[]; cityLabel: string | null; onCta: () => void }) {
   const navigate = useNavigate();
   const [activeIdx, setActiveIdx] = useState(0);
-  const [fading, setFading] = useState(false);
+  const [entering, setEntering] = useState(false);   // blendet die obere (neue) Ebene ein
+  const idxRef = useRef(0);                            // aktueller Index ohne Stale-Closure
+  const prevIdxRef = useRef(0);                        // vorheriges Bild bleibt darunter voll sichtbar
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const n = Math.min(places.length, 6);
+
+  // Wechsel ohne dunklen Zwischenblitz: neues Bild vorladen, darunter bleibt das alte,
+  // das neue blendet on-top von 0→1. So wird nie der Hintergrund sichtbar.
+  const goTo = (next: number) => {
+    if (next === idxRef.current) return;
+    prevIdxRef.current = idxRef.current;
+    idxRef.current = next;
+    const img = new Image(); img.src = places[next]?.hero ?? '';   // vorladen
+    setActiveIdx(next);
+    setEntering(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => setEntering(false)));
+  };
 
   useEffect(() => {
     if (places.length < 2) return;
-    timerRef.current = setInterval(() => {
-      setFading(true);
-      setTimeout(() => {
-        setActiveIdx(i => (i + 1) % Math.min(places.length, 6));
-        setFading(false);
-      }, 400);
-    }, 4000);
+    timerRef.current = setInterval(() => goTo((idxRef.current + 1) % n), 4000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [places.length]);
+  }, [places.length, n]); // eslint-disable-line
 
   const place = places[activeIdx];
+  const prevPlace = places[prevIdxRef.current];
   if (!place) return null;
 
   return (
@@ -318,11 +328,18 @@ function DesktopHero({ places, cityLabel, onCta }: { places: Place[]; cityLabel:
         className="relative flex-1 overflow-hidden bg-[var(--color-aubergine)] cursor-pointer group"
         onClick={() => navigate(`/ort/${place.id}`)}
       >
+        {/* Untere Ebene: vorheriges Bild bleibt voll sichtbar, bis das neue eingeblendet ist */}
+        {prevPlace && prevPlace.id !== place.id && (
+          <img key={`prev-${prevPlace.id}`} src={prevPlace.hero} alt=""
+            className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        {/* Obere Ebene: aktuelles Bild, blendet von 0→1 über dem vorherigen ein (kein Schwarz dazwischen) */}
         <img
           key={place.id}
           src={place.hero}
           alt={place.name}
-          className={`absolute inset-0 w-full h-full object-cover transition-all duration-400 group-hover:scale-[1.02] ${fading ? 'opacity-0' : 'opacity-100'}`}
+          className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.02]"
+          style={{ opacity: entering ? 0 : 1, transition: 'opacity .7s ease, transform .4s ease' }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
         <div className="absolute top-4 left-4">
@@ -343,7 +360,7 @@ function DesktopHero({ places, cityLabel, onCta }: { places: Place[]; cityLabel:
             {places.slice(0, 6).map((_, i) => (
               <button
                 key={i}
-                onClick={() => { setActiveIdx(i); if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } }}
+                onClick={() => { goTo(i); if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } }}
                 className={`h-1.5 rounded-full transition-all duration-300 ${i === activeIdx ? 'w-6 bg-[var(--color-amber)]' : 'w-1.5 bg-white/40 hover:bg-white/70'}`}
               />
             ))}
