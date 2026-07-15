@@ -536,29 +536,28 @@ export function MobileEntdecken() {
               </span>
             </div>
           )}
-          <div className="fixed left-0 right-0 bottom-0 z-40 flex flex-col overflow-hidden rounded-t-[1.75rem]"
+          <div className="fixed left-0 right-0 bottom-0 z-40 overflow-hidden rounded-t-[1.75rem]"
             style={{
-              top: swipeLow ? '58vh' : '16vh',
-              background: 'var(--color-bg)',
+              top: swipeLow ? '58vh' : '12vh',
               boxShadow: '0 -8px 30px rgba(52,37,76,0.22)',
               transform: `translateY(${swipeLow ? swipeDragY : Math.max(0, swipeDragY)}px)`,
               transition: swipeDrag.current ? 'none' : 'top .3s cubic-bezier(.32,.72,0,1), transform .3s cubic-bezier(.32,.72,0,1)',
             }}>
-            {/* Griff + Kopf (Zieh-Bereich) */}
-            <div className="flex-shrink-0" onTouchStart={onSwipeSheetStart} onTouchMove={onSwipeSheetMove} onTouchEnd={onSwipeSheetEnd} style={{ touchAction: 'none' }}>
-              <div className="flex justify-center pt-2 pb-1"><div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} /></div>
-              <div className="px-4 pb-1.5 flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-[var(--color-lavender)]">
-                  <i className={`fa-solid ${swipeLow ? 'fa-chevron-up' : 'fa-chevron-down'} mr-1.5`} />{swipeLow ? 'Hoch zum Swipen · weiter runter zur Liste' : 'Runterziehen für Karte & Filter'}
-                </span>
-                <button onClick={closeSwipe}
-                  onTouchStart={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}
-                  className="text-xs font-bold text-[var(--color-amber)] flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: 'rgba(249,144,57,0.12)' }}><i className="fa-solid fa-list" />Liste</button>
-              </div>
-            </div>
-            <div className="flex-1 min-h-0">
+            {/* Full-Bleed: das Bild selbst ist oben abgerundet — kein weißer Hintergrund */}
+            <div className="absolute inset-0">
               <SwipeDeck places={swipeFeed} onOpenDetail={id => setPlaceOpen(id)} onCardChange={setSwipeFocus} />
             </div>
+            {/* Zieh-Griff (zentriert): runterziehen zeigt Karte/Filter, Tippen klappt um */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 w-28 h-9 flex items-start justify-center pt-2"
+              onTouchStart={onSwipeSheetStart} onTouchMove={onSwipeSheetMove} onTouchEnd={onSwipeSheetEnd} style={{ touchAction: 'none' }}>
+              <div className="w-10 h-1.5 rounded-full bg-white/60" />
+            </div>
+            {/* Ansicht wechseln — gleiche Farbe & Position wie „Swipen" in der Liste (amber, oben rechts) */}
+            <button onClick={closeSwipe} onTouchStart={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}
+              className="absolute top-2.5 right-3 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white"
+              style={{ background: 'var(--color-amber)', boxShadow: '0 2px 8px rgba(52,37,76,0.35)' }}>
+              <i className="fa-solid fa-list" />Liste
+            </button>
           </div>
         </>
       )}

@@ -71,11 +71,12 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange }: {
   function up() {
     if (!start.current) return;
     const dx = drag?.x ?? 0, dy = drag?.y ?? 0; start.current = null;
-    if (dx > 90) decide('want');
-    else if (dx < -90) decide('nope');
-    else if (dy < -90) openDetail();
-    else if (Math.abs(dx) < 6 && Math.abs(dy) < 6) nextImg(1); // Tap = nächstes Bild
-    else setDrag(null);
+    // Entscheidungen laufen NUR über die Buttons. Wischen = Bilder blättern, Hochziehen = Detail.
+    if (dy < -70 && Math.abs(dy) > Math.abs(dx)) openDetail();   // hoch = Detailansicht
+    else if (dx > 55) nextImg(-1);                                // rechts wischen = vorheriges Bild
+    else if (dx < -55) nextImg(1);                                // links wischen = nächstes Bild
+    else if (Math.abs(dx) < 6 && Math.abs(dy) < 6) nextImg(1);    // Tap = nächstes Bild
+    setDrag(null);
   }
 
   if (!card) {
@@ -88,11 +89,12 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange }: {
     );
   }
 
-  const dx = flyOut === 'right' ? 600 : flyOut === 'left' ? -600 : (drag?.x ?? 0);
-  const dy = flyOut === 'up' ? -800 : (drag?.y ?? 0);
+  // Karte bewegt sich horizontal NUR bei Button-Entscheidung (Fly-out); Drag nur nach oben (Detail-Hinweis).
+  const dx = flyOut === 'right' ? 600 : flyOut === 'left' ? -600 : 0;
+  const dragUp = drag && !flyOut ? Math.min(0, drag.y) : 0;
+  const dy = flyOut === 'up' ? -800 : dragUp;
   const rot = dx / 22;
-  const wantOp = Math.min(1, Math.max(0, dx / 90)), nopeOp = Math.min(1, Math.max(0, -dx / 90));
-  const detailOp = Math.min(1, Math.max(0, -dy / 90));
+  const detailOp = Math.min(1, Math.max(0, -dragUp / 90));
   const tags = (card.tagSlugs?.length ? card.tagSlugs : (card.tagSlug ? [card.tagSlug] : [null])).slice(0, 3);
 
   return (
@@ -113,23 +115,21 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange }: {
         {media.length > 1 && (<>
           <button onClick={() => nextImg(-1)} className="absolute left-0 top-16 bottom-40 w-1/3" aria-label="Vorheriges Bild" />
           <button onClick={() => nextImg(1)} className="absolute right-0 top-16 bottom-40 w-1/3" aria-label="Nächstes Bild" />
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
             {media.map((_, i) => <span key={i} className="h-1 rounded-full transition-all" style={{ width: i === imgIdx ? 20 : 6, background: i === imgIdx ? 'white' : 'rgba(255,255,255,.5)' }} />)}
           </div>
         </>)}
 
-        <div className="absolute top-3.5 right-3.5 flex flex-col gap-2">
+        <div className="absolute top-14 right-3.5 flex flex-col gap-2">
           <button onClick={share} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center active:scale-90" aria-label="Senden"><i className="fa-solid fa-paper-plane text-sm" /></button>
           <button onClick={likePhoto} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center active:scale-90" style={{ color: likedPhotos.has(cur?.url ?? '') ? '#ff5a7a' : 'white' }} aria-label="Schönes Foto"><i className={`fa-${likedPhotos.has(cur?.url ?? '') ? 'solid' : 'regular'} fa-heart text-sm`} /></button>
         </div>
 
-        {/* Swipe-Stempel */}
-        <div className="absolute top-8 left-6 px-3 py-1 rounded-xl border-[3px] font-black text-lg rotate-[-15deg] pointer-events-none" style={{ opacity: wantOp, borderColor: '#fff', color: '#fff', background: 'rgba(52,37,76,.55)' }}>WILL ICH HIN</div>
-        <div className="absolute top-8 right-6 px-3 py-1 rounded-xl border-[3px] font-black text-lg rotate-[15deg] pointer-events-none" style={{ opacity: nopeOp, borderColor: '#fff', color: '#fff', background: 'rgba(229,72,77,.6)' }}>NEIN</div>
+        {/* Hinweis beim Hochziehen */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 rounded-xl border-[3px] font-black text-base pointer-events-none" style={{ opacity: detailOp, borderColor: '#fff', color: '#fff', background: 'rgba(0,0,0,.4)' }}>DETAILS ↑</div>
 
         {/* Text + Hinweis „hochziehen für Details" */}
-        <div className="absolute left-0 right-0 pointer-events-none px-5" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 96px)' }}>
+        <div className="absolute left-0 right-0 pointer-events-none px-5" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 118px)' }}>
           <div className="flex gap-1.5 mb-2 flex-wrap">
             {tags.map((s, i) => <TagBadge key={i} slug={s} fallback={i === 0 ? card.categoryLabel : undefined} variant="dark" icon={i === 0} />)}
           </div>
@@ -141,8 +141,8 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange }: {
         </div>
       </div>
 
-      {/* Buttons als Layer über dem Bild: abgerundete Rechtecke im Brand-Stil */}
-      <div className="absolute left-0 right-0 z-30 flex items-stretch gap-2 px-4" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 14px)' }}>
+      {/* Entscheidungs-Buttons als Layer über dem Bild (etwas höher), abgerundete Brand-Rechtecke */}
+      <div className="absolute left-0 right-0 z-30 flex items-stretch gap-2 px-4" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 30px)' }}>
         <button onClick={() => decide('nope')} aria-label="Nein"
           className="flex-1 h-12 rounded-2xl bg-white/95 backdrop-blur shadow-lg flex items-center justify-center gap-2 text-[#E5484D] font-bold text-sm active:scale-95 transition-transform">
           <i className="fa-solid fa-xmark text-lg" />Nein
