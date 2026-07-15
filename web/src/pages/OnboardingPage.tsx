@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { discoverApi } from '../services/api.js';
+import { AvatarUpload } from '../components/ui/AvatarUpload.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { MOBILITY } from '../types/index.js';
 import type { Transport } from '../types/index.js';
@@ -191,6 +192,16 @@ export function OnboardingPage() {
           {/* Schritt 3 — Demografie + Swipe-Hinweis */}
           {step === 3 && (
             <div className="flex flex-col gap-5">
+              {user && (
+                <div className="flex items-center gap-4">
+                  <AvatarUpload name={user.name} src={user.avatarUrl} size={64}
+                    onUploaded={url => updateUser({ avatarUrl: url })} />
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--color-aubergine)]">Profilbild (optional)</p>
+                    <p className="text-xs text-[var(--color-lavender)]">Tippe aufs Bild, um ein Foto hochzuladen.</p>
+                  </div>
+                </div>
+              )}
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-2">Geschlecht (optional)</p>
                 <div className="flex flex-wrap gap-2">

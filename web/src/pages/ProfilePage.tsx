@@ -4,6 +4,7 @@ import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { Avatar } from '../components/ui/Avatar.js';
+import { AvatarUpload } from '../components/ui/AvatarUpload.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { authApi, rankingsApi, friendsApi, placesApi, notificationsApi } from '../services/api.js';
@@ -72,7 +73,8 @@ export function ProfilePage() {
       <div className="px-6 pt-5 max-w-lg mx-auto">
         {/* Header */}
         <div className="flex items-start gap-4 mb-6">
-          <Avatar name={user.name} src={user.avatarUrl} size={64} />
+          <AvatarUpload name={user.name} src={user.avatarUrl} size={64}
+            onUploaded={url => updateUser({ avatarUrl: url })} />
           <div className="flex-1 min-w-0">
             <h1 className="font-display font-bold text-xl text-[var(--color-aubergine)]">{user.name}</h1>
             <p className="text-sm text-[var(--color-lavender)]">@{user.handle}</p>

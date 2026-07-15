@@ -89,6 +89,11 @@ router.patch('/me', requireAuth, async (c) => {
   for (const key of allowed) {
     if (key in body) update[key] = body[key];
   }
+  // Profilbild: nur eigene Uploads bzw. leeren (kein beliebiges Hotlink-Ziel setzen)
+  if ('avatarUrl' in body) {
+    const u = body.avatarUrl;
+    update.avatarUrl = (typeof u === 'string' && /^\/(?:api\/)?uploads\//.test(u)) ? u : null;
+  }
   // Alter separat (Zahl/leer → null, plausibel begrenzt)
   if ('age' in body) {
     const n = body.age == null || body.age === '' ? null : Number(body.age);
