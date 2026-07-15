@@ -12,10 +12,11 @@ const isVid = (u: string) => /\.(mp4|webm|mov|m4v|ogg)(\?|#|$)/i.test(u);
  * Drei Entscheidungen — links „Nein", rechts „Will ich hin", hoch = Details.
  * Bekommt einen stabilen Feed (Snapshot) übergeben, damit der Index beim Weglegen nicht springt.
  */
-export function SwipeDeck({ places, onOpenDetail, onCardChange }: {
+export function SwipeDeck({ places, onOpenDetail, onCardChange, onDragToList }: {
   places: Place[];
   onOpenDetail: (id: string) => void;
   onCardChange?: (p: Place | null) => void;
+  onDragToList?: () => void;   // Bild nach unten ziehen → zurück zur Liste (morpht)
 }) {
   const { toggleSave, savedIds, swipeNope, swipeMaybe } = useAppStore();
   const [idx, setIdx] = useState(0);
@@ -71,11 +72,12 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange }: {
   function up() {
     if (!start.current) return;
     const dx = drag?.x ?? 0, dy = drag?.y ?? 0; start.current = null;
-    // Entscheidungen laufen NUR über die Buttons. Wischen = Bilder blättern, Hochziehen = Detail.
-    if (dy < -70 && Math.abs(dy) > Math.abs(dx)) openDetail();   // hoch = Detailansicht
-    else if (dx > 55) nextImg(-1);                                // rechts wischen = vorheriges Bild
-    else if (dx < -55) nextImg(1);                                // links wischen = nächstes Bild
-    else if (Math.abs(dx) < 6 && Math.abs(dy) < 6) nextImg(1);    // Tap = nächstes Bild
+    // Entscheidungen laufen NUR über die Buttons. Wischen = Bilder blättern, hoch = Detail, runter = Liste.
+    if (dy < -70 && Math.abs(dy) > Math.abs(dx)) openDetail();          // hoch = Detailansicht
+    else if (dy > 100 && Math.abs(dy) > Math.abs(dx)) onDragToList?.(); // runter = zurück zur Liste
+    else if (dx > 55) nextImg(-1);                                       // rechts wischen = vorheriges Bild
+    else if (dx < -55) nextImg(1);                                       // links wischen = nächstes Bild
+    else if (Math.abs(dx) < 6 && Math.abs(dy) < 6) nextImg(1);           // Tap = nächstes Bild
     setDrag(null);
   }
 
@@ -89,12 +91,14 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange }: {
     );
   }
 
-  // Karte bewegt sich horizontal NUR bei Button-Entscheidung (Fly-out); Drag nur nach oben (Detail-Hinweis).
+  // Horizontal nur bei Button-Entscheidung (Fly-out). Drag hoch = Detail-Hinweis, runter = Morph zur Liste.
   const dx = flyOut === 'right' ? 600 : flyOut === 'left' ? -600 : 0;
-  const dragUp = drag && !flyOut ? Math.min(0, drag.y) : 0;
-  const dy = flyOut === 'up' ? -800 : dragUp;
+  const dragY = drag && !flyOut ? drag.y : 0;
+  const dy = flyOut === 'up' ? -800 : dragY;
   const rot = dx / 22;
-  const detailOp = Math.min(1, Math.max(0, -dragUp / 90));
+  const scale = dragY > 0 ? Math.max(0.8, 1 - dragY / 700) : 1;   // runterziehen → Bild schrumpft (Richtung Liste)
+  const detailOp = Math.min(1, Math.max(0, -dragY / 90));
+  const listOp   = Math.min(1, Math.max(0, dragY / 130));
   const tags = (card.tagSlugs?.length ? card.tagSlugs : (card.tagSlug ? [card.tagSlug] : [null])).slice(0, 3);
 
   return (
@@ -103,9 +107,9 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange }: {
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-[var(--color-aubergine)] text-white text-xs font-bold px-3.5 py-2 rounded-full shadow-lg pointer-events-none">{toast}</div>
       )}
 
-      {/* Full-Bleed-Karte */}
+      {/* Full-Bleed-Karte — schrumpft beim Runterziehen Richtung Liste (Morph-Gefühl) */}
       <div className="absolute inset-0 overflow-hidden bg-black cursor-grab active:cursor-grabbing"
-        style={{ transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity: flyOut === 'maybe' ? 0 : 1, transition: flyOut ? 'transform .22s ease-in, opacity .22s ease-in' : drag ? 'none' : 'transform .28s cubic-bezier(.2,.8,.3,1)' }}
+        style={{ transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg) scale(${scale})`, transformOrigin: 'bottom center', opacity: flyOut === 'maybe' ? 0 : 1, transition: flyOut ? 'transform .22s ease-in, opacity .22s ease-in' : drag ? 'none' : 'transform .28s cubic-bezier(.2,.8,.3,1)' }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { start.current = null; setDrag(null); }}>
         {cur?.video
           ? <video src={cur.url} autoPlay muted loop playsInline className="w-full h-full object-cover pointer-events-none" />
@@ -125,8 +129,9 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange }: {
           <button onClick={likePhoto} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center active:scale-90" style={{ color: likedPhotos.has(cur?.url ?? '') ? '#ff5a7a' : 'white' }} aria-label="Schönes Foto"><i className={`fa-${likedPhotos.has(cur?.url ?? '') ? 'solid' : 'regular'} fa-heart text-sm`} /></button>
         </div>
 
-        {/* Hinweis beim Hochziehen */}
+        {/* Hinweise beim Ziehen: hoch = Details, runter = Liste */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 rounded-xl border-[3px] font-black text-base pointer-events-none" style={{ opacity: detailOp, borderColor: '#fff', color: '#fff', background: 'rgba(0,0,0,.4)' }}>DETAILS ↑</div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 rounded-xl border-[3px] font-black text-base pointer-events-none" style={{ opacity: listOp, borderColor: '#fff', color: '#fff', background: 'rgba(0,0,0,.4)' }}>↓ LISTE</div>
 
         {/* Text + Hinweis „hochziehen für Details" */}
         <div className="absolute left-0 right-0 pointer-events-none px-5" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 118px)' }}>
