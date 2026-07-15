@@ -187,6 +187,16 @@ export function MobileEntdecken() {
   const detailDrag = useRef<{ startY: number; moved: number } | null>(null);
   const closeDetail = () => { setPlaceOpen(null); setDetailDragY(0); };
   const closeSwipe = () => { setSwipeOpen(false); setSwipeFocus(null); setSwipeLow(false); setSwipeDragY(0); };
+  // Aus dem Swipe runterziehen → zurück zur Liste, dabei zum aktuellen Ort scrollen (der, auf dem man war)
+  const closeSwipeToList = () => {
+    const focusId = swipeFocus?.id ?? null;
+    closeSwipe();
+    if (focusId) {
+      setSelectedId(focusId);
+      setSheetExpanded(true);
+      setTimeout(() => listRef.current?.querySelector(`[data-place-id="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 90);
+    }
+  };
   const [sheetDragY, setSheetDragY] = useState(0);
   const [sheetDragging, setSheetDragging] = useState(false);
   const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
@@ -290,9 +300,9 @@ export function MobileEntdecken() {
     const d = swipeDrag.current; swipeDrag.current = null; if (!d) return;
     const dy = swipeDragY;
     setSwipeDragY(0);
-    if (d.moved < 6) { setSwipeLow(v => !v); return; }        // Tippen = umschalten Swipe/Karte
-    if (swipeLow && dy > 90) { closeSwipe(); return; }         // aus der Kartenansicht weit runter → zurück zur Liste
-    setSwipeLow(dy > 40 ? true : dy < -40 ? false : swipeLow);
+    if (d.moved < 6) { setSwipeLow(v => !v); return; }        // Tippen = Karten-Peek umschalten
+    if (dy > 80) { closeSwipeToList(); return; }               // runterziehen → zurück zur Liste (aktueller Ort)
+    if (dy < -40) { setSwipeLow(false); return; }              // hochziehen → wieder voll swipen
   }
   function onListTouchStart(e: React.TouchEvent) { const t = e.touches[0]; listSwipe.current = { x: t.clientX, y: t.clientY }; }
   function onListTouchEnd(e: React.TouchEvent) {
@@ -566,15 +576,16 @@ export function MobileEntdecken() {
            Aus dem Swipe-Modus (hochziehen) fährt es nahtlos über die Karte; runterziehen führt zurück. */}
       {placeOpen && (
         <div className="fixed inset-0 z-[55]"
-          style={{ background: `rgba(20,12,32,${detailIn ? 0.35 : 0})`, backdropFilter: detailIn ? 'blur(3px)' : 'none', WebkitBackdropFilter: detailIn ? 'blur(3px)' : 'none', transition: 'background .3s ease, backdrop-filter .3s ease' }}
+          style={{ background: `rgba(248,246,251,${detailIn ? 0.72 : 0})`, backdropFilter: detailIn ? 'blur(6px)' : 'none', WebkitBackdropFilter: detailIn ? 'blur(6px)' : 'none', transition: 'background .3s ease, backdrop-filter .3s ease' }}
           onClick={closeDetail}>
-          <div className="absolute inset-x-0 bottom-0 flex flex-col rounded-t-[1.5rem] overflow-hidden bg-[var(--color-bg)]"
+          {/* Eingerückte Karte: links/rechts/oben bleibt ein heller Rand — passt besser als Full-Page */}
+          <div className="absolute left-2 right-2 bottom-0 flex flex-col rounded-t-[1.5rem] overflow-hidden bg-[var(--color-bg)]"
             onClick={e => e.stopPropagation()}
             style={{
-              top: 'calc(env(safe-area-inset-top) + 18px)',
+              top: 'calc(env(safe-area-inset-top) + 14px)',
               transform: `translateY(${detailIn ? detailDragY : (typeof window !== 'undefined' ? window.innerHeight : 900)}px)`,
               transition: detailDragging ? 'none' : 'transform .32s cubic-bezier(.32,.72,0,1)',
-              boxShadow: '0 -12px 40px rgba(52,37,76,0.28)',
+              boxShadow: '0 -10px 40px rgba(52,37,76,0.22)',
             }}>
             {/* Zieh-Griff (nur hier schließt das Runterziehen — der Inhalt scrollt normal) */}
             <div className="flex-shrink-0 flex justify-center pt-2 pb-1.5 bg-[var(--color-bg)]"
