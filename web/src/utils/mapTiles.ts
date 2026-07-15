@@ -14,7 +14,9 @@ export const TILE_URL: Record<MapLayer, string> = {
   hybrid:    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
 };
 
-// Beschriftungs-Overlay für „Hybrid" (Grenzen/Orte über dem Luftbild).
+// Overlays für „Hybrid": Straßen/Verkehr + Orts-/Grenz-Beschriftung über dem Luftbild.
+export const HYBRID_ROADS =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}';
 export const HYBRID_LABELS =
   'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
 

@@ -13,7 +13,7 @@ import {
 } from 'react-leaflet';
 import L, { type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MAP_LAYERS, TILE_URL, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../../utils/mapTiles.js';
+import { MAP_LAYERS, TILE_URL, HYBRID_ROADS, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../../utils/mapTiles.js';
 import { useAppStore } from '../../store/useAppStore.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { AppShell } from '../../components/layout/AppShell.js';
@@ -739,6 +739,7 @@ export function GeoGamePage() {
             style={{ width: '100%', height: '100%' }}
             zoomControl={false}>
             <TileLayer key={mapLayer} url={TILE_URL[mapLayer]} attribution="" {...TILE_PERF} />
+            {mapLayer === 'hybrid' && <TileLayer url={HYBRID_ROADS} attribution="" {...TILE_PERF} />}
             {mapLayer === 'hybrid' && <TileLayer url={HYBRID_LABELS} attribution="" {...TILE_PERF} />}
 
             {!revealed && (

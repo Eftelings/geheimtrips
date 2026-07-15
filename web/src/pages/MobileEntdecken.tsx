@@ -15,7 +15,7 @@ import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagF
 import type { TagSelection } from '../components/ui/TagFilter.js';
 import { SwipeDeck } from '../components/ui/SwipeDeck.js';
 import { useRequireAuth } from '../hooks/useRequireAuth.js';
-import { MAP_LAYERS, TILE_URL, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../utils/mapTiles.js';
+import { MAP_LAYERS, TILE_URL, HYBRID_ROADS, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../utils/mapTiles.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
 const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
@@ -329,6 +329,7 @@ export function MobileEntdecken() {
           zoom={reachCenter ? 9 : 6} scrollWheelZoom zoomControl={false} attributionControl={false}
           style={{ height: '100%', width: '100%' }}>
           <TileLayer key={mapLayer} url={TILE_URL[mapLayer]} {...TILE_PERF} />
+          {mapLayer === 'hybrid' && <TileLayer url={HYBRID_ROADS} {...TILE_PERF} />}
           {mapLayer === 'hybrid' && <TileLayer url={HYBRID_LABELS} {...TILE_PERF} />}
           <LongPressPick onPick={pickMapPoint} />
           <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
@@ -347,12 +348,12 @@ export function MobileEntdecken() {
         </div>
       )}
 
-      {/* Toolbar — direkt unter dem Standard-Header. Beim Swipen (Karte nicht sichtbar) fliegt sie
-          nach oben weg; sobald man das Swipe-Sheet runterzieht (swipeLow), fliegt sie wieder rein. */}
-      <div className="fixed left-0 right-0 z-30 px-3 flex flex-col gap-2"
+      {/* Toolbar — direkt unter dem Standard-Header. Beim Swipen fliegt sie nach oben HINTER den
+          (opaken) Header (z unter Header z-20), nicht darüber. Runterziehen (swipeLow) holt sie zurück. */}
+      <div className="fixed left-0 right-0 z-[15] px-3 flex flex-col gap-2"
         style={{
           top: '52px',
-          transform: (swipeOpen && !swipeLow) ? 'translateY(-150%)' : 'translateY(0)',
+          transform: (swipeOpen && !swipeLow) ? 'translateY(-160%)' : 'translateY(0)',
           opacity: (swipeOpen && !swipeLow) ? 0 : 1,
           pointerEvents: (swipeOpen && !swipeLow) ? 'none' : 'auto',
           transition: 'transform .32s cubic-bezier(.32,.72,0,1), opacity .28s ease',
