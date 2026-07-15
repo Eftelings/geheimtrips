@@ -322,7 +322,7 @@ export type DeckPlace = Place & { matchScore: number };
 export const discoverApi = {
   prefs:     () => get<DiscoverPrefs>('/discover/prefs'),
   savePrefs: (p: Partial<DiscoverPrefs>) => put<{ ok: boolean }>('/discover/prefs', p),
-  swipe:     (placeId: string, action: 'like' | 'dislike' | 'click' | 'skip', dwellMs: number) =>
+  swipe:     (placeId: string, action: 'like' | 'dislike' | 'click' | 'skip' | 'maybe', dwellMs = 0) =>
                post<{ ok: boolean }>('/discover/swipe', { placeId, action, dwellMs }),
   deck:      (params: { lat?: number; lng?: number; mode?: string; minutes?: number; limit?: number; includeKnown?: boolean }) => {
     const q = new URLSearchParams();

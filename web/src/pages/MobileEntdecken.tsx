@@ -78,7 +78,7 @@ const entdeckenCache = {
   searchLabel: null as string | null,
   userCoords: null as Coords | null,   // zuletzt bekannter GPS-Standort → „Zurück" muss nicht erst neu orten
   radiusKm: 10,   // Standard vorerst 10 km — Karte zoomt beim Laden genau auf diesen Radius
-  mode: 'all' as Mode,
+  mode: 'foryou' as Mode,   // Standard „Für dich": Besuchte + weggewischte Orte sind ausgeblendet
   tagSel: EMPTY_TAG_SEL as TagSelection,
   travelMode: 'radius' as 'radius' | Transport,
   travelMinutes: 45,
@@ -95,7 +95,7 @@ function LongPressPick({ onPick }: { onPick: (lat: number, lng: number) => void 
 
 export function MobileEntdecken() {
   const navigate = useNavigate();
-  const { places, loadPlaces, savedIds, visitedIds, funnelAnswers } = useAppStore();
+  const { places, loadPlaces, savedIds, visitedIds, nopeIds, maybeIds, funnelAnswers } = useAppStore();
   const vocab = useTaxVocab();
   const { gate } = useRequireAuth();
 
@@ -127,9 +127,9 @@ export function MobileEntdecken() {
     if (!userCoords) requestGpsPosition().then(setUserCoords).catch(() => {});
   }, []); // eslint-disable-line
 
-  // Orte filtern: Kategorie + Reichweite + Modus
+  // Orte filtern: Kategorie + Reichweite + Modus. „Nein"-Orte (nope) fliegen IMMER raus.
   const shownPlaces = useMemo(() => {
-    let base = places.filter(p => p.lat != null && p.lng != null);
+    let base = places.filter(p => p.lat != null && p.lng != null && !nopeIds.has(p.id));
     if (catActive) base = base.filter(p => placeMatchesTag(p, tagSel, vocab));
     if (reachCenter) {
       const within = (p: Place) =>
@@ -141,18 +141,21 @@ export function MobileEntdecken() {
     if (mode === 'saved') return base.filter(p => savedIds.has(p.id));
     if (mode === 'new')   return base.filter(p => !visitedIds.has(p.id) && !savedIds.has(p.id));
     if (mode === 'foryou') {
-      // „Für dich": Orte in den Gruppen, die die Person schon gemerkt hat (echtes Signal);
-      // ohne gemerkte Orte fällt es auf die beste Übereinstimmung (match) zurück.
+      // „Für dich" (Standard): Besuchtes raus, nach Affinität sortiert. Gemerkte Gruppen priorisiert.
+      const pool = base.filter(p => !visitedIds.has(p.id));
       const likedGroups = new Set(
         places.filter(p => savedIds.has(p.id)).map(p => tagInfoFrom(vocab, p.tagSlug)?.groupSlug).filter(Boolean),
       );
-      const pool = base.filter(p => !savedIds.has(p.id));
-      return likedGroups.size
+      const primary = likedGroups.size
         ? pool.filter(p => likedGroups.has(tagInfoFrom(vocab, p.tagSlug)?.groupSlug ?? ''))
-        : [...pool].sort((a, b) => (b.match - a.match) || (b.rating - a.rating));
+        : pool;
+      return [...(primary.length ? primary : pool)].sort((a, b) => (b.match - a.match) || (b.rating - a.rating));
     }
-    return base; // 'all'
-  }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds, visitedIds]);
+    return base; // 'all' — alles außer „Nein"
+  }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds, visitedIds, nopeIds]);
+
+  // Swipe-Feed: zusätzlich „Vielleicht" raus (die will man nicht direkt wieder swipen)
+  const swipePlaces = useMemo(() => shownPlaces.filter(p => !maybeIds.has(p.id) && !savedIds.has(p.id)), [shownPlaces, maybeIds, savedIds]);
 
   // Liste nach Entfernung sortiert (nächste zuerst)
   const listPlaces = useMemo(() => {
@@ -171,6 +174,7 @@ export function MobileEntdecken() {
   const listRef = useRef<HTMLDivElement>(null);
   const [sheetExpanded, setSheetExpanded] = useState(entdeckenCache.sheetExpanded);
   const [swipeOpen, setSwipeOpen] = useState(false);   // Swipe-Sheet über der Karte
+  const [swipeFeed, setSwipeFeed] = useState<Place[]>([]);   // stabiler Snapshot beim Öffnen (Index springt sonst)
   const [swipeFocus, setSwipeFocus] = useState<Place | null>(null);   // aktueller Swipe-Ort (Karte fokussiert ihn)
   const [swipeLow, setSwipeLow] = useState(false);     // Sheet heruntergezogen → mehr Karte sichtbar
   const [swipeDragY, setSwipeDragY] = useState(0);
@@ -245,8 +249,8 @@ export function MobileEntdecken() {
     if (d.moved < 6) { setSheetExpanded(v => !v); return; }
     setSheetExpanded(sheetDragY < peekOffset() / 2);
   }
-  // Swipe-Sheet über der Karte — nutzt direkt die auf der Karte gefilterten Orte (kein Seitenwechsel)
-  function goSwipe() { gate(() => { setSwipeOpen(true); setSwipeLow(false); }, 'Melde dich an, um den Swipe-Modus zu nutzen.'); }
+  // Swipe-Sheet über der Karte — Snapshot des gefilterten Feeds (stabiler Index beim Weglegen)
+  function goSwipe() { gate(() => { setSwipeFeed(swipePlaces); setSwipeOpen(true); setSwipeLow(false); }, 'Melde dich an, um den Swipe-Modus zu nutzen.'); }
   // Swipe-Sheet ziehen: runter → mehr Karte (aktueller Ort sichtbar), hoch → wieder swipen
   function onSwipeSheetStart(e: React.TouchEvent) { swipeDrag.current = { startY: e.touches[0].clientY, moved: 0 }; }
   function onSwipeSheetMove(e: React.TouchEvent) {
@@ -525,7 +529,7 @@ export function MobileEntdecken() {
               </div>
             </div>
             <div className="flex-1 min-h-0">
-              <SwipeDeck places={shownPlaces} onOpenDetail={id => setPlaceOpen(id)} onCardChange={setSwipeFocus} />
+              <SwipeDeck places={swipeFeed} onOpenDetail={id => setPlaceOpen(id)} onCardChange={setSwipeFocus} />
             </div>
           </div>
         </>

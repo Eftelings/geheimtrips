@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Place, Trip, FunnelAnswers, Rating } from '../types/index.js';
-import { placesApi, tripsApi } from '../services/api.js';
+import { placesApi, tripsApi, discoverApi } from '../services/api.js';
 
 interface AppState {
   // ── Saved / Visited ─────────────────────────────────────────
@@ -10,8 +10,14 @@ interface AppState {
   ratings:    Record<string, Rating>;
   savedTags:  Record<string, string[]>;   // placeId → eigene Tags
 
+  // ── Swipe-Entscheidungen ─────────────────────────────────────
+  nopeIds:    Set<string>;   // „Nein" — fliegt aus dem Feed & wird ausgeblendet
+  maybeIds:   Set<string>;   // „Vielleicht" — aus dem Swipe-Feed, bleibt aber auf Karte/Liste
+
   toggleSave:  (placeId: string) => Promise<void>;
   markVisited: (placeId: string) => Promise<void>;
+  swipeNope:   (placeId: string) => void;   // „Nein"
+  swipeMaybe:  (placeId: string) => void;   // „Vielleicht"
   addRating:   (placeId: string, rating: Rating) => Promise<void>;
   loadSavedTags: () => Promise<void>;
   setPlaceTags:  (placeId: string, tags: string[]) => Promise<void>;
@@ -53,6 +59,8 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       savedIds:   new Set<string>(),
       visitedIds: new Set<string>(),
+      nopeIds:    new Set<string>(),
+      maybeIds:   new Set<string>(),
       ratings:    {},
       savedTags:  {},
       places:        [],
@@ -77,6 +85,17 @@ export const useAppStore = create<AppState>()(
         const next = new Set(get().visitedIds);
         next.add(placeId);
         set({ visitedIds: next });
+      },
+
+      swipeNope: (placeId) => {
+        discoverApi.swipe(placeId, 'dislike').catch(() => {});
+        set({ nopeIds: new Set(get().nopeIds).add(placeId),
+              maybeIds: (() => { const m = new Set(get().maybeIds); m.delete(placeId); return m; })() });
+      },
+
+      swipeMaybe: (placeId) => {
+        discoverApi.swipe(placeId, 'maybe').catch(() => {});
+        set({ maybeIds: new Set(get().maybeIds).add(placeId) });
       },
 
       addRating: async (placeId, rating) => {
@@ -141,6 +160,8 @@ export const useAppStore = create<AppState>()(
       partialize: (s) => ({
         savedIds:    [...s.savedIds],
         visitedIds:  [...s.visitedIds],
+        nopeIds:     [...s.nopeIds],
+        maybeIds:    [...s.maybeIds],
         ratings:     s.ratings,
         savedTags:   s.savedTags,
         funnelAnswers: s.funnelAnswers,
@@ -151,6 +172,8 @@ export const useAppStore = create<AppState>()(
         ...persisted,
         savedIds:   new Set<string>(persisted?.savedIds  ?? []),
         visitedIds: new Set<string>(persisted?.visitedIds ?? []),
+        nopeIds:    new Set<string>(persisted?.nopeIds  ?? []),
+        maybeIds:   new Set<string>(persisted?.maybeIds ?? []),
       }),
     }
   )

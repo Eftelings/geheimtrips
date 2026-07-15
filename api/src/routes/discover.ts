@@ -129,7 +129,7 @@ router.put('/prefs', requireAuth,
 router.post('/swipe', requireAuth,
   zValidator('json', z.object({
     placeId: z.string(),
-    action: z.enum(['like', 'dislike', 'click', 'skip']),
+    action: z.enum(['like', 'dislike', 'click', 'skip', 'maybe']),
     dwellMs: z.number().int().min(0).max(600_000).optional().default(0),
   })),
   async (c) => {
@@ -142,7 +142,7 @@ router.post('/swipe', requireAuth,
 
     // Lern-Update: Klick ist starkes Positiv-Signal, langes Anschauen ein leichtes;
     // schnelles Wegwischen (< 1,5 s) wertet stärker ab als ein überlegtes Nein.
-    let delta = action === 'like' ? 1 : action === 'click' ? 0.6 : action === 'dislike' ? -1 : -0.4;
+    let delta = action === 'like' ? 1 : action === 'click' ? 0.6 : action === 'maybe' ? 0.3 : action === 'dislike' ? -1 : -0.4;
     if (action === 'dislike' && dwellMs > 0 && dwellMs < 1500) delta = -1.2;
     if ((action === 'like' || action === 'click') && dwellMs >= 6000) delta += 0.3;
 
