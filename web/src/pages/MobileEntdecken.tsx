@@ -95,7 +95,7 @@ function LongPressPick({ onPick }: { onPick: (lat: number, lng: number) => void 
 
 export function MobileEntdecken() {
   const navigate = useNavigate();
-  const { places, loadPlaces, savedIds, visitedIds, nopeIds, maybeIds, funnelAnswers } = useAppStore();
+  const { places, loadPlaces, savedIds, visitedIds, nopeIds, funnelAnswers } = useAppStore();
   const vocab = useTaxVocab();
   const { gate } = useRequireAuth();
 
@@ -154,8 +154,9 @@ export function MobileEntdecken() {
     return base; // 'all' — alles außer „Nein"
   }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds, visitedIds, nopeIds]);
 
-  // Swipe-Feed: zusätzlich „Vielleicht" raus (die will man nicht direkt wieder swipen)
-  const swipePlaces = useMemo(() => shownPlaces.filter(p => !maybeIds.has(p.id) && !savedIds.has(p.id)), [shownPlaces, maybeIds, savedIds]);
+  // Swipe-Feed: nur bereits gemerkte („Will ich hin") raus. „Vielleicht" bleibt bewusst drin —
+  // es hat keine bleibende Wirkung, die Orte werden künftig (und auf der Karte) weiter gezeigt.
+  const swipePlaces = useMemo(() => shownPlaces.filter(p => !savedIds.has(p.id)), [shownPlaces, savedIds]);
 
   // Liste nach Entfernung sortiert (nächste zuerst)
   const listPlaces = useMemo(() => {
