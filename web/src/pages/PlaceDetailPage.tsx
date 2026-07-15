@@ -1932,8 +1932,15 @@ async function handleVerifyToggle() {
             <i className="fa-solid fa-camera text-sm" />
           </button>
 
-          {/* Right: Trip + share + save */}
+          {/* Right: Navigation + Trip + share + save */}
           <div className="ml-auto flex items-center gap-2">
+            {place.lat != null && place.lng != null && (
+              <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`, '_blank', 'noopener')} title="Route in der Navi-App öffnen"
+                className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+                style={{ background: '#F1ECF4', color: '#71587A' }}>
+                <i className="fa-solid fa-diamond-turn-right text-sm" />
+              </button>
+            )}
             <button onClick={() => gate(() => setAddTripOpen(true), 'Melde dich an, um Orte zu einem Trip hinzuzufügen.')} title="Zu Trip hinzufügen"
               className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
               style={{ background: '#F1ECF4', color: '#71587A' }}>
@@ -2368,9 +2375,8 @@ async function handleVerifyToggle() {
               )}
             </div>
 
-            {/* Das Besondere — der USP-Teaser aus dem Einreichformular (highlight) */}
-            {/* Mobil: direkt unter die Bilder ziehen (order-first) */}
-            {highlight && (
+            {/* Das Besondere — der USP-Teaser. Im Overlay (embedded) ausgeblendet: hat man beim Swipen schon gesehen. */}
+            {highlight && !embedded && (
               <section className="rounded-2xl p-4 order-first lg:order-none"
                 style={{ background: 'linear-gradient(135deg, #FFF4EB, #FFEAD6)' }}>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-amber)] mb-1">Das Besondere</p>
@@ -2380,12 +2386,12 @@ async function handleVerifyToggle() {
 
             {/* Aufrufzahl steht bewusst NICHT mehr auf dem Ort — sie liegt jetzt in „Meine Orte". */}
 
-            {/* Story */}
+            {/* Story — im Overlay ohne Überschrift & immer voll ausgeklappt */}
             {place.long && (
               <section>
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">Über diesen Ort</p>
+                {!embedded && <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">Über diesen Ort</p>}
                 <div
-                  className={`text-[15px] text-[var(--color-body)] leading-relaxed prose prose-sm max-w-none [&_img]:rounded-2xl [&_img]:w-full [&_img]:my-4 [&_img]:shadow-[var(--shadow-card)] [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline [&_a.gt-place]:cursor-pointer ${!storyExpanded && isLongStory ? 'line-clamp-5' : ''}`}
+                  className={`text-[15px] text-[var(--color-body)] leading-relaxed prose prose-sm max-w-none [&_img]:rounded-2xl [&_img]:w-full [&_img]:my-4 [&_img]:shadow-[var(--shadow-card)] [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline [&_a.gt-place]:cursor-pointer ${!embedded && !storyExpanded && isLongStory ? 'line-clamp-5' : ''}`}
                   onClick={e => {
                     const a = (e.target as HTMLElement).closest?.('a.gt-place') as HTMLElement | null;
                     if (a) { e.preventDefault(); const pid = a.getAttribute('data-place-id'); if (pid) openPlace(pid); }
@@ -2393,7 +2399,7 @@ async function handleVerifyToggle() {
                   // eslint-disable-next-line react/no-danger
                   dangerouslySetInnerHTML={{ __html: place.long }}
                 />
-                {isLongStory && (
+                {!embedded && isLongStory && (
                   <button onClick={() => setStoryExpanded(v => !v)}
                     className="mt-2.5 text-[var(--color-aubergine)] font-semibold text-sm flex items-center gap-1.5 hover:underline">
                     {storyExpanded ? 'Weniger anzeigen' : 'Mehr lesen'}
