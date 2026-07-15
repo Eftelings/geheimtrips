@@ -1,7 +1,7 @@
 /**
  * Geheimquiz — real-time multiplayer location-guessing game.
  *
- * Timer starts only after the first player pins a guess (7 s countdown).
+ * Timer starts only after the first player pins a guess (14 s countdown).
  * Round advances only when BOTH players click "Weiter" (ready message).
  * Photos: hero + galleryJson sent per round; views tracked for end-of-game stats.
  * Results are persisted to quiz_games for logged-in players.
@@ -243,7 +243,7 @@ export function handleGameConnection(ws: WebSocket): void {
           const code = genCode();
           const room: GameRoom = {
             code, players: new Map(), state: 'playing',
-            round: 0, places: [], timer: null, ticksLeft: 7,
+            round: 0, places: [], timer: null, ticksLeft: 14,
             guessedCount: 0, timerStarted: false, readyCount: 0,
             photosSeen: new Map(),
           };
@@ -304,11 +304,11 @@ export function handleGameConnection(ws: WebSocket): void {
           if (p2id !== pid) send(p2.ws, { type: 'player_guessed', playerId: pid });
         }
 
-        // Start 7-second timer on FIRST guess
+        // Start 14-second timer on FIRST guess
         if (!room.timerStarted) {
           room.timerStarted = true;
-          room.ticksLeft    = 7;
-          broadcast(room, { type: 'timer_start', remaining: 7 });
+          room.ticksLeft    = 14;
+          broadcast(room, { type: 'timer_start', remaining: 14 });
           room.timer = setInterval(() => {
             room.ticksLeft--;
             broadcast(room, { type: 'timer', remaining: room.ticksLeft });

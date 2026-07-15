@@ -13,6 +13,7 @@ import {
 } from 'react-leaflet';
 import L, { type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { MAP_LAYERS, TILE_URL, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../../utils/mapTiles.js';
 import { useAppStore } from '../../store/useAppStore.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { AppShell } from '../../components/layout/AppShell.js';
@@ -20,7 +21,7 @@ import { BrandLogo } from '../../components/ui/BrandLogo.js';
 import { TagBadge } from '../../components/ui/TagBadge.js';
 
 // Rundendauer (Sekunden) — Server steuert den echten Countdown, hier für Ring-Mathe/Anzeige.
-const ROUND_SECONDS = 7;
+const ROUND_SECONDS = 14;
 
 const WS_URL = import.meta.env.VITE_WS_URL
   ?? `${location.protocol.replace('http', 'ws')}//${location.host}/api/game/ws`;
@@ -113,6 +114,7 @@ export function GeoGamePage() {
 
   const [timerActive, setTimerActive] = useState(false);
   const [timeLeft,    setTimeLeft]    = useState(ROUND_SECONDS);
+  const [mapLayer,    setMapLayer]    = useState<MapLayer>('standard');
 
   const [revealed,       setRevealed]       = useState(false);
   const [revealPlace,    setRevealPlace]    = useState<PlaceResult | null>(null);
@@ -528,8 +530,21 @@ export function GeoGamePage() {
         <div className="flex flex-col min-h-0 flex-1 lg:flex-none lg:w-[40%]"
           style={{ gap: revealed ? '1rem' : '0' }}>
 
-          {/* Photo card */}
-          <div className="relative overflow-hidden flex-shrink-0"
+          {/* Mobil im Ergebnis: kein Bild (staucht sich sonst) — nur Name + Standort kompakt */}
+          {revealed && revealPlace && (
+            <div className="lg:hidden rounded-2xl p-3.5 flex-shrink-0" style={{ background: C.aubergine }}>
+              <TagBadge slug={revealPlace.tagSlug} fallback={revealPlace.categoryLabel} icon variant="dark" className="mb-1" />
+              <h2 className="font-display text-xl font-bold text-white leading-tight">{revealPlace.name}</h2>
+              <p className="text-white/80 text-sm mt-0.5 flex items-center gap-1.5">
+                <i className="fa-solid fa-location-dot" style={{ color: C.amber }} />{revealPlace.region}
+                <span className="mx-1 opacity-40">·</span>
+                <i className="fa-solid fa-star" style={{ color: C.amber }} />{revealPlace.rating.toFixed(1)}
+              </p>
+            </div>
+          )}
+
+          {/* Photo card (auf Mobile bei Auswertung ausgeblendet) */}
+          <div className={`relative overflow-hidden flex-shrink-0 ${revealed ? 'hidden lg:block' : ''}`}
             style={{
               flexGrow: revealed ? 0 : 1,
               height: revealed ? '42%' : undefined,
@@ -708,10 +723,23 @@ export function GeoGamePage() {
             </div>
           )}
 
+          {/* Karten-Ebene umschalten (Standard / Satellit / Hybrid) */}
+          <div className="absolute top-3 right-3 z-[900] flex gap-1 bg-white/90 backdrop-blur rounded-full p-1"
+            style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.2)' }}>
+            {MAP_LAYERS.map(l => (
+              <button key={l.id} onClick={() => setMapLayer(l.id)} title={l.label} aria-label={l.label}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs transition-colors"
+                style={mapLayer === l.id ? { background: C.amber, color: 'white' } : { color: C.aubergine }}>
+                <i className={`fa-solid ${l.icon}`} />
+              </button>
+            ))}
+          </div>
+
           <MapContainer center={GERMANY} zoom={5} minZoom={2} scrollWheelZoom worldCopyJump
             style={{ width: '100%', height: '100%' }}
             zoomControl={false}>
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="" />
+            <TileLayer key={mapLayer} url={TILE_URL[mapLayer]} attribution="" {...TILE_PERF} />
+            {mapLayer === 'hybrid' && <TileLayer url={HYBRID_LABELS} attribution="" {...TILE_PERF} />}
 
             {!revealed && (
               <MapClick onGuess={hasGuessed ? () => {} : (lat, lng) => setPendingGuess({ lat, lng })} />
