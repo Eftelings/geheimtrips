@@ -40,8 +40,8 @@ const T_ICON: Record<string, string> = {
 };
 type Mode = 'all' | 'saved' | 'new' | 'foryou';
 const MODES: { id: Mode; label: string }[] = [
-  { id: 'all', label: 'Alle' }, { id: 'saved', label: 'Nur gemerkte' },
-  { id: 'new', label: 'Nur neue' }, { id: 'foryou', label: 'Für dich' },
+  { id: 'foryou', label: 'Für dich' }, { id: 'all', label: 'Alle' },
+  { id: 'new', label: 'Nur neue' }, { id: 'saved', label: 'Nur gemerkte' },
 ];
 
 // Karte auf die Reichweite (Radius/Isochrone) einpassen — sonst liegt der Kreis außerhalb des Sichtfelds
@@ -260,10 +260,11 @@ export function MobileEntdecken() {
   // Detail-Overlay: beim Öffnen von unten hereinfahren (Single-Page-Feel, Karte bleibt dahinter)
   useEffect(() => {
     if (!placeOpen) { setDetailIn(false); return; }
-    setDetailDragY(0); setDetailIn(false);
+    setDetailDragY(0);
+    if (detailIn) return;   // schon offen (Ort → Ort, z.B. „ähnliche Orte") → nicht neu einfahren
     const r = requestAnimationFrame(() => setDetailIn(true));
     return () => cancelAnimationFrame(r);
-  }, [placeOpen]);
+  }, [placeOpen]); // eslint-disable-line
   function onDetailStart(e: React.TouchEvent) { detailDrag.current = { startY: e.touches[0].clientY, moved: 0 }; setDetailDragging(true); }
   function onDetailMove(e: React.TouchEvent) {
     const d = detailDrag.current; if (!d) return;
@@ -390,8 +391,8 @@ export function MobileEntdecken() {
         </div>
         <div className="flex gap-1.5 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
           {MODES.map(m => (
-            <button key={m.id} onClick={() => (m.id === 'saved' || m.id === 'foryou')
-              ? gate(() => setMode(m.id), 'Melde dich an für persönliche Filter wie „Nur gemerkte" und „Für dich".')
+            <button key={m.id} onClick={() => m.id === 'saved'
+              ? gate(() => setMode(m.id), 'Melde dich an, um deine gemerkten Orte zu filtern.')
               : setMode(m.id)}
               className="text-[11px] font-semibold rounded-full px-3 py-1.5 flex-shrink-0 transition-colors"
               style={mode === m.id
