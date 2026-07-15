@@ -1690,11 +1690,13 @@ async function handleVerifyToggle() {
 
           {/* Zeile 1: Zurück + Standort-Suche (Adresse → Suchzentrum) */}
           <div className="flex items-start gap-2">
-            <button onClick={goBack} aria-label="Zurück"
-              className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0"
-              style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.18)' }}>
-              <i className="fa-solid fa-arrow-left text-[var(--color-aubergine)]" />
-            </button>
+            {!embedded && (
+              <button onClick={goBack} aria-label="Zurück"
+                className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0"
+                style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.18)' }}>
+                <i className="fa-solid fa-arrow-left text-[var(--color-aubergine)]" />
+              </button>
+            )}
             <div className="flex-1 relative">
               <div className="flex items-center gap-2 bg-white rounded-full px-4 h-10"
                 style={{ boxShadow: '0 2px 10px rgba(52,37,76,0.18)' }}>
@@ -1898,12 +1900,14 @@ async function handleVerifyToggle() {
 
         {/* ── Row 1: Navigation bar ─────────────────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 flex items-center gap-3">
-          {/* Back button — small lavender circle (im Overlay übernimmt der Overlay-Header das Zurück) */}
-          <button onClick={goBack}
-            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
-            style={{ background: '#F1ECF4' }}>
-            <i className="fa-solid fa-arrow-left text-sm" style={{ color: '#34254c' }} />
-          </button>
+          {/* Back button — im Overlay nicht nötig (Sheet runterziehen führt zurück) */}
+          {!embedded && (
+            <button onClick={goBack}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
+              style={{ background: '#F1ECF4' }}>
+              <i className="fa-solid fa-arrow-left text-sm" style={{ color: '#34254c' }} />
+            </button>
+          )}
 
           {/* „Ich war hier": grüner Status-Button (besucht) oder Toggle */}
           {isVisited ? (
