@@ -59,6 +59,18 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
   };
 
   const groupTags = (gSlug: string) => (vocab?.tags ?? []).filter(t => t.groups.includes(gSlug)).sort((a, b) => a.label.localeCompare(b.label, 'de'));
+  // Typen einer Gruppe nach Unterkategorie (sub) bündeln — in Seed-Reihenfolge (nicht alphabetisch),
+  // damit Museen/Sakralbauten/… sinnvoll gruppiert erscheinen. Ohne sub → „Weitere".
+  const subgroupsOf = (gSlug: string): [string, NonNullable<typeof vocab>['tags']][] => {
+    const order: string[] = [];
+    const map = new Map<string, NonNullable<typeof vocab>['tags']>();
+    for (const t of (vocab?.tags ?? []).filter(x => x.groups.includes(gSlug))) {
+      const sub = t.sub || 'Weitere';
+      if (!map.has(sub)) { map.set(sub, []); order.push(sub); }
+      map.get(sub)!.push(t);
+    }
+    return order.map(sub => [sub, map.get(sub)!]);
+  };
   const searchResults = useMemo(() => {
     const q = tagSearch.trim().toLowerCase();
     return q ? (vocab?.tags ?? []).filter(t => t.label.toLowerCase().includes(q)).slice(0, 24) : [];
@@ -133,12 +145,20 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
           </div>
         ) : openGroup ? (
           <div className="mt-3">
-            <button type="button" onClick={() => setOpenGroup(null)} className="text-xs font-bold text-[var(--color-amber)] mb-2 inline-flex items-center gap-1">
+            <button type="button" onClick={() => setOpenGroup(null)} className="text-xs font-bold text-[var(--color-amber)] mb-2.5 inline-flex items-center gap-1">
               <i className="fa-solid fa-chevron-left text-[10px]" />Alle Gruppen
             </button>
-            <div className="flex flex-wrap gap-1.5">
-              {groupTags(openGroup).map(t => (
-                <button key={t.slug} type="button" onClick={() => toggleTag(t.slug)} disabled={atMax && !value.tags.includes(t.slug)} className={pillCls} style={tagPillStyle(t.slug, openGroup)}>{t.label}</button>
+            {/* Unterkategorien als Zwischenüberschrift — Fallback-Browsing, wenn die KI nichts vorschlägt */}
+            <div className="flex flex-col gap-3">
+              {subgroupsOf(openGroup).map(([sub, tags]) => (
+                <div key={sub}>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-1.5">{sub}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tags.map(t => (
+                      <button key={t.slug} type="button" onClick={() => toggleTag(t.slug)} disabled={atMax && !value.tags.includes(t.slug)} className={pillCls} style={tagPillStyle(t.slug, openGroup)}>{t.label}</button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

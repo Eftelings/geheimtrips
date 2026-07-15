@@ -142,6 +142,11 @@ export function AdminTaxonomy() {
                           <InlineEdit value={t.label} onSave={v => run(() => adminApi.taxEditTag(t.slug, { label: v }))} />
                         </span>
                         <span className="text-[11px] text-white/30">{t.usage} {t.usage === 1 ? 'Ort' : 'Orte'}</span>
+                        <button title="Unterkategorie (Gruppierung im Auswahl-Picker)"
+                          onClick={() => { const v = prompt('Unterkategorie (leer = keine)', t.sub ?? ''); if (v !== null) run(() => adminApi.taxEditTag(t.slug, { sub: v })); }}
+                          className="text-[10px] text-white/45 hover:text-white/80 border border-white/10 rounded px-1.5 py-0.5">
+                          {t.sub || '+ Unterkat.'}
+                        </button>
                         <div className="ml-auto flex items-center gap-1">
                           <select value={g.slug} title="Hauptkategorie wechseln"
                             onChange={e => run(() => adminApi.taxEditTag(t.slug, { group: e.target.value }))}

@@ -880,10 +880,10 @@ async function renameTermOnPlaces(kind: 'merkmal' | 'vibe', oldLabel: string, ne
 router.get('/tax/all', async (c) => {
   const groups = await db.all(sql`SELECT slug, label, icon, color, sort FROM tax_groups ORDER BY sort, label`).catch(() => []);
   const tags = await db.all(sql`
-    SELECT t.slug, t.label, t.is_approved AS isApproved,
+    SELECT t.slug, t.label, t.sub, t.is_approved AS isApproved,
            (SELECT group_slug FROM tax_tag_group g WHERE g.tag_slug = t.slug LIMIT 1) AS groupSlug,
            (SELECT count(*) FROM places p WHERE p.tag_slug = t.slug) AS usage
-    FROM tax_tags t ORDER BY t.label`).catch(() => []);
+    FROM tax_tags t ORDER BY t.sort, t.label`).catch(() => []);
   const terms = async (table: 'tax_merkmale' | 'tax_vibes', key: 'merkmale' | 'vibes') => {
     const rows = await db.all<{ slug: string; label: string; isApproved: number }>(
       sql`SELECT slug, label, is_approved AS isApproved FROM ${sql.raw(table)} ORDER BY label`).catch(() => []);
@@ -940,10 +940,12 @@ router.post('/tax/tag', zValidator('json', z.object({
 });
 
 router.patch('/tax/tag', zValidator('json', z.object({
-  slug: z.string().min(1), label: z.string().min(2).max(60).optional(), group: z.string().min(1).optional(),
+  slug: z.string().min(1), label: z.string().min(2).max(60).optional(),
+  group: z.string().min(1).optional(), sub: z.string().max(60).optional(),
 })), async (c) => {
-  const { slug, label, group } = c.req.valid('json');
+  const { slug, label, group, sub } = c.req.valid('json');
   if (label) await db.run(sql`UPDATE tax_tags SET label = ${label.trim()} WHERE slug = ${slug}`);
+  if (sub !== undefined) await db.run(sql`UPDATE tax_tags SET sub = ${sub.trim() || null} WHERE slug = ${slug}`);
   if (group) {
     await db.run(sql`DELETE FROM tax_tag_group WHERE tag_slug = ${slug}`);
     await db.run(sql`INSERT OR IGNORE INTO tax_tag_group (tag_slug, group_slug) VALUES (${slug}, ${group})`);

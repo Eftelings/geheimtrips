@@ -196,7 +196,7 @@ export const adminApi = {
   taxAddGroup:   (label: string, icon?: string, color?: string) => post<{ ok: boolean; slug: string }>('/tax/group', { label, icon, color }),
   taxEditGroup:  (slug: string, d: { label?: string; icon?: string; color?: string }) => patch<{ ok: boolean }>('/tax/group', { slug, ...d }),
   taxAddTag:     (label: string, group: string) => post<{ ok: boolean; slug: string }>('/tax/tag', { label, group }),
-  taxEditTag:    (slug: string, d: { label?: string; group?: string }) => patch<{ ok: boolean }>('/tax/tag', { slug, ...d }),
+  taxEditTag:    (slug: string, d: { label?: string; group?: string; sub?: string }) => patch<{ ok: boolean }>('/tax/tag', { slug, ...d }),
   taxMergeTag:   (from: string, to: string) => post<{ ok: boolean }>('/tax/tag/merge', { from, to }),
   taxDeleteTag:  (slug: string) => del<{ ok: boolean }>(`/tax/tag/${encodeURIComponent(slug)}`),
   taxRenameTerm: (kind: 'merkmal' | 'vibe', slug: string, label: string) => patch<{ ok: boolean }>('/tax/term', { kind, slug, label }),
@@ -205,7 +205,7 @@ export const adminApi = {
 /** Komplettes Live-Vokabular (das, was Picker/Filter/Fragen wirklich nutzen). */
 export interface TaxAll {
   groups:   { slug: string; label: string; icon: string | null; color: string | null; sort: number }[];
-  tags:     { slug: string; label: string; groupSlug: string | null; usage: number }[];
+  tags:     { slug: string; label: string; sub: string | null; groupSlug: string | null; usage: number }[];
   merkmale: { slug: string; label: string; isApproved: number; usage: number }[];
   vibes:    { slug: string; label: string; isApproved: number; usage: number }[];
 }

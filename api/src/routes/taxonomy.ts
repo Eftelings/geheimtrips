@@ -28,6 +28,8 @@ async function ensureTables() {
   await db.run(sql`CREATE TABLE IF NOT EXISTS tax_tags (
     slug TEXT PRIMARY KEY, label TEXT NOT NULL, sort INTEGER DEFAULT 0,
     is_approved INTEGER DEFAULT 1, created_by INTEGER, created_at TEXT DEFAULT (datetime('now')))`);
+  // sub = Unterkategorie (Gruppierung im Auswahl-Picker) — für bestehende DBs nachrüsten
+  await db.run(sql`ALTER TABLE tax_tags ADD COLUMN sub TEXT`).catch(() => {});
   await db.run(sql`CREATE TABLE IF NOT EXISTS tax_tag_group (
     tag_slug TEXT NOT NULL, group_slug TEXT NOT NULL, PRIMARY KEY (tag_slug, group_slug))`);
   await db.run(sql`CREATE TABLE IF NOT EXISTS tax_merkmale (
@@ -72,6 +74,11 @@ async function seedTaxonomy() {
     T2_GROUPS.map((g, i) => sql`(${g.slug},${g.label},${g.icon},${g.color},${i})`));
   await runRows('INSERT OR IGNORE INTO tax_tags (slug,label,sort)',
     T2_TAGS.map((t, i) => sql`(${taxSlug(t.label)},${t.label},${i})`));
+  // Unterkategorie (sub) nachtragen — nur wo noch keine gesetzt ist, damit Admin-Änderungen bleiben
+  for (const t of T2_TAGS) {
+    if (t.sub) await db.run(sql`UPDATE tax_tags SET sub = ${t.sub}
+      WHERE slug = ${taxSlug(t.label)} AND (sub IS NULL OR sub = '')`).catch(() => {});
+  }
   await runRows('INSERT OR IGNORE INTO tax_tag_group (tag_slug,group_slug)',
     T2_TAGS.flatMap(t => t.groups.map(g => sql`(${taxSlug(t.label)},${g})`)));
   await runRows('INSERT OR IGNORE INTO tax_merkmale (slug,label)',
@@ -131,11 +138,11 @@ async function seedTaxonomy() {
 // GET /taxonomy — komplettes Vokabular (Gruppen, Tags+Gruppen, freigegebene Merkmale/Vibes)
 router.get('/', async (c) => {
   const groups = await db.all(sql`SELECT slug, label, icon, color FROM tax_groups ORDER BY sort`).catch(() => []);
-  const tagRows = await db.all<{ slug: string; label: string }>(sql`SELECT slug, label FROM tax_tags WHERE is_approved = 1 ORDER BY sort`).catch(() => []);
+  const tagRows = await db.all<{ slug: string; label: string; sub: string | null }>(sql`SELECT slug, label, sub FROM tax_tags WHERE is_approved = 1 ORDER BY sort`).catch(() => []);
   const tg = await db.all<{ tag_slug: string; group_slug: string }>(sql`SELECT tag_slug, group_slug FROM tax_tag_group`).catch(() => []);
   const byTag = new Map<string, string[]>();
   for (const r of tg) { const a = byTag.get(r.tag_slug) ?? []; a.push(r.group_slug); byTag.set(r.tag_slug, a); }
-  const tags = tagRows.map(t => ({ ...t, groups: byTag.get(t.slug) ?? [] }));
+  const tags = tagRows.map(t => ({ slug: t.slug, label: t.label, sub: t.sub ?? null, groups: byTag.get(t.slug) ?? [] }));
   const merkmale = await db.all(sql`SELECT slug, label FROM tax_merkmale WHERE is_approved = 1 ORDER BY label`).catch(() => []);
   const vibes = await db.all(sql`SELECT slug, label FROM tax_vibes WHERE is_approved = 1 ORDER BY label`).catch(() => []);
   return c.json({ groups, tags, merkmale, vibes });

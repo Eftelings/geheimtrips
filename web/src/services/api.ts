@@ -380,7 +380,7 @@ export const peopleApi = {
 
 // ─── Neue Taxonomie (Tags · Merkmale · Vibes) ────────────────────────────────────
 export interface TaxGroup { slug: string; label: string; icon: string; color: string }
-export interface TaxTag { slug: string; label: string; groups: string[] }
+export interface TaxTag { slug: string; label: string; groups: string[]; sub?: string | null }
 export interface TaxTerm { slug: string; label: string }
 export interface TaxVocab { groups: TaxGroup[]; tags: TaxTag[]; merkmale: TaxTerm[]; vibes: TaxTerm[] }
 export const taxonomyApi = {
