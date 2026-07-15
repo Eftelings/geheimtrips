@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from 'react';
+import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -15,6 +15,7 @@ import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagF
 import type { TagSelection } from '../components/ui/TagFilter.js';
 import { SwipeDeck } from '../components/ui/SwipeDeck.js';
 import { useRequireAuth } from '../hooks/useRequireAuth.js';
+import { MAP_LAYERS, TILE_URL, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../utils/mapTiles.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
 const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
@@ -108,6 +109,7 @@ export function MobileEntdecken() {
   const [tagSel, setTagSel] = useState<TagSelection>(entdeckenCache.tagSel);
   const [selectedId, setSelectedId] = useState<string | null>(entdeckenCache.selectedId);
   const [panel, setPanel] = useState<null | 'cat' | 'loc' | 'reach'>(null);
+  const [mapLayer, setMapLayer] = useState<MapLayer>('standard');   // Standard/Satellit/Hybrid
 
   // Standort-Suche (Adresse → Suchzentrum)
   const [searchQuery, setSearchQuery] = useState('');
@@ -243,11 +245,6 @@ export function MobileEntdecken() {
     if (d.moved < 6) { setSheetExpanded(v => !v); return; }
     setSheetExpanded(sheetDragY < peekOffset() / 2);
   }
-  const selectPlace = useCallback((id: string) => {
-    setSelectedId(id);
-    setSheetExpanded(true);
-    setTimeout(() => listRef.current?.querySelector(`[data-place-id="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
-  }, []);
   // Swipe-Sheet über der Karte — nutzt direkt die auf der Karte gefilterten Orte (kein Seitenwechsel)
   function goSwipe() { gate(() => { setSwipeOpen(true); setSwipeLow(false); }, 'Melde dich an, um den Swipe-Modus zu nutzen.'); }
   // Swipe-Sheet ziehen: runter → mehr Karte (aktueller Ort sichtbar), hoch → wieder swipen
@@ -285,12 +282,13 @@ export function MobileEntdecken() {
   // Marker memoisieren → beim Sheet-Ziehen (häufige Re-Renders) werden NICHT alle Leaflet-Marker
   // neu gebunden (das war die Hänger-Ursache auf Mobil).
   const highlightId = swipeOpen ? swipeFocus?.id : preview?.id;
+  // Pin-Klick öffnet direkt das Orts-Overlay (nicht erst die Liste)
   const markerEls = useMemo(() => shownPlaces.map(p => (
     <Marker key={p.id} position={[p.lat!, p.lng!]}
       icon={p.id === highlightId ? purpleMarker : orangeMarker}
       zIndexOffset={p.id === highlightId ? 1000 : 0}
-      eventHandlers={{ click: () => selectPlace(p.id) }} />
-  )), [shownPlaces, highlightId, selectPlace]);
+      eventHandlers={{ click: () => setPlaceOpen(p.id) }} />
+  )), [shownPlaces, highlightId]);
 
   return (
     <AppShell>
@@ -299,7 +297,8 @@ export function MobileEntdecken() {
         <MapContainer center={reachCenter ? [reachCenter.lat, reachCenter.lng] : [51.1657, 10.4515]}
           zoom={reachCenter ? 9 : 6} scrollWheelZoom zoomControl={false} attributionControl={false}
           style={{ height: '100%', width: '100%' }}>
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+          <TileLayer key={mapLayer} url={TILE_URL[mapLayer]} {...TILE_PERF} />
+          {mapLayer === 'hybrid' && <TileLayer url={HYBRID_LABELS} {...TILE_PERF} />}
           <LongPressPick onPick={pickMapPoint} />
           <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
           {markerEls}
@@ -353,6 +352,12 @@ export function MobileEntdecken() {
                 : <i className="fa-solid fa-chevron-down text-[10px]" style={{ color: '#b9a8c4' }} />}
             </button>
           </div>
+          {/* Karten-Ebene: Standard → Satellit → Hybrid (durchtippen) */}
+          <button onClick={() => { const i = MAP_LAYERS.findIndex(l => l.id === mapLayer); setMapLayer(MAP_LAYERS[(i + 1) % MAP_LAYERS.length].id); }}
+            className={toolBtn} style={{ ...toolShadow, color: mapLayer === 'standard' ? '#34254c' : '#F99039' }}
+            aria-label="Karten-Ebene wechseln" title={MAP_LAYERS.find(l => l.id === mapLayer)?.label}>
+            <i className="fa-solid fa-layer-group" />
+          </button>
         </div>
         <div className="flex gap-1.5 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
           {MODES.map(m => (
