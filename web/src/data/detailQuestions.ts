@@ -54,7 +54,7 @@ export function detailQuestions(tags: (string | null | undefined)[]): SubmitQues
   if (gastro || entry) {
     qs.push({ id: 'opening_hours', label: 'Öffnungszeiten', type: 'weekhours',
       hint: 'Als Uhrzeit hinterlegt – so sehen andere, ob gerade geöffnet ist.' });
-    qs.push({ id: 'phone',   label: 'Telefon (optional)', type: 'text', placeholder: '+49 …' });
+    qs.push({ id: 'phone',   label: 'Telefon (optional)', type: 'phone', placeholder: '30 12345678' });
     qs.push({ id: 'email',   label: 'E-Mail (optional)',  type: 'text', placeholder: 'kontakt@ort.de' });
     // Website NICHT hier — sie wird universal (für alle Orte) im „Allgemeines"-Block gefragt (keine Dublette).
   }

@@ -9,6 +9,10 @@ import { users } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { JWT_SECRET, requireAuth } from '../middleware/auth.js';
 import { sendMail } from '../lib/mailer.js';
+import { checkUserNaming, containsBannedWord } from '../lib/moderation.js';
+
+// E-Mail: Format inkl. gültiger Domain-Endung (Zod .email() lässt „a@b" ohne TLD zu)
+const emailField = z.string().email().refine(e => /@[^@\s]+\.[a-z]{2,}$/i.test(e), 'Bitte eine gültige E-Mail-Adresse angeben.');
 
 const router = new Hono();
 
@@ -45,10 +49,10 @@ const loginSchema = z.object({
 });
 
 const registerSchema = z.object({
-  email: z.string().email(),
+  email: emailField,
   password: z.string().min(6),
-  name: z.string().min(1),
-  handle: z.string().min(2).regex(/^[a-z0-9_]+$/),
+  name: z.string().min(1).max(60),
+  handle: z.string().min(2).max(30).regex(/^[a-z0-9_]+$/),
 });
 
 router.post('/login', zValidator('json', loginSchema), async (c) => {
@@ -64,6 +68,9 @@ router.post('/login', zValidator('json', loginSchema), async (c) => {
 
 router.post('/register', zValidator('json', registerSchema), async (c) => {
   const { email, password, name, handle } = c.req.valid('json');
+  // Blacklist: Schimpfwörter / Hassrede in Name oder Handle blockieren
+  const namingError = checkUserNaming(name, handle);
+  if (namingError) return c.json({ error: namingError }, 400);
   const existing = await db.select().from(users).where(eq(users.email, email)).get();
   if (existing) return c.json({ error: 'Diese E-Mail ist bereits registriert.' }, 409);
   const handleTaken = await db.select().from(users).where(eq(users.handle, handle)).get();
@@ -85,6 +92,10 @@ router.patch('/me', requireAuth, async (c) => {
   const body = await c.req.json();
   const allowed = ['name', 'bio', 'instagram', 'tiktok', 'website', 'profileVisible',
                    'notificationsEnabled', 'playVideos', 'meetPeopleEnabled'] as const;
+  // Name darf nachträglich nicht zu einem Sperrbegriff geändert werden
+  if (typeof body.name === 'string' && containsBannedWord(body.name)) {
+    return c.json({ error: 'Dieser Name ist nicht erlaubt. Bitte wähle einen anderen.' }, 400);
+  }
   const update: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) update[key] = body[key];

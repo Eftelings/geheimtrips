@@ -3,6 +3,7 @@
 export type QuestionType =
   | 'textarea' | 'text' | 'select' | 'stars' | 'yesno' | 'multicheck' | 'slider'
   | 'weekhours'    // Öffnungszeiten je Wochentag (Record<mo|di|…|so, string>)
+  | 'phone'        // Telefon: Ländervorwahl-Dropdown + Nummer → gespeichert als „+49 …"
   | 'pricefields'; // Eintrittspreise Erwachsene/Kinder/Ermäßigte/Senioren (Record)
 
 export interface SubmitQuestion {

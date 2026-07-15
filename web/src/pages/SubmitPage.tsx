@@ -709,6 +709,36 @@ function StarPicker({ value, onChange }: { value: number; onChange: (n: number) 
 }
 
 // ─── QuestionField ────────────────────────────────────────────────────────────
+// Telefon mit Ländervorwahl-Dropdown → gespeichert als „+49 30 12345678"
+const DIAL_CODES = [
+  { code: '+49', label: '🇩🇪 +49' }, { code: '+43', label: '🇦🇹 +43' }, { code: '+41', label: '🇨🇭 +41' },
+  { code: '+33', label: '🇫🇷 +33' }, { code: '+39', label: '🇮🇹 +39' }, { code: '+31', label: '🇳🇱 +31' },
+  { code: '+32', label: '🇧🇪 +32' }, { code: '+352', label: '🇱🇺 +352' }, { code: '+48', label: '🇵🇱 +48' },
+  { code: '+420', label: '🇨🇿 +420' }, { code: '+45', label: '🇩🇰 +45' }, { code: '+44', label: '🇬🇧 +44' },
+  { code: '+34', label: '🇪🇸 +34' },
+];
+
+function PhoneField({ value, onChange, placeholder }: { value: string; onChange: (v: unknown) => void; placeholder?: string }) {
+  const m = /^(\+\d{1,4})\s*(.*)$/.exec((value ?? '').trim());
+  const code = m && DIAL_CODES.some(d => d.code === m[1]) ? m[1] : '+49';
+  const number = m ? m[2] : (value ?? '');
+  const set = (c: string, n: string) => {
+    const clean = n.replace(/[^\d\s/-]/g, '').trim();
+    onChange(clean ? `${c} ${clean}` : '');
+  };
+  return (
+    <div className="flex gap-2">
+      <select value={code} onChange={e => set(e.target.value, number)}
+        className="rounded-xl border px-2 text-sm bg-white outline-none" style={{ borderColor: '#E4DCF0', color: C.aubergine }}>
+        {DIAL_CODES.map(d => <option key={d.code} value={d.code}>{d.label}</option>)}
+      </select>
+      <input type="tel" inputMode="tel" placeholder={placeholder ?? '30 12345678'} value={number}
+        onChange={e => set(code, e.target.value)} maxLength={30}
+        className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none" style={{ borderColor: '#E4DCF0', color: C.aubergine }} />
+    </div>
+  );
+}
+
 function QuestionField({ q, value, onChange }: {
   q: SubmitQuestion; value: unknown; onChange: (v: unknown) => void;
 }) {
@@ -735,6 +765,9 @@ function QuestionField({ q, value, onChange }: {
         className={base}
       />
     );
+  }
+  if (q.type === 'phone') {
+    return <PhoneField value={(value as string) ?? ''} onChange={onChange} placeholder={q.placeholder} />;
   }
   if (q.type === 'select') {
     return (
