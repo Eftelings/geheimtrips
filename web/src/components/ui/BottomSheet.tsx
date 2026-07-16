@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 interface Props {
@@ -18,21 +18,36 @@ export function BottomSheet({ open, onClose, title, children, className = '' }: 
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  // Ein `fixed`-Sheet hängt am Layout-Viewport — und den ändert die Tastatur (iOS) nicht: das Sheet
+  // liegt dann darunter, genau dort, wo man tippen will. Der visualViewport kennt die tatsächlich
+  // sichtbare Höhe; um dessen Differenz heben wir das Sheet an.
+  const [kbInset, setKbInset] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!open || !vv) return;
+    const apply = () => setKbInset(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => { vv.removeEventListener('resize', apply); vv.removeEventListener('scroll', apply); };
+  }, [open]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center"
+      style={{ bottom: kbInset, transition: 'bottom .2s ease' }}>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        style={{ animation: 'gtFade 0.2s ease' }}
+        style={{ animation: 'gtFade 0.2s ease', bottom: -kbInset }}
         onClick={onClose}
       />
       {/* Sheet / Dialog */}
       <div
         ref={ref}
-        className={`relative z-10 w-full bg-white md:max-w-lg md:rounded-[var(--radius-card)] rounded-t-[var(--radius-sheet)] shadow-[var(--shadow-raised)] max-h-[90dvh] overflow-y-auto ${className}`}
-        style={{ animation: 'gtSlideUp 0.28s cubic-bezier(0.32,0.72,0,1)' }}
+        className={`relative z-10 w-full bg-white md:max-w-lg md:rounded-[var(--radius-card)] rounded-t-[var(--radius-sheet)] shadow-[var(--shadow-raised)] overflow-y-auto ${className}`}
+        style={{ animation: 'gtSlideUp 0.28s cubic-bezier(0.32,0.72,0,1)', maxHeight: `calc(90dvh - ${kbInset}px)` }}
       >
         {/* Handle (mobile only) */}
         <div className="md:hidden flex justify-center pt-3 pb-1">

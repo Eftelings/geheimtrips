@@ -24,6 +24,14 @@ import type { Place, Trip } from '../types/index.js';
 
 type Tab = 'orte' | 'trips';
 
+/** Sortierung der Merkliste. „dist" fällt ohne Standort sauber auf A–Z zurück. */
+type SortBy = 'dist' | 'az' | 'match';
+const SORTS: { id: SortBy; label: string; icon: string }[] = [
+  { id: 'dist',  label: 'Entfernung',    icon: 'fa-location-crosshairs' },
+  { id: 'az',    label: 'A–Z',           icon: 'fa-arrow-down-a-z' },
+  { id: 'match', label: 'Passt zu dir',  icon: 'fa-wand-magic-sparkles' },
+];
+
 // ─── Marker (wie auf der Startseite) ─────────────────────────────────────────
 const makePinMarker = (n: number) => L.divIcon({
   html: `<div style="width:28px;height:28px;border-radius:50%;background:#F99039;color:white;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;border:2.5px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.35)">${n}</div>`,
@@ -132,6 +140,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   const { places, savedIds, loadPlaces, trips, loadTrips, createTrip, savedTags, loadSavedTags, setPlaceTags } = useAppStore();
   const [tagFilter, setTagFilter]       = useState<string | null>(null);
   const [editTagsPlace, setEditTagsPlace] = useState<Place | null>(null);
+  const [sortBy, setSortBy]             = useState<SortBy>('dist');
 
   useEffect(() => { loadPlaces(); loadTrips(); loadSavedTags(); }, []); // eslint-disable-line
   useEffect(() => { setMapReady(true); }, []);
@@ -186,14 +195,23 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
     const s = q.trim().toLowerCase();
     if (s) list = list.filter(p => placeMatchesText(p, s));
     if (reachActive && activeCenter) {
-      list = list
-        .filter(p => p.lat != null && p.lng != null && withinReach(p.lat!, p.lng!))
-        .map(p => ({ ...p, _dist: distanceKm(activeCenter, { lat: p.lat!, lng: p.lng! }) }))
-        .sort((a, b) => a._dist! - b._dist!);
+      list = list.filter(p => p.lat != null && p.lng != null && withinReach(p.lat!, p.lng!));
     }
-    return list;
+    // Entfernung berechnen, sobald ein Standort bekannt ist — nicht erst bei aktivem
+    // Reichweiten-Filter: die Kacheln zeigen sie an, sonst stünde dort weiter „Entfernung variiert".
+    if (activeCenter) {
+      list = list.map(p => p.lat != null && p.lng != null
+        ? { ...p, _dist: distanceKm(activeCenter, { lat: p.lat, lng: p.lng }) } : p);
+    }
+    const byName = (a: Place, b: Place) => a.name.localeCompare(b.name, 'de');
+    const sorted = [...list];
+    if (sortBy === 'az') sorted.sort(byName);
+    else if (sortBy === 'match') sorted.sort((a, b) => (b.match - a.match) || byName(a, b));
+    // Ohne Standort haben alle _dist = Infinity → fällt sauber auf A–Z zurück.
+    else sorted.sort((a, b) => ((a._dist ?? Infinity) - (b._dist ?? Infinity)) || byName(a, b));
+    return sorted;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orteBase, q, tagSel, catActive, vocab, tagFilter, savedTags, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
+  }, [orteBase, q, tagSel, catActive, vocab, tagFilter, savedTags, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso, sortBy]);
 
   // ── Gefilterte Trips: Kategorie-Tag + Freitext + Reichweite ──────────────
   const filteredTrips = useMemo(() => {
@@ -492,12 +510,25 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
                     ))}
                   </div>
                 )}
+                {/* Sortierung — ohne Standort ist „Entfernung" faktisch A–Z (siehe filteredPlaces) */}
+                <div className="flex items-center gap-1.5 mb-3 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+                  <span className="text-[11px] font-semibold text-[var(--color-lavender)] flex-shrink-0 pr-0.5">Sortieren:</span>
+                  {SORTS.map(s => (
+                    <button key={s.id} onClick={() => setSortBy(s.id)}
+                      className="text-[11px] font-semibold rounded-full px-3 py-1.5 flex-shrink-0 transition-colors inline-flex items-center gap-1.5"
+                      style={sortBy === s.id
+                        ? { background: 'var(--color-amber)', color: 'white' }
+                        : { background: 'white', color: 'var(--color-aubergine)', boxShadow: '0 2px 8px rgba(52,37,76,0.08)' }}>
+                      <i className={`fa-solid ${s.icon} text-[10px]`} />{s.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {filteredPlaces.map(p => {
                     const tags = savedTags[p.id] ?? [];
                     return (
                       <div key={p.id} className="flex flex-col gap-1.5">
-                        <PlaceCard place={p} />
+                        <PlaceCard place={p} distanceKm={p._dist} />
                         {orteView === 'beigetragen' ? (
                           <p className="px-1 text-[11px] font-semibold text-[var(--color-lavender)] inline-flex items-center gap-1.5">
                             <i className="fa-regular fa-eye text-[10px]" />
@@ -510,7 +541,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
                               <span key={t} className="bg-[var(--color-amber)]/15 text-[var(--color-amber)] text-[10px] font-bold px-2 py-0.5 rounded-full">{t}</span>
                             ))}
                             <span className="text-[10px] font-semibold text-[var(--color-lavender)] inline-flex items-center gap-1 px-1.5 py-0.5">
-                              <i className="fa-solid fa-tag text-[9px]" /> {tags.length ? 'bearbeiten' : 'Tag'}
+                              <i className="fa-solid fa-tag text-[9px]" /> {tags.length ? 'bearbeiten' : 'Eigenen Tag vergeben'}
                             </span>
                           </button>
                         )}

@@ -10,9 +10,17 @@ interface Props {
   place: Place;
   showMatch?: boolean;
   className?: string;
+  /**
+   * Echte Entfernung vom Standort in km. Ohne das zeigt die Kachel `distanceLabel` — das ist ein
+   * fester Text aus der Datenbank („Entfernung variiert"), der ohne Standort das Beste ist, was
+   * wir wissen. Ist der Standort erlaubt, gehört hier die tatsächliche Zahl hin.
+   */
+  distanceKm?: number | null;
 }
 
-export function PlaceCard({ place, showMatch, className = '' }: Props) {
+const fmtKm = (d: number) => d < 1 ? `${Math.round(d * 1000)} m` : `${d < 10 ? d.toFixed(1) : Math.round(d)} km`;
+
+export function PlaceCard({ place, showMatch, className = '', distanceKm }: Props) {
   const navigate = useNavigate();
   const { savedIds, toggleSave } = useAppStore();
   const isSaved = savedIds.has(place.id);
@@ -38,7 +46,9 @@ export function PlaceCard({ place, showMatch, className = '' }: Props) {
       </div>
       <div className="p-3">
         <TagBadge slug={place.tagSlug} fallback={place.categoryLabel} className="mb-1" />
-        <div className="font-display font-semibold text-[var(--color-aubergine)] text-sm leading-tight">{place.name}</div>
+        {/* Zwei Zeilen fest reservieren: sonst wird jede Kachel mit langem Ortsnamen höher als
+            ihre Nachbarn und das Raster franst aus. */}
+        <div className="font-display font-semibold text-[var(--color-aubergine)] text-sm leading-tight line-clamp-2 min-h-[2.5em]">{place.name}</div>
         <div className="text-[var(--color-lavender)] text-xs mt-0.5 flex items-center gap-1">
           <i className="fa-solid fa-location-dot text-[10px]" />
           {place.region}
@@ -48,7 +58,9 @@ export function PlaceCard({ place, showMatch, className = '' }: Props) {
             <i className="fa-solid fa-star text-[var(--color-amber)] text-[10px]" /> {place.rating}
           </span>
           <span className="text-xs text-[var(--color-lavender)]">{place.costLabel}</span>
-          <span className="text-xs text-[var(--color-lavender)]">{place.distanceLabel}</span>
+          <span className="text-xs text-[var(--color-lavender)] whitespace-nowrap">
+            {distanceKm != null ? fmtKm(distanceKm) : place.distanceLabel}
+          </span>
           <WeatherBadge lat={place.lat} lng={place.lng} placeId={place.id} compact />
         </div>
         {(place.saverCount ?? 0) > 0 && (
