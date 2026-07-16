@@ -159,12 +159,30 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     if (pulling.current) { pulling.current = false; onPullDownEnd?.(Math.max(0, dragRef.current.y)); }
   }
 
+  // Griff + „Liste" — auf dem Bild hell, auf hellem Grund dunkel. Muss in BEIDEN Zweigen raus,
+  // sonst ist der leere Zustand eine Sackgasse (kein Button, keine Geste, kein Weg zurück).
+  const topBar = (onImage: boolean) => (
+    <>
+      <div className="absolute top-2.5 left-1/2 -translate-x-1/2 pointer-events-none">
+        <div className="w-10 h-1.5 rounded-full" style={{ background: onImage ? 'rgba(255,255,255,.6)' : '#d9cfe2' }} />
+      </div>
+      <button onClick={onBackToList}
+        className="absolute right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white"
+        style={{ top: 22, background: 'var(--color-amber)', boxShadow: '0 2px 8px rgba(52,37,76,0.35)' }}>
+        <i className="fa-solid fa-list" />Liste
+      </button>
+    </>
+  );
+
   if (!card) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-8" style={{ background: 'var(--color-bg)' }}>
+      <div className="h-full relative flex flex-col items-center justify-center gap-3 text-center px-8"
+        style={{ background: 'var(--color-bg)', touchAction: 'none' }}
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
+        {topBar(false)}
         <i className="fa-solid fa-champagne-glasses text-5xl text-[var(--color-amber)]" />
         <p className="font-display font-bold text-xl text-[var(--color-aubergine)]">{places.length === 0 ? 'Keine Orte im Filter' : 'Alle durchgeswipet!'}</p>
-        <p className="text-sm text-[var(--color-lavender)] max-w-xs">{places.length === 0 ? 'Passe Radius, Standort oder Filter an — dann tauchen hier Orte zum Swipen auf.' : 'Schließe das Overlay und passe die Filter an für neue Vorschläge.'}</p>
+        <p className="text-sm text-[var(--color-lavender)] max-w-xs">{places.length === 0 ? 'Passe Radius, Standort oder Filter an — dann tauchen hier Orte zum Swipen auf.' : 'Zieh das Overlay runter oder tippe auf „Liste" — dann kannst du die Filter anpassen.'}</p>
       </div>
     );
   }
@@ -207,14 +225,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
 
         {/* Griff + „Liste" liegen IM Bild (nicht im Sheet-Kopf) — sie scrollen mit dem Hero weg,
             statt dauerhaft über dem Artikel zu schweben. Position wie zuvor der Sheet-Kopf. */}
-        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 pointer-events-none">
-          <div className="w-10 h-1.5 rounded-full bg-white/60" />
-        </div>
-        <button onClick={onBackToList}
-          className="absolute right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white"
-          style={{ top: 22, background: 'var(--color-amber)', boxShadow: '0 2px 8px rgba(52,37,76,0.35)' }}>
-          <i className="fa-solid fa-list" />Liste
-        </button>
+        {topBar(true)}
 
         {/* Kein Button-Layer fürs Blättern: Tippen/Wischen macht das die Karte selbst (siehe up()).
             Buttons hätten touch-action:auto (nicht vererbt) und würden den Zug nach unten schlucken. */}

@@ -20,12 +20,12 @@ export function BottomNav() {
     if (!isLoggedIn) { e.preventDefault(); gate(undefined, reason); }
   };
 
-  // z-50: die Nav liegt ÜBER den Karten-Overlays (Sheet z-20/z-40), nicht darunter.
-  // `navPeek` (Swipe-Modus) schiebt sie um genau ihre eigene Höhe runter — stehen bleibt der
-  // Überstand des Kompasses (der FAB ragt per -mt-5 aus der Leiste heraus).
+  // z-50: die Nav liegt ÜBER den Karten-Overlays (Sheet z-20), nicht darunter.
+  // `navPeek` (Swipe-Modus) fährt sie ganz raus: eigene Höhe + 40px, denn der Kompass-FAB ragt per
+  // -mt-5 aus der Leiste heraus und stünde bei glatten 100% samt Schatten noch am Rand.
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--color-bg-soft)] z-50 pb-safe md:hidden"
-      style={{ transform: navPeek ? 'translateY(100%)' : 'translateY(0)', transition: 'transform .34s cubic-bezier(.32,.72,0,1)' }}>
+      style={{ transform: navPeek ? 'translateY(calc(100% + 40px))' : 'translateY(0)', transition: 'transform .34s cubic-bezier(.32,.72,0,1)' }}>
       <div className="flex items-end">
         {/* Links */}
         {LEFT_TABS.map(({ to, icon, label, reason }) => (

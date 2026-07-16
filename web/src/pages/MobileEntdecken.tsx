@@ -132,9 +132,10 @@ export function MobileEntdecken() {
     if (!userCoords) requestGpsPosition().then(setUserCoords).catch(() => {});
   }, []); // eslint-disable-line
 
-  // Orte filtern: Kategorie + Reichweite + Modus. „Nein"-Orte (nope) fliegen IMMER raus.
+  // Orte filtern: Kategorie + Reichweite + Modus. „Nein" (nope) wirkt NUR dort, wo es um Vorschläge
+  // geht (Für dich / Nur neue / Swipe-Feed) — „Alle" heißt alle, sonst wäre der Name gelogen.
   const shownPlaces = useMemo(() => {
-    let base = places.filter(p => p.lat != null && p.lng != null && !nopeIds.has(p.id));
+    let base = places.filter(p => p.lat != null && p.lng != null);
     if (catActive) base = base.filter(p => placeMatchesTag(p, tagSel, vocab));
     if (reachCenter) {
       const within = (p: Place) =>
@@ -144,10 +145,11 @@ export function MobileEntdecken() {
       base = base.filter(within);
     }
     if (mode === 'saved') return base.filter(p => savedIds.has(p.id));
-    if (mode === 'new')   return base.filter(p => !visitedIds.has(p.id) && !savedIds.has(p.id));
+    if (mode === 'new')   return base.filter(p => !visitedIds.has(p.id) && !savedIds.has(p.id) && !nopeIds.has(p.id));
     if (mode === 'foryou') {
-      // „Für dich" (Standard): Besuchtes raus, nach Affinität sortiert. Gemerkte Gruppen priorisiert.
-      const pool = base.filter(p => !visitedIds.has(p.id));
+      // „Für dich" (Standard): Besuchtes + Weggewischtes raus, nach Affinität sortiert.
+      // Gemerkte Gruppen priorisiert.
+      const pool = base.filter(p => !visitedIds.has(p.id) && !nopeIds.has(p.id));
       // Im Radius alles schon gesehen? Dann lieber wie „Alle" zeigen als eine leere Karte —
       // eine leere Entdecken-Seite ist die schlechteste aller Antworten.
       if (!pool.length) return base;
@@ -159,12 +161,14 @@ export function MobileEntdecken() {
         : pool;
       return [...(primary.length ? primary : pool)].sort((a, b) => (b.match - a.match) || (b.rating - a.rating));
     }
-    return base; // 'all' — alles außer „Nein"
+    return base; // 'all' — wirklich alles, auch Weggewischtes und schon Beantwortetes
   }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds, visitedIds, nopeIds]);
 
-  // Swipe-Feed: nur bereits gemerkte („Will ich hin") raus. „Vielleicht" bleibt bewusst drin —
-  // es hat keine bleibende Wirkung, die Orte werden künftig (und auf der Karte) weiter gezeigt.
-  const swipePlaces = useMemo(() => shownPlaces.filter(p => !savedIds.has(p.id)), [shownPlaces, savedIds]);
+  // Swipe-Feed: bereits gemerkte („Will ich hin") und weggewischte („Nein") raus — hier hängt das
+  // nicht am Modus, sonst legte „Alle" jedes „Nein" wieder auf den Stapel. „Vielleicht" bleibt
+  // bewusst drin: es hat keine bleibende Wirkung, die Orte kommen künftig weiter vor.
+  const swipePlaces = useMemo(
+    () => shownPlaces.filter(p => !savedIds.has(p.id) && !nopeIds.has(p.id)), [shownPlaces, savedIds, nopeIds]);
 
   // Liste nach Entfernung sortiert (nächste zuerst)
   const listPlaces = useMemo(() => {
@@ -205,6 +209,7 @@ export function MobileEntdecken() {
    * eine Entscheidungsfrage, die niemand gestellt hat. Runterziehen führt zurück in die Liste.
    */
   const openPlace = (p: Place) => {
+    setPanel(null);         // sonst schwebt der offene Filter über dem Artikel
     setSwipeFeed([p]);      // Einzel-Feed: es geht um GENAU diesen Ort
     setSwipeFocus(p);       // direkt setzen — sonst rendert der Artikel einen Frame lang den alten Ort
     setArticleOnly(true);
@@ -277,6 +282,7 @@ export function MobileEntdecken() {
   }
 
   function onSheetTouchStart(e: React.TouchEvent) {
+    setPanel(null);   // wer das Overlay anfasst, ist mit dem Filter fertig
     sheetDrag.current = { startY: e.touches[0].clientY, startOffset: sheetDragY, moved: 0 };
     setSheetDragging(true);
   }
@@ -311,7 +317,7 @@ export function MobileEntdecken() {
     closeSwipeToList(to);
   }
   // „Swipen" zieht nur das Overlay auf die oberste Rast — dort IST der Swipe.
-  function goSwipe() { setArticleOnly(false); setSheetSnap(2); }
+  function goSwipe() { setPanel(null); setArticleOnly(false); setSheetSnap(2); }
   // Ankommen auf Rast 2 (egal ob per Button oder mit der Hand hochgezogen): Feed einfrieren.
   // Snapshot, sonst indiziert der Feed beim Weglegen neu → Index springt.
   useEffect(() => {
@@ -448,7 +454,9 @@ export function MobileEntdecken() {
       {/* Popovers */}
       {panel && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
+          {/* „Daneben tippen schließt" — aber nur NEBEN dem Overlay. Ein Backdrop über das ganze
+              Bild würde das Hochziehen des Sheets schlucken, solange ein Filter offen ist. */}
+          <div className="fixed left-0 right-0 top-0 z-30" style={{ height: snap.top + sheetDragY }} onClick={() => setPanel(null)} />
           <div className="fixed left-3 right-3 z-40 bg-white rounded-2xl p-3.5"
             style={{ top: '108px', boxShadow: '0 14px 40px rgba(52,37,76,0.25)', maxHeight: '58vh', overflowY: 'auto' }}>
             {panel === 'cat' && <TagFilter value={tagSel} onChange={setTagSel} />}
