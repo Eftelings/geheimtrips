@@ -375,13 +375,18 @@ export function MobileEntdecken() {
     if (to === 2) { setSheetSnap(2); return; }   // nicht weit genug → zurück in den Swipe
     closeSwipeToList(to);
   }
-  // „Swipen" zieht nur das Overlay auf die oberste Rast — dort IST der Swipe.
-  function goSwipe() { setPanel(null); setArticleOnly(false); setSheetSnap(2); }
+  // „Swipen" zieht nur das Overlay auf die oberste Rast — dort IST der Swipe. Nur HIER endet eine
+  // gezielte Ort-Sitzung: wer bewusst swipen geht, will keinen Zurückpfeil nach „Meine Orte" mehr.
+  function goSwipe() { setPanel(null); setArticleOnly(false); setBackTo(null); setSheetSnap(2); }
   // Ankommen auf Rast 2 (egal ob per Button oder mit der Hand hochgezogen): Feed einfrieren.
   // Snapshot, sonst indiziert der Feed beim Weglegen neu → Index springt.
   useEffect(() => {
-    if (!swipeMode) { setSwipeFocus(null); setSwipeArticle(false); setArticleOnly(false); setBackTo(null); return; }
-    if (articleOnly) return;   // gezielt geöffnet: Einzel-Feed steht schon, kein Gate (Liste ist öffentlich)
+    // Rast 2 verlassen heißt NICHT „fertig mit dem Ort": man zieht das Overlay runter, um kurz auf
+    // die Karte zu schauen. Räumten wir hier articleOnly/backTo weg, käme beim Hochziehen der
+    // Swipe statt des Orts und der Zurückpfeil hätte sein Ziel verloren.
+    if (!swipeMode) return;
+    if (articleOnly) { setSwipeArticle(true); return; }   // gezielter Ort: Rast 2 zeigt IHN, nicht den Swipe
+    setSwipeArticle(false);   // frischer Swipe beginnt beim Bild, nicht bei einem alten Artikel
     if (!gate(() => setSwipeFeed(swipePlaces), 'Melde dich an, um den Swipe-Modus zu nutzen.')) setSheetSnap(1);
   }, [swipeMode, feedNonce]); // eslint-disable-line
 
