@@ -2261,10 +2261,12 @@ async function handleVerifyToggle() {
 
       {/* ── Main layout ──────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 pt-2 lg:pt-6 pb-2">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10">
+        {/* Block-Abstände mobil halbiert (gap-4/gap-5 statt 8/10) — auf dem Telefon zerfiel die
+            Seite sonst in weit auseinanderliegende Inseln. Ab lg bleibt die Luft wie gehabt. */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-10">
 
           {/* ═══ LEFT ════════════════════════════════════════════════════════ */}
-          <div className="lg:col-span-2 flex flex-col gap-10">
+          <div className="lg:col-span-2 flex flex-col gap-5 lg:gap-10">
 
             {/* „Zu Trip hinzufügen" ist mobil jetzt im Header (runder Icon-Button) */}
 
@@ -2815,7 +2817,7 @@ async function handleVerifyToggle() {
           </div>
 
           {/* ═══ RIGHT ════════════════════════════════════════════════════════ */}
-          <div className="flex flex-col gap-5 lg:sticky lg:top-24 lg:self-start">
+          <div className="flex flex-col gap-2.5 lg:gap-5 lg:sticky lg:top-24 lg:self-start">
 
             <div className="hidden lg:block">
               <button onClick={() => setAddTripOpen(true)}
