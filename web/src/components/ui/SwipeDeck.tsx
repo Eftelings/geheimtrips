@@ -38,7 +38,7 @@ function Stars({ rating }: { rating: number }) {
  *  · runter→ bewegt das Overlay selbst (`onPullDown`), die Karte bleibt stehen
  * Bekommt einen stabilen Feed (Snapshot) übergeben, damit der Index beim Weglegen nicht springt.
  */
-export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd, onBackToList, onOpenReviews, radiusCount, onShowAll, emptyFilters, reachFrom, travelMode }: {
+export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd, onBackToList, onBack, onOpenReviews, radiusCount, onShowAll, emptyFilters, reachFrom, travelMode }: {
   places: Place[];
   onCardChange?: (p: Place | null) => void;
   /** Artikel unter dem Bild offen (Zustand liegt beim Overlay, das Sheet muss ihn kennen). */
@@ -50,6 +50,8 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   onPullDown?: (dy: number) => void;
   onPullDownEnd?: (dy: number) => void;
   onBackToList?: () => void;
+  /** Zurückpfeil am offenen Ort — wohin, entscheidet das Overlay (Liste, Swipe oder „Meine Orte"). */
+  onBack?: () => void;
   /** Sterne am Hero angetippt → Rezensionen im Artikel aufklappen. */
   onOpenReviews?: () => void;
   /** Wie viele Orte liegen im Radius? Leerer Feed trotz Orten = alles schon beantwortet. */
@@ -192,6 +194,14 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
       <div className="absolute top-2.5 left-1/2 -translate-x-1/2 pointer-events-none">
         <div className="w-10 h-1.5 rounded-full" style={{ background: onImage ? 'rgba(255,255,255,.6)' : '#d9cfe2' }} />
       </div>
+      {/* Zurück — nur am offenen Ort: im reinen Swipe gibt es nichts, wohin „zurück" führen würde. */}
+      {onBack && articleOpen && (
+        <button onClick={onBack} aria-label="Zurück"
+          className="absolute left-4 z-10 w-9 h-9 rounded-full flex items-center justify-center active:scale-90"
+          style={{ top: 18, background: onImage ? 'rgba(0,0,0,.4)' : '#F1ECF4', color: onImage ? '#fff' : 'var(--color-aubergine)', backdropFilter: onImage ? 'blur(4px)' : undefined }}>
+          <i className="fa-solid fa-arrow-left text-sm" />
+        </button>
+      )}
       <button onClick={onBackToList}
         className="absolute right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white"
         style={{ top: 22, background: 'var(--color-amber)', boxShadow: '0 2px 8px rgba(52,37,76,0.35)' }}>

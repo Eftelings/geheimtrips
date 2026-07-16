@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -126,6 +126,7 @@ function LongPressPick({ onPick }: { onPick: (lat: number, lng: number) => void 
 
 export function MobileEntdecken() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { places, loadPlaces, savedIds, visitedIds, nopeIds, funnelAnswers } = useAppStore();
   const vocab = useTaxVocab();
   const { gate } = useRequireAuth();
@@ -241,6 +242,7 @@ export function MobileEntdecken() {
   // wirken erst im nächsten Render, ein Aufruf in derselben Runde griffe auf alte Werte.
   const [feedNonce, setFeedNonce] = useState(0);
   const [swipeLocOpen, setSwipeLocOpen] = useState(false);   // Ortssuche auf der leeren Swipe-Seite
+  const [backTo, setBackTo] = useState<string | null>(null);  // Herkunft (z.B. „Meine Orte") für den Zurückpfeil
   const recaptureFeed = () => setFeedNonce(n => n + 1);
   // „Nochmal zeigen" = die Ansicht „Alle" — dieselbe Wirkung, nur als Knopf. Der Chip oben springt
   // sichtbar mit, damit klar ist, warum plötzlich alles kommt (und man mit einem Tipp zurückkann).
@@ -378,10 +380,26 @@ export function MobileEntdecken() {
   // Ankommen auf Rast 2 (egal ob per Button oder mit der Hand hochgezogen): Feed einfrieren.
   // Snapshot, sonst indiziert der Feed beim Weglegen neu → Index springt.
   useEffect(() => {
-    if (!swipeMode) { setSwipeFocus(null); setSwipeArticle(false); setArticleOnly(false); return; }
+    if (!swipeMode) { setSwipeFocus(null); setSwipeArticle(false); setArticleOnly(false); setBackTo(null); return; }
     if (articleOnly) return;   // gezielt geöffnet: Einzel-Feed steht schon, kein Gate (Liste ist öffentlich)
     if (!gate(() => setSwipeFeed(swipePlaces), 'Melde dich an, um den Swipe-Modus zu nutzen.')) setSheetSnap(1);
   }, [swipeMode, feedNonce]); // eslint-disable-line
+
+  /**
+   * Auftrag von außen („Meine Orte" → dieser Ort): Modus setzen, Ort öffnen, Herkunft merken.
+   * Läuft erst, wenn die Orte geladen sind — beim Mount ist die Liste oft noch leer. Danach wird
+   * der Router-State geleert, sonst risse ein Zurück/Reload den Ort erneut auf.
+   */
+  useEffect(() => {
+    const st = location.state as { openPlace?: string; mode?: Mode; from?: string } | null;
+    if (!st?.openPlace) return;
+    const p = places.find(x => x.id === st.openPlace);
+    if (!p) return;
+    if (st.mode) setMode(st.mode);
+    setBackTo(st.from ?? null);
+    openPlace(p);
+    navigate('.', { replace: true, state: null });
+  }, [places, location.state]); // eslint-disable-line
 
   // Im Swipe fährt die Bottom-Nav bis auf den Kompass-Überstand runter. Aufräumen beim Verlassen
   // ist Pflicht — sonst bliebe sie auf der nächsten Seite versteckt.
@@ -656,6 +674,15 @@ export function MobileEntdecken() {
             <SwipeDeck places={swipeFeed} onCardChange={setSwipeFocus}
               onPullDown={onDeckPull} onPullDownEnd={onDeckPullEnd}
               onBackToList={() => closeSwipeToList()}
+              // Zurück führt dorthin, wo man hergekommen ist: „Meine Orte", die Liste (gezielt
+              // geöffneter Ort) oder das Swipe-Bild (von dort hochgewischt).
+              // Bei fremder Herkunft echtes History-Zurück statt navigate(pfad) — das schöbe einen
+              // neuen Eintrag drauf und die Scroll-Position der Merkliste wäre sicher verloren.
+              onBack={() => {
+                if (backTo) navigate(-1);
+                else if (articleOnly) closeSwipeToList();
+                else setSwipeArticle(false);
+              }}
               onOpenReviews={() => setReviewsSignal(n => n + 1)}
               radiusCount={inRadius.length} onShowAll={mode === 'all' ? undefined : showAllAgain}
               emptyFilters={swipeFilters}

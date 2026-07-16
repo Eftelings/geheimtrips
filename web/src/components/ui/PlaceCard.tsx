@@ -16,18 +16,23 @@ interface Props {
    * wir wissen. Ist der Standort erlaubt, gehört hier die tatsächliche Zahl hin.
    */
   distanceKm?: number | null;
+  /**
+   * Eigener Öffnen-Weg statt der öffentlichen `/ort/:id`-Seite. „Meine Orte" schickt damit ins
+   * Entdecken-Overlay, wo der Ort dieselbe Ansicht bekommt wie beim Swipen.
+   */
+  onOpen?: () => void;
 }
 
 const fmtKm = (d: number) => d < 1 ? `${Math.round(d * 1000)} m` : `${d < 10 ? d.toFixed(1) : Math.round(d)} km`;
 
-export function PlaceCard({ place, showMatch, className = '', distanceKm }: Props) {
+export function PlaceCard({ place, showMatch, className = '', distanceKm, onOpen }: Props) {
   const navigate = useNavigate();
   const { savedIds, toggleSave } = useAppStore();
   const isSaved = savedIds.has(place.id);
 
   return (
     <div
-      onClick={() => navigate(`/ort/${place.id}`)}
+      onClick={() => (onOpen ? onOpen() : navigate(`/ort/${place.id}`))}
       className={`bg-white rounded-[var(--radius-card)] shadow-[var(--shadow-card)] overflow-hidden cursor-pointer active:scale-[0.98] transition-transform ${className}`}
     >
       <div className="relative aspect-[16/9] overflow-hidden">

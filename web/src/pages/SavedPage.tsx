@@ -12,6 +12,7 @@ import { placesApi } from '../services/api.js';
 import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagFilter.js';
 import type { TagSelection } from '../components/ui/TagFilter.js';
 import { useTaxVocab } from '../data/taxVocab.js';
+import { useIsMobile } from '../hooks/useIsMobile.js';
 import { ReachControls } from '../components/ui/ReachControls.js';
 import { ReachLayer, MapComputeOverlay } from '../components/map/ReachLayer.js';
 import type { TravelView } from '../components/map/ReachLayer.js';
@@ -141,6 +142,15 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   const [tagFilter, setTagFilter]       = useState<string | null>(null);
   const [editTagsPlace, setEditTagsPlace] = useState<Place | null>(null);
   const [sortBy, setSortBy]             = useState<SortBy>('dist');
+  const isMobile = useIsMobile(1024);
+  /**
+   * Mobil öffnet ein gemerkter Ort dieselbe Ansicht wie beim Swipen (Overlay auf „/"), statt der
+   * öffentlichen Ortsseite. `mode: 'saved'` — zieht man das Overlay runter, steht man in der eigenen
+   * Merkliste; `from` bringt den Zurückpfeil hierher zurück. Am Desktop bleibt es die Ortsseite,
+   * dort gibt es das Overlay nicht.
+   */
+  const openInOverlay = (p: Place) =>
+    navigate('/', { state: { openPlace: p.id, mode: 'saved', from: '/meine-orte' } });
 
   useEffect(() => { loadPlaces(); loadTrips(); loadSavedTags(); }, []); // eslint-disable-line
   useEffect(() => { setMapReady(true); }, []);
@@ -528,7 +538,8 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
                     const tags = savedTags[p.id] ?? [];
                     return (
                       <div key={p.id} className="flex flex-col gap-1.5">
-                        <PlaceCard place={p} distanceKm={p._dist} />
+                        <PlaceCard place={p} distanceKm={p._dist}
+                          onOpen={isMobile ? () => openInOverlay(p) : undefined} />
                         {orteView === 'beigetragen' ? (
                           <p className="px-1 text-[11px] font-semibold text-[var(--color-lavender)] inline-flex items-center gap-1.5">
                             <i className="fa-regular fa-eye text-[10px]" />
