@@ -513,25 +513,26 @@ export function MobileEntdecken() {
           transform: `translateY(${sheetDragY}px)`,
           transition: sheetDragging ? 'none' : 'transform .34s cubic-bezier(.32,.72,0,1)',
         }}>
-        {/* Griff + Kopf (Zieh-Bereich). Im Swipe schwebt er über dem Full-Bleed-Bild (z-30 über dem
-            Deck) — gleiche Stelle, gleicher Button, nur andere Farben. */}
-        <div className="flex-shrink-0 relative z-30" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
-          <div className="flex justify-center pt-2.5 pb-1.5">
-            <div className="w-10 h-1.5 rounded-full transition-colors" style={{ background: swipeMode ? 'rgba(255,255,255,.6)' : '#d9cfe2' }} />
+        {/* Griff + Kopf (Zieh-Bereich) — nur in der Liste. Im Swipe liegen Griff und „Liste"-Button
+            IM Bild (siehe SwipeDeck), damit sie mit dem Hero wegscrollen statt zu schweben. */}
+        {!swipeMode && (
+          <div className="flex-shrink-0 relative z-30" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
+            <div className="flex justify-center pt-2.5 pb-1.5">
+              <div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} />
+            </div>
+            <div className="px-4 pb-2.5 flex items-center justify-between gap-2">
+              <p className="font-display font-bold text-[var(--color-aubergine)]">
+                {listPlaces.length} {listPlaces.length === 1 ? 'Ort' : 'Orte'}{reachCenter ? ' in der Nähe' : ''}
+              </p>
+              <button onClick={goSwipe}
+                onTouchStart={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold flex-shrink-0"
+                style={{ background: 'var(--color-amber)', color: 'white' }}>
+                <i className="fa-solid fa-layer-group" />Swipen
+              </button>
+            </div>
           </div>
-          <div className="px-4 pb-2.5 flex items-center justify-between gap-2">
-            <p className="font-display font-bold text-[var(--color-aubergine)] transition-opacity"
-              style={{ opacity: swipeMode ? 0 : 1 }}>
-              {listPlaces.length} {listPlaces.length === 1 ? 'Ort' : 'Orte'}{reachCenter ? ' in der Nähe' : ''}
-            </p>
-            <button onClick={() => (swipeMode ? closeSwipeToList() : goSwipe())}
-              onTouchStart={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold flex-shrink-0"
-              style={{ background: 'var(--color-amber)', color: 'white', boxShadow: swipeMode ? '0 2px 8px rgba(52,37,76,0.35)' : undefined }}>
-              <i className={`fa-solid ${swipeMode ? 'fa-list' : 'fa-layer-group'}`} />{swipeMode ? 'Liste' : 'Swipen'}
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Rast 2: der Swipe-Ort füllt dasselbe Overlay (Bild oben abgerundet durchs Sheet selbst).
             Hochwischen klappt den Artikel DARUNTER auf — kein zweites Overlay, gleiche Seite. */}
@@ -539,6 +540,8 @@ export function MobileEntdecken() {
           <div className="absolute inset-0 z-20">
             <SwipeDeck places={swipeFeed} onCardChange={setSwipeFocus}
               onPullDown={onDeckPull} onPullDownEnd={onDeckPullEnd}
+              onBackToList={() => closeSwipeToList()}
+              reachFrom={reachCenter} travelMode={reach.travelMode}
               articleOpen={swipeArticle}
               onOpenArticle={() => setSwipeArticle(true)}
               onCloseArticle={() => setSwipeArticle(false)}

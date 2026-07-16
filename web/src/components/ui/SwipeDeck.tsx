@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Place } from '../../types/index.js';
+import type { Place, Transport } from '../../types/index.js';
 import { useAppStore } from '../../store/useAppStore.js';
 import { discoverApi, placesApi } from '../../services/api.js';
+import { distanceKm } from '../../services/geoService.js';
+import { EFFECTIVE_SPEED_KMH } from '../../utils/geo.js';
+import { formatDuration } from '../../services/routeService.js';
 import { TagBadge } from './TagBadge.js';
 import { PlaceImage } from './PlaceImage.js';
 
 const isVid = (u: string) => /\.(mp4|webm|mov|m4v|ogg)(\?|#|$)/i.test(u);
+
+const TRANSPORT_ICON: Record<Transport, string> = {
+  walk: 'fa-person-walking', bike: 'fa-bicycle', transit: 'fa-train-subway', train: 'fa-train', auto: 'fa-car',
+};
+const fmtKm = (d: number) => d < 1 ? `${Math.round(d * 1000)} m` : `${d < 10 ? d.toFixed(1) : Math.round(d)} km`;
 
 /** Höhe des Bildes, sobald der Artikel darunter offen ist: flacher, aber NICHT schmaler. */
 const HERO_H = 'clamp(240px, 44vh, 440px)';
@@ -29,7 +37,7 @@ function Stars({ rating }: { rating: number }) {
  *  · runter→ bewegt das Overlay selbst (`onPullDown`), die Karte bleibt stehen
  * Bekommt einen stabilen Feed (Snapshot) übergeben, damit der Index beim Weglegen nicht springt.
  */
-export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd }: {
+export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd, onBackToList, reachFrom, travelMode }: {
   places: Place[];
   onCardChange?: (p: Place | null) => void;
   /** Artikel unter dem Bild offen (Zustand liegt beim Overlay, das Sheet muss ihn kennen). */
@@ -40,6 +48,10 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   /** Runterziehen auf dem Bild = das Overlay ziehen: laufender Wert bzw. Loslassen. */
   onPullDown?: (dy: number) => void;
   onPullDownEnd?: (dy: number) => void;
+  onBackToList?: () => void;
+  /** Startpunkt + Verkehrsmittel der Karte → Entfernung bzw. Fahrzeit am Ort. */
+  reachFrom?: { lat: number; lng: number } | null;
+  travelMode?: 'radius' | Transport;
 }) {
   const { toggleSave, savedIds, swipeNope, swipeMaybe } = useAppStore();
   const [idx, setIdx] = useState(0);
@@ -62,6 +74,16 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   }, [card]);
   const cur = media[imgIdx] ?? media[0];
   useEffect(() => { onCardChange?.(card ?? null); }, [card?.id]); // eslint-disable-line
+
+  // Nur Radius eingestellt → Strecke; Verkehrsmittel gewählt → Fahrzeit damit. Bewusst mit
+  // EFFECTIVE_SPEED_KMH gerechnet — genau damit filtert die Karte, sonst widerspricht die
+  // Anzeige dem Filter („45 Min erreichbar", aber am Ort stünde 60 Min).
+  const travel = useMemo(() => {
+    if (!card || !reachFrom || card.lat == null || card.lng == null) return null;
+    const km = distanceKm(reachFrom, { lat: card.lat, lng: card.lng });
+    if (!travelMode || travelMode === 'radius') return { icon: 'fa-ruler-horizontal', text: fmtKm(km) };
+    return { icon: TRANSPORT_ICON[travelMode], text: formatDuration(km / EFFECTIVE_SPEED_KMH[travelMode]) };
+  }, [card?.id, card?.lat, card?.lng, reachFrom, travelMode]); // eslint-disable-line
 
   const showToast = (m: string) => { if (!m) return; setToast(m); setTimeout(() => setToast(null), 1400); };
 
@@ -179,6 +201,17 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
           : <PlaceImage src={cur?.url ?? ''} category="" alt={card.name} className="w-full h-full object-cover pointer-events-none" iconClass="text-6xl" eager />}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/25 pointer-events-none" />
 
+        {/* Griff + „Liste" liegen IM Bild (nicht im Sheet-Kopf) — sie scrollen mit dem Hero weg,
+            statt dauerhaft über dem Artikel zu schweben. Position wie zuvor der Sheet-Kopf. */}
+        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 pointer-events-none">
+          <div className="w-10 h-1.5 rounded-full bg-white/60" />
+        </div>
+        <button onClick={onBackToList}
+          className="absolute right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white"
+          style={{ top: 22, background: 'var(--color-amber)', boxShadow: '0 2px 8px rgba(52,37,76,0.35)' }}>
+          <i className="fa-solid fa-list" />Liste
+        </button>
+
         {/* Kein Button-Layer fürs Blättern: Tippen/Wischen macht das die Karte selbst (siehe up()).
             Buttons hätten touch-action:auto (nicht vererbt) und würden den Zug nach unten schlucken. */}
         {media.length > 1 && (
@@ -204,16 +237,19 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
           <h2 className="font-display font-bold text-white text-2xl leading-tight" style={{ textShadow: '0 2px 12px rgba(0,0,0,.6)' }}>{card.name}</h2>
           {!articleOpen && card.short && <p className="text-white/85 text-[13px] mt-1 line-clamp-2 leading-snug">{card.short}</p>}
           {articleOpen ? (
-            <div className="flex items-center gap-3 mt-1.5">
-              {card.reviews > 0 && (
-                <span className="flex items-center gap-1.5">
-                  <Stars rating={card.rating} />
-                  <span className="text-white/90 text-xs font-bold">{card.rating}</span>
-                  <span className="text-white/60 text-[10px]">({card.reviews})</span>
-                </span>
-              )}
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="text-white/75 text-xs flex items-center gap-1">
                 <i className="fa-solid fa-location-dot text-[10px]" />{card.region}
+              </span>
+              {travel && (
+                <span className="text-white/75 text-xs flex items-center gap-1.5">
+                  <i className={`fa-solid ${travel.icon} text-[10px]`} style={{ color: 'var(--color-amber)' }} />{travel.text}
+                </span>
+              )}
+              <span className="flex items-center gap-1.5">
+                <Stars rating={card.rating} />
+                <span className="text-white/90 text-xs font-semibold">{card.rating}</span>
+                <span className="text-white/60 text-[10px]">({card.reviews})</span>
               </span>
             </div>
           ) : (
