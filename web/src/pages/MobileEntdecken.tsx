@@ -184,15 +184,12 @@ export function MobileEntdecken() {
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>(entdeckenCache.sheetSnap);
   const [swipeFeed, setSwipeFeed] = useState<Place[]>([]);   // stabiler Snapshot beim Öffnen (Index springt sonst)
   const [swipeFocus, setSwipeFocus] = useState<Place | null>(null);   // aktueller Swipe-Ort (Karte fokussiert ihn)
-  const [placeOpen, setPlaceOpen] = useState<string | null>(null);   // Ortsdetails im ziehbaren Overlay
-  const [detailIn, setDetailIn] = useState(false);                   // Slide-up-Zustand
-  const [detailDragY, setDetailDragY] = useState(0);
-  const [detailDragging, setDetailDragging] = useState(false);
-  const detailDrag = useRef<{ startY: number; moved: number } | null>(null);
-  const closeDetail = () => { setPlaceOpen(null); setDetailDragY(0); };
   // Rast 2 IST der Swipe — es gibt kein eigenes Sheet und keine eigene Seite mehr.
   const swipeMode = sheetSnap === 2;
-  const [swipeArticle, setSwipeArticle] = useState(false);   // Artikel unter dem Swipe-Bild (gleiche Seite)
+  const [swipeArticle, setSwipeArticle] = useState(false);   // Artikel unter dem Bild (gleiche Seite)
+  // „Zeig mir DIESEN Ort" (Liste/Pin/ähnlicher Ort) statt „lass mich durchgehen" (Swipe):
+  // Einzel-Feed, Artikel sofort offen, keine Entscheidungs-Buttons, runter führt direkt zur Liste.
+  const [articleOnly, setArticleOnly] = useState(false);
   // Aus dem Swipe zurück in die Liste und zu dem Ort scrollen, auf dem man war
   const closeSwipeToList = (to: SheetSnap = 1) => {
     const focusId = swipeFocus?.id ?? null;
@@ -202,6 +199,19 @@ export function MobileEntdecken() {
       setTimeout(() => listRef.current?.querySelector(`[data-place-id="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: 'auto' }), 90);
     }
   };
+  /**
+   * Einen bestimmten Ort öffnen (Liste, Pin, „ähnlicher Ort"). Wer gezielt tippt, hat die Auswahl
+   * schon getroffen — also direkt der Artikel, ohne den Umweg über den Swipe-Bildschirm und ohne
+   * eine Entscheidungsfrage, die niemand gestellt hat. Runterziehen führt zurück in die Liste.
+   */
+  const openPlace = (p: Place) => {
+    setSwipeFeed([p]);      // Einzel-Feed: es geht um GENAU diesen Ort
+    setSwipeFocus(p);       // direkt setzen — sonst rendert der Artikel einen Frame lang den alten Ort
+    setArticleOnly(true);
+    setSwipeArticle(true);
+    setSheetSnap(2);
+  };
+  const openPlaceId = (id: string) => { const p = places.find(x => x.id === id); if (p) openPlace(p); };
   const [sheetDragY, setSheetDragY] = useState(0);
   const [sheetDragging, setSheetDragging] = useState(false);
   const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
@@ -301,11 +311,12 @@ export function MobileEntdecken() {
     closeSwipeToList(to);
   }
   // „Swipen" zieht nur das Overlay auf die oberste Rast — dort IST der Swipe.
-  function goSwipe() { setSheetSnap(2); }
+  function goSwipe() { setArticleOnly(false); setSheetSnap(2); }
   // Ankommen auf Rast 2 (egal ob per Button oder mit der Hand hochgezogen): Feed einfrieren.
   // Snapshot, sonst indiziert der Feed beim Weglegen neu → Index springt.
   useEffect(() => {
-    if (!swipeMode) { setSwipeFocus(null); setSwipeArticle(false); return; }
+    if (!swipeMode) { setSwipeFocus(null); setSwipeArticle(false); setArticleOnly(false); return; }
+    if (articleOnly) return;   // gezielt geöffnet: Einzel-Feed steht schon, kein Gate (Liste ist öffentlich)
     if (!gate(() => setSwipeFeed(swipePlaces), 'Melde dich an, um den Swipe-Modus zu nutzen.')) setSheetSnap(1);
   }, [swipeMode]); // eslint-disable-line
   // Im Swipe fährt die Bottom-Nav bis auf den Kompass-Überstand runter. Aufräumen beim Verlassen
@@ -313,26 +324,6 @@ export function MobileEntdecken() {
   const setNavPeek = useUiStore(s => s.setNavPeek);
   useEffect(() => { setNavPeek(swipeMode); return () => setNavPeek(false); }, [swipeMode, setNavPeek]);
 
-  // Detail-Overlay: beim Öffnen von unten hereinfahren (Single-Page-Feel, Karte bleibt dahinter)
-  useEffect(() => {
-    if (!placeOpen) { setDetailIn(false); return; }
-    setDetailDragY(0);
-    if (detailIn) return;   // schon offen (Ort → Ort, z.B. „ähnliche Orte") → nicht neu einfahren
-    const r = requestAnimationFrame(() => setDetailIn(true));
-    return () => cancelAnimationFrame(r);
-  }, [placeOpen]); // eslint-disable-line
-  function onDetailStart(e: React.TouchEvent) { detailDrag.current = { startY: e.touches[0].clientY, moved: 0 }; setDetailDragging(true); }
-  function onDetailMove(e: React.TouchEvent) {
-    const d = detailDrag.current; if (!d) return;
-    const dy = e.touches[0].clientY - d.startY;
-    d.moved = Math.max(d.moved, Math.abs(dy));
-    setDetailDragY(Math.max(0, dy));   // nur nach unten ziehen
-  }
-  function onDetailEnd() {
-    const d = detailDrag.current; detailDrag.current = null; setDetailDragging(false);
-    if (!d) return;
-    if (detailDragY > 120) closeDetail(); else setDetailDragY(0);   // weit genug runter → schließen
-  }
   // Der Swipe wird direkt auf dem Bild gezogen (SwipeDeck): runter = zurück zur Liste (kein Zwischenzustand mehr).
   function onListTouchStart(e: React.TouchEvent) { const t = e.touches[0]; listSwipe.current = { x: t.clientX, y: t.clientY }; }
   function onListTouchEnd(e: React.TouchEvent) {
@@ -363,7 +354,7 @@ export function MobileEntdecken() {
     <Marker key={p.id} position={[p.lat!, p.lng!]}
       icon={p.id === highlightId ? purpleMarker : orangeMarker}
       zIndexOffset={p.id === highlightId ? 1000 : 0}
-      eventHandlers={{ click: () => setPlaceOpen(p.id) }} />
+      eventHandlers={{ click: () => openPlace(p) }} />
   )), [shownPlaces, highlightId]);
 
   return (
@@ -551,10 +542,11 @@ export function MobileEntdecken() {
               reachFrom={reachCenter} travelMode={reach.travelMode}
               articleOpen={swipeArticle}
               onOpenArticle={() => setSwipeArticle(true)}
-              onCloseArticle={() => setSwipeArticle(false)}
+              // Gezielt geöffnet → runter führt direkt in die Liste (kein Umweg über den Swipe).
+              onCloseArticle={() => (articleOnly ? closeSwipeToList() : setSwipeArticle(false))}
               article={swipeFocus && (
                 <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
-                  <PlaceDetailEmbed key={swipeFocus.id} id={swipeFocus.id} embedded inline onOpenPlace={setPlaceOpen} />
+                  <PlaceDetailEmbed key={swipeFocus.id} id={swipeFocus.id} embedded inline onOpenPlace={openPlaceId} />
                 </Suspense>
               )} />
           </div>
@@ -572,7 +564,7 @@ export function MobileEntdecken() {
               Keine Orte im Radius. Erhöhe Reisezeit/Radius oder ändere die Kategorie.
             </div>
           ) : listPlaces.map(({ p, dist }) => (
-            <button key={p.id} data-place-id={p.id} onClick={() => { if (justSwiped.current) return; setPlaceOpen(p.id); }}
+            <button key={p.id} data-place-id={p.id} onClick={() => { if (justSwiped.current) return; openPlace(p); }}
               className="w-full flex items-center gap-3 py-2 px-2 rounded-2xl text-left transition-colors active:scale-[0.99]"
               style={{ background: p.id === selectedId ? '#F1ECF4' : 'transparent' }}>
               <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
@@ -601,34 +593,6 @@ export function MobileEntdecken() {
       </div>
 
 
-      {/* ── Orts-Overlay als ziehbares Sheet: Karte bleibt dahinter, Griff runterziehen schließt. ──
-           Aus dem Swipe-Modus (hochziehen) fährt es nahtlos über die Karte; runterziehen führt zurück. */}
-      {placeOpen && (
-        <div className="fixed inset-0 z-[55]"
-          style={{ background: `rgba(248,246,251,${detailIn ? 0.72 : 0})`, backdropFilter: detailIn ? 'blur(6px)' : 'none', WebkitBackdropFilter: detailIn ? 'blur(6px)' : 'none', transition: 'background .3s ease, backdrop-filter .3s ease' }}
-          onClick={closeDetail}>
-          {/* Eingerückte Karte: links/rechts/oben bleibt ein heller Rand — passt besser als Full-Page */}
-          <div className="absolute left-2 right-2 bottom-0 flex flex-col rounded-t-[1.5rem] overflow-hidden bg-[var(--color-bg)]"
-            onClick={e => e.stopPropagation()}
-            style={{
-              top: 'calc(env(safe-area-inset-top) + 14px)',
-              transform: `translateY(${detailIn ? detailDragY : (typeof window !== 'undefined' ? window.innerHeight : 900)}px)`,
-              transition: detailDragging ? 'none' : 'transform .32s cubic-bezier(.32,.72,0,1)',
-              boxShadow: '0 -10px 40px rgba(52,37,76,0.22)',
-            }}>
-            {/* Zieh-Griff (nur hier schließt das Runterziehen — der Inhalt scrollt normal) */}
-            <div className="flex-shrink-0 flex justify-center pt-2 pb-1.5 bg-[var(--color-bg)]"
-              onTouchStart={onDetailStart} onTouchMove={onDetailMove} onTouchEnd={onDetailEnd} style={{ touchAction: 'none' }}>
-              <div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} />
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-              <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
-                <PlaceDetailEmbed key={placeOpen} id={placeOpen} embedded onOpenPlace={setPlaceOpen} onClose={closeDetail} />
-              </Suspense>
-            </div>
-          </div>
-        </div>
-      )}
     </AppShell>
   );
 }

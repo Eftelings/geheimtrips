@@ -100,8 +100,12 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     discoverApi.swipe(card.id, 'click', Date.now() - shownAt.current).catch(() => {});
     onOpenArticle?.();
   };
-  // Artikel immer oben beginnen — sonst hängt beim Öffnen die Scroll-Position des vorigen Orts drin
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [articleOpen, card?.id]);
+  // Neuer Ort / Artikel auf: oben beginnen und beim ersten Bild — sonst hängt die Scroll-Position
+  // bzw. der Bildindex des vorigen Orts drin (der neue hat den u.U. gar nicht).
+  useEffect(() => {
+    setImgIdx(0);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [articleOpen, card?.id]);
   const nextImg = (dir: 1 | -1) => { if (media.length > 1) setImgIdx(i => (i + dir + media.length) % media.length); };
   const likePhoto = () => {
     if (!card || !cur) return;
