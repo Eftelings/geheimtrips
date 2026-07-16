@@ -982,7 +982,7 @@ function VisitorContribPanel({ place, user, onDone, showToast }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export function PlaceDetailPage({ id: idProp, embedded, onOpenPlace, onClose }: { id?: string; embedded?: boolean; onOpenPlace?: (id: string) => void; onClose?: () => void } = {}) {
+export function PlaceDetailPage({ id: idProp, embedded, inline, onOpenPlace, onClose }: { id?: string; embedded?: boolean; inline?: boolean; onOpenPlace?: (id: string) => void; onClose?: () => void } = {}) {
   const { id: routeId } = useParams<{ id: string }>();
   const id = idProp ?? routeId;
   // Im Overlay: Ort→Ort-Links (z.B. ähnliche Orte) im Overlay öffnen statt Seitenwechsel;
@@ -1262,6 +1262,10 @@ export function PlaceDetailPage({ id: idProp, embedded, onOpenPlace, onClose }: 
 
   // ── Mobiles Bottom-Sheet über der Vollbildkarte ────────────────────────────
   const isMobile = useIsMobile(1024);
+  // `inline`: der Artikel hängt schon in einem fremden Sheet (Swipe-Overlay) und unter einem fremden
+  // Hero → hier KEINE eigene Karte, kein eigenes Sheet, kein eigener Griff, kein eigenes Titelbild.
+  // Sonst steckt ein Sheet im Sheet und es fühlt sich wieder wie eine eigene Seite an.
+  const sheeted = isMobile && !inline;
   const sheetScrollRef = useRef<HTMLDivElement>(null);
   const [sheetCollapsed, setSheetCollapsed] = useState(false);
   const [sheetDragY, setSheetDragY] = useState(0);
@@ -1649,7 +1653,7 @@ async function handleVerifyToggle() {
     <AppShell noHeader bare={embedded}>
 
       {/* ══ Mobil: Vollbildkarte im Hintergrund ══════════════════════════════ */}
-      {isMobile && place.lat && place.lng && (
+      {sheeted && place.lat && place.lng && (
         <div className="fixed inset-0 z-0" style={{ background: '#e8e4ee' }}>
           {embedded ? (
             // Im Karten-Overlay läuft schon eine Leaflet-Karte → hier keine zweite (Performance).
@@ -1684,7 +1688,7 @@ async function handleVerifyToggle() {
       )}
 
       {/* ══ Karten-Header (nur eingeklappt): Standort + Verkehrsmittel + Reisezeit (wie Startseite) ══ */}
-      {isMobile && sheetCollapsed && (
+      {sheeted && sheetCollapsed && (
         <div className="fixed top-0 left-0 right-0 z-20 px-3 pt-3 pb-5 flex flex-col gap-2"
           style={{ background: 'linear-gradient(to bottom, rgba(232,228,238,0.97) 62%, rgba(232,228,238,0))' }}>
 
@@ -1759,17 +1763,17 @@ async function handleVerifyToggle() {
 
       {/* ══ Detailseite: mobil ziehbares Bottom-Sheet, ab lg normaler Fluss ══ */}
       <div
-        className={isMobile
+        className={sheeted
           ? 'fixed inset-x-0 z-40 flex flex-col overflow-hidden rounded-t-[1.75rem] shadow-[0_-10px_44px_rgba(52,37,76,0.22)]'
           : 'contents'}
-        style={isMobile ? {
+        style={sheeted ? {
           top: '6vh', bottom: 0, background: '#FBF9FC',
           transform: `translateY(${sheetDragY}px)`,
           transition: sheetDragging ? 'none' : 'transform .34s cubic-bezier(.32,.72,0,1)',
         } : undefined}
       >
         {/* ── Sheet-Kopf: Griff + Karten-Infozeile (nur mobil) ──────────────── */}
-        {isMobile && (
+        {sheeted && (
           <div className="flex-shrink-0">
             {/* Zieh-Griff — antippen schaltet auf/zu, ziehen bewegt das Sheet */}
             <div onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd}
@@ -1868,7 +1872,7 @@ async function handleVerifyToggle() {
         )}
 
         {/* Scrollbarer Sheet-Inhalt — eingeklappt ausgeblendet (dann zählt nur die Vorschau) */}
-        <div ref={sheetScrollRef} className={isMobile ? (sheetCollapsed ? 'hidden' : 'flex-1 overflow-y-auto overscroll-contain') : 'contents'}>
+        <div ref={sheetScrollRef} className={sheeted ? (sheetCollapsed ? 'hidden' : 'flex-1 overflow-y-auto overscroll-contain') : 'contents'}>
 
       {/* „In Prüfung"-Banner — nur bei noch nicht freigegebenen Orten */}
       {place.isUserSubmitted && (
@@ -1965,11 +1969,14 @@ async function handleVerifyToggle() {
 
         {/* ── Galerie: mobil Swipe-Slider, ab sm 3-Panel-Mosaik ─── */}
         <div className="max-w-7xl mx-auto px-4 pb-4">
-          {/* Mobil: Titelbild als Swipe-Slider mit Dots + „X Bilder"-Badge */}
-          <div className="sm:hidden">
-            <MobileHero place={place} photos={allPhotos}
-              onOpen={idx => setLightboxIdx(idx)} onReviews={() => setShowReviews(v => !v)} />
-          </div>
+          {/* Mobil: Titelbild als Swipe-Slider mit Dots + „X Bilder"-Badge.
+              `inline`: das Swipe-Bild darüber IST der Hero — hier kein zweites Titelbild. */}
+          {!inline && (
+            <div className="sm:hidden">
+              <MobileHero place={place} photos={allPhotos}
+                onOpen={idx => setLightboxIdx(idx)} onReviews={() => setShowReviews(v => !v)} />
+            </div>
+          )}
           {/* Ab sm: bestehendes 3-Panel-Mosaik */}
           <div className="hidden sm:flex gap-2" style={{ height: GALLERY_H }}>
 

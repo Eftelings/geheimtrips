@@ -188,10 +188,11 @@ export function MobileEntdecken() {
   const closeDetail = () => { setPlaceOpen(null); setDetailDragY(0); };
   // Rast 2 IST der Swipe — es gibt kein eigenes Sheet und keine eigene Seite mehr.
   const swipeMode = sheetSnap === 2;
-  // Aus dem Swipe zurück in die Liste (Rast 1) und zu dem Ort scrollen, auf dem man war
-  const closeSwipeToList = () => {
+  const [swipeArticle, setSwipeArticle] = useState(false);   // Artikel unter dem Swipe-Bild (gleiche Seite)
+  // Aus dem Swipe zurück in die Liste und zu dem Ort scrollen, auf dem man war
+  const closeSwipeToList = (to: SheetSnap = 1) => {
     const focusId = swipeFocus?.id ?? null;
-    setSheetSnap(1);
+    setSheetSnap(to);
     if (focusId) {
       setSelectedId(focusId);
       setTimeout(() => listRef.current?.querySelector(`[data-place-id="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: 'auto' }), 90);
@@ -271,21 +272,36 @@ export function MobileEntdecken() {
     d.moved = Math.max(d.moved, Math.abs(delta));
     setSheetDragY(Math.min(Math.max(d.startOffset + delta, 0), snap.offs[0]));
   }
+  /** Nächstgelegene Rast zu einem Zug-Offset — eine Regel für Griff UND Bild. */
+  function settleSnap(y: number): SheetSnap {
+    let best: SheetSnap = 0, bd = Infinity;
+    snap.offs.forEach((v, i) => { const dist = Math.abs(v - y); if (dist < bd) { bd = dist; best = i as SheetSnap; } });
+    return best;
+  }
   function onSheetTouchEnd() {
     const d = sheetDrag.current; sheetDrag.current = null; setSheetDragging(false);
     if (!d) return;
     if (d.moved < 6) { setSheetSnap(s => (s === 1 ? 0 : 1)); return; }   // Tippen = eine Stufe
-    // In die nächstgelegene Rast einrasten
-    let best: SheetSnap = 0, bd = Infinity;
-    snap.offs.forEach((v, i) => { const dist = Math.abs(v - sheetDragY); if (dist < bd) { bd = dist; best = i as SheetSnap; } });
-    setSheetSnap(best);
+    setSheetSnap(settleSnap(sheetDragY));
+  }
+  // Runterziehen auf dem Swipe-Bild zieht das Overlay selbst — dieselbe Mechanik wie am Griff,
+  // damit die Karte nicht zusätzlich schrumpft (kein Morph) und die Filter im Takt mitlaufen.
+  function onDeckPull(dy: number) {
+    if (!sheetDragging) setSheetDragging(true);
+    setSheetDragY(Math.min(Math.max(dy, 0), snap.offs[0]));
+  }
+  function onDeckPullEnd(dy: number) {
+    setSheetDragging(false);
+    const to = settleSnap(Math.min(Math.max(dy, 0), snap.offs[0]));
+    if (to === 2) { setSheetSnap(2); return; }   // nicht weit genug → zurück in den Swipe
+    closeSwipeToList(to);
   }
   // „Swipen" zieht nur das Overlay auf die oberste Rast — dort IST der Swipe.
   function goSwipe() { setSheetSnap(2); }
   // Ankommen auf Rast 2 (egal ob per Button oder mit der Hand hochgezogen): Feed einfrieren.
   // Snapshot, sonst indiziert der Feed beim Weglegen neu → Index springt.
   useEffect(() => {
-    if (!swipeMode) { setSwipeFocus(null); return; }
+    if (!swipeMode) { setSwipeFocus(null); setSwipeArticle(false); return; }
     if (!gate(() => setSwipeFeed(swipePlaces), 'Melde dich an, um den Swipe-Modus zu nutzen.')) setSheetSnap(1);
   }, [swipeMode]); // eslint-disable-line
 
@@ -517,10 +533,20 @@ export function MobileEntdecken() {
           </div>
         </div>
 
-        {/* Rast 2: der Swipe-Ort füllt dasselbe Overlay (Bild oben abgerundet durchs Sheet selbst) */}
+        {/* Rast 2: der Swipe-Ort füllt dasselbe Overlay (Bild oben abgerundet durchs Sheet selbst).
+            Hochwischen klappt den Artikel DARUNTER auf — kein zweites Overlay, gleiche Seite. */}
         {swipeMode && (
           <div className="absolute inset-0 z-20">
-            <SwipeDeck places={swipeFeed} onOpenDetail={id => setPlaceOpen(id)} onCardChange={setSwipeFocus} onDragToList={closeSwipeToList} />
+            <SwipeDeck places={swipeFeed} onCardChange={setSwipeFocus}
+              onPullDown={onDeckPull} onPullDownEnd={onDeckPullEnd}
+              articleOpen={swipeArticle}
+              onOpenArticle={() => setSwipeArticle(true)}
+              onCloseArticle={() => setSwipeArticle(false)}
+              article={swipeFocus && (
+                <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
+                  <PlaceDetailEmbed key={swipeFocus.id} id={swipeFocus.id} embedded inline onOpenPlace={setPlaceOpen} />
+                </Suspense>
+              )} />
           </div>
         )}
         {/* Scrollbare Liste (nach rechts wischen startet den Swipe). Scroll-Fuß = Bottom-Nav + der
