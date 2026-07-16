@@ -323,8 +323,10 @@ export function MobileEntdecken() {
   }
   const fmtDist = (d: number) => d < 1 ? `${Math.round(d * 1000)} m` : `${d < 10 ? d.toFixed(1) : Math.round(d)} km`;
 
-  // Rast 2 (= Swipe) → die Filter räumen hinter dem Header das Feld; dort wäre sowieso das Sheet.
-  const filtersAway = swipeMode;
+  // Die Filter hängen am selben Wert wie das Sheet: 0 = Rast 1 (Filter da), 1 = Rast 2 (hinter dem
+  // Header). Beim Ziehen folgen sie damit dem Finger 1:1, beim Loslassen teilen sie sich die
+  // Animation des Sheets (gleiche Dauer/Kurve) — statt eigenständig loszufliegen.
+  const filterHide = Math.min(1, Math.max(0, 1 - sheetDragY / Math.max(1, snap.offs[1])));
 
   const toolBtn = 'w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0';
   const toolShadow = { boxShadow: '0 2px 10px rgba(52,37,76,0.18)' } as const;
@@ -367,16 +369,18 @@ export function MobileEntdecken() {
         </div>
       )}
 
-      {/* Toolbar — direkt unter dem Standard-Header. Sobald das Overlay ganz hoch geht (Rast 2)
-          bzw. beim Swipen fliegt sie nach oben HINTER den (opaken) Header (z unter Header z-20),
-          nicht darüber — dort wäre sie sonst vom Sheet verdeckt. */}
+      {/* Toolbar — direkt unter dem Standard-Header. Sie wischt im Gleichtakt mit dem Overlay nach
+          oben HINTER den (opaken) Header (z unter Header z-20), nicht darüber — dort wäre sie sonst
+          vom Sheet verdeckt. Timing bewusst identisch zum Sheet, sonst laufen sie auseinander. */}
       <div className="fixed left-0 right-0 z-[15] px-3 flex flex-col gap-2"
         style={{
           top: '52px',
-          transform: filtersAway ? 'translateY(-160%)' : 'translateY(0)',
-          opacity: filtersAway ? 0 : 1,
-          pointerEvents: filtersAway ? 'none' : 'auto',
-          transition: 'transform .32s cubic-bezier(.32,.72,0,1), opacity .28s ease',
+          transform: `translateY(${-160 * filterHide}%)`,
+          // Weggenommen werden sie vom Header; die Deckkraft geht erst spät runter (hoch 3),
+          // sonst lösen sie sich schon auf, während sie noch voll im Bild stehen.
+          opacity: 1 - filterHide ** 3,
+          pointerEvents: filterHide > 0.02 ? 'none' : 'auto',
+          transition: sheetDragging ? 'none' : 'transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1)',
         }}>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setPanel(panel === 'cat' ? null : 'cat')} className={toolBtn}
