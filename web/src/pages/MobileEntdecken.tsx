@@ -178,7 +178,6 @@ export function MobileEntdecken() {
   // ── Ziehbares Listen-Sheet ────────────────────────────────────────────────
   const listRef = useRef<HTMLDivElement>(null);
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>(entdeckenCache.sheetSnap);
-  const [swipeOpen, setSwipeOpen] = useState(false);   // Swipe-Sheet über der Karte
   const [swipeFeed, setSwipeFeed] = useState<Place[]>([]);   // stabiler Snapshot beim Öffnen (Index springt sonst)
   const [swipeFocus, setSwipeFocus] = useState<Place | null>(null);   // aktueller Swipe-Ort (Karte fokussiert ihn)
   const [placeOpen, setPlaceOpen] = useState<string | null>(null);   // Ortsdetails im ziehbaren Overlay
@@ -187,15 +186,15 @@ export function MobileEntdecken() {
   const [detailDragging, setDetailDragging] = useState(false);
   const detailDrag = useRef<{ startY: number; moved: number } | null>(null);
   const closeDetail = () => { setPlaceOpen(null); setDetailDragY(0); };
-  const closeSwipe = () => { setSwipeOpen(false); setSwipeFocus(null); };
-  // Aus dem Swipe runterziehen → zurück zur Liste, dabei zum aktuellen Ort scrollen (der, auf dem man war)
+  // Rast 2 IST der Swipe — es gibt kein eigenes Sheet und keine eigene Seite mehr.
+  const swipeMode = sheetSnap === 2;
+  // Aus dem Swipe zurück in die Liste (Rast 1) und zu dem Ort scrollen, auf dem man war
   const closeSwipeToList = () => {
     const focusId = swipeFocus?.id ?? null;
-    closeSwipe();
+    setSheetSnap(1);
     if (focusId) {
       setSelectedId(focusId);
-      setSheetSnap(1);
-      setTimeout(() => listRef.current?.querySelector(`[data-place-id="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 90);
+      setTimeout(() => listRef.current?.querySelector(`[data-place-id="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: 'auto' }), 90);
     }
   };
   const [sheetDragY, setSheetDragY] = useState(0);
@@ -231,7 +230,10 @@ export function MobileEntdecken() {
     Object.assign(entdeckenCache, {
       searchCenter, searchLabel, userCoords, radiusKm, mode, tagSel,
       travelMode: reach.travelMode, travelMinutes: reach.travelMinutes,
-      selectedId, sheetSnap, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
+      selectedId, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
+      // Rast 2 NICHT merken: der Swipe-Feed ist ein Snapshot dieser Sitzung — beim Neuaufbau
+      // stünde man sonst im Swipe vor einem leeren Feed. „Zurück" landet in der Liste.
+      sheetSnap: swipeMode ? 1 : sheetSnap,
     });
   });
   // Beim Öffnen zuletzt gemerkte Scroll-Position der Liste wiederherstellen
@@ -278,8 +280,14 @@ export function MobileEntdecken() {
     snap.offs.forEach((v, i) => { const dist = Math.abs(v - sheetDragY); if (dist < bd) { bd = dist; best = i as SheetSnap; } });
     setSheetSnap(best);
   }
-  // Swipe-Sheet über der Karte — Snapshot des gefilterten Feeds (stabiler Index beim Weglegen)
-  function goSwipe() { gate(() => { setSwipeFeed(swipePlaces); setSwipeOpen(true); }, 'Melde dich an, um den Swipe-Modus zu nutzen.'); }
+  // „Swipen" zieht nur das Overlay auf die oberste Rast — dort IST der Swipe.
+  function goSwipe() { setSheetSnap(2); }
+  // Ankommen auf Rast 2 (egal ob per Button oder mit der Hand hochgezogen): Feed einfrieren.
+  // Snapshot, sonst indiziert der Feed beim Weglegen neu → Index springt.
+  useEffect(() => {
+    if (!swipeMode) { setSwipeFocus(null); return; }
+    if (!gate(() => setSwipeFeed(swipePlaces), 'Melde dich an, um den Swipe-Modus zu nutzen.')) setSheetSnap(1);
+  }, [swipeMode]); // eslint-disable-line
 
   // Detail-Overlay: beim Öffnen von unten hereinfahren (Single-Page-Feel, Karte bleibt dahinter)
   useEffect(() => {
@@ -315,15 +323,15 @@ export function MobileEntdecken() {
   }
   const fmtDist = (d: number) => d < 1 ? `${Math.round(d * 1000)} m` : `${d < 10 ? d.toFixed(1) : Math.round(d)} km`;
 
-  // Ganz hochgezogenes Overlay (Rast 2) bzw. Swipe → die Filter räumen hinter dem Header das Feld.
-  const filtersAway = swipeOpen || sheetSnap === 2;
+  // Rast 2 (= Swipe) → die Filter räumen hinter dem Header das Feld; dort wäre sowieso das Sheet.
+  const filtersAway = swipeMode;
 
   const toolBtn = 'w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0';
   const toolShadow = { boxShadow: '0 2px 10px rgba(52,37,76,0.18)' } as const;
 
   // Marker memoisieren → beim Sheet-Ziehen (häufige Re-Renders) werden NICHT alle Leaflet-Marker
   // neu gebunden (das war die Hänger-Ursache auf Mobil).
-  const highlightId = swipeOpen ? swipeFocus?.id : preview?.id;
+  const highlightId = swipeMode ? swipeFocus?.id : preview?.id;
   // Pin-Klick öffnet direkt das Orts-Overlay (nicht erst die Liste)
   const markerEls = useMemo(() => shownPlaces.map(p => (
     <Marker key={p.id} position={[p.lat!, p.lng!]}
@@ -346,7 +354,7 @@ export function MobileEntdecken() {
           <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
           {markerEls}
           <FitReach center={reachCenter} travel={travel} radiusKm={radiusKm} fallback={fallbackPts} />
-          <SwipeFlyTo lat={swipeOpen ? swipeFocus?.lat ?? null : null} lng={swipeOpen ? swipeFocus?.lng ?? null : null} />
+          <SwipeFlyTo lat={swipeMode ? swipeFocus?.lat ?? null : null} lng={swipeMode ? swipeFocus?.lng ?? null : null} />
         </MapContainer>
       </div>
 
@@ -475,34 +483,46 @@ export function MobileEntdecken() {
         </>
       )}
 
-      {/* Orts-Liste als ziehbares Bottom-Sheet (nach Entfernung sortiert) — beim Swipen ausgeblendet */}
-      <div className="fixed left-0 right-0 z-20 flex flex-col overflow-hidden rounded-t-[1.75rem]"
+      {/* Das EINE Overlay: Rast 0/1 = Liste, Rast 2 = Swipe. Kein zweites Sheet, keine neue Seite.
+          Im Swipe muss es über die Bottom-Nav (z-30), sonst verdeckt die die Auswahl-Buttons. */}
+      <div className="fixed left-0 right-0 flex flex-col overflow-hidden rounded-t-[1.75rem]"
         style={{
+          zIndex: swipeMode ? 40 : 20,
           top: snap.top, bottom: 0, background: '#FBF9FC',
           boxShadow: '0 -8px 30px rgba(52,37,76,0.18)',
           transform: `translateY(${sheetDragY}px)`,
           transition: sheetDragging ? 'none' : 'transform .34s cubic-bezier(.32,.72,0,1)',
-          display: swipeOpen ? 'none' : undefined,
         }}>
-        {/* Griff + Kopf (Zieh-Bereich) */}
-        <div className="flex-shrink-0" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
-          <div className="flex justify-center pt-2.5 pb-1.5"><div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} /></div>
+        {/* Griff + Kopf (Zieh-Bereich). Im Swipe schwebt er über dem Full-Bleed-Bild (z-30 über dem
+            Deck) — gleiche Stelle, gleicher Button, nur andere Farben. */}
+        <div className="flex-shrink-0 relative z-30" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
+          <div className="flex justify-center pt-2.5 pb-1.5">
+            <div className="w-10 h-1.5 rounded-full transition-colors" style={{ background: swipeMode ? 'rgba(255,255,255,.6)' : '#d9cfe2' }} />
+          </div>
           <div className="px-4 pb-2.5 flex items-center justify-between gap-2">
-            <p className="font-display font-bold text-[var(--color-aubergine)]">
+            <p className="font-display font-bold text-[var(--color-aubergine)] transition-opacity"
+              style={{ opacity: swipeMode ? 0 : 1 }}>
               {listPlaces.length} {listPlaces.length === 1 ? 'Ort' : 'Orte'}{reachCenter ? ' in der Nähe' : ''}
             </p>
-            <button onClick={goSwipe}
+            <button onClick={() => (swipeMode ? closeSwipeToList() : goSwipe())}
               onTouchStart={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold flex-shrink-0"
-              style={{ background: 'var(--color-amber)', color: 'white' }}>
-              <i className="fa-solid fa-layer-group" /> Swipen
+              style={{ background: 'var(--color-amber)', color: 'white', boxShadow: swipeMode ? '0 2px 8px rgba(52,37,76,0.35)' : undefined }}>
+              <i className={`fa-solid ${swipeMode ? 'fa-list' : 'fa-layer-group'}`} />{swipeMode ? 'Liste' : 'Swipen'}
             </button>
           </div>
         </div>
-        {/* Scrollbare Liste — nach rechts wischen startet den Swipe-Modus */}
-        {/* Scroll-Fuß = Bottom-Nav + der Teil des Sheets, der in dieser Rast unter dem Bildschirmrand
-            hängt — sonst wären die letzten Orte nicht erreichbar. Bewusst an der RAST statt am
-            laufenden Zug: sonst würde die Liste bei jedem Frame neu umbrechen. */}
+
+        {/* Rast 2: der Swipe-Ort füllt dasselbe Overlay (Bild oben abgerundet durchs Sheet selbst) */}
+        {swipeMode && (
+          <div className="absolute inset-0 z-20">
+            <SwipeDeck places={swipeFeed} onOpenDetail={id => setPlaceOpen(id)} onCardChange={setSwipeFocus} onDragToList={closeSwipeToList} />
+          </div>
+        )}
+        {/* Scrollbare Liste (nach rechts wischen startet den Swipe). Scroll-Fuß = Bottom-Nav + der
+            Teil des Sheets, der in dieser Rast unter dem Bildschirmrand hängt — sonst wären die
+            letzten Orte nicht erreichbar. Bewusst an der RAST statt am laufenden Zug: sonst würde
+            die Liste bei jedem Frame neu umbrechen. */}
         <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain px-3"
           style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + ${88 + snap.offs[sheetSnap]}px)` }}
           onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd}>
@@ -540,36 +560,6 @@ export function MobileEntdecken() {
         </div>
       </div>
 
-      {/* ── Swipe-Sheet über der Karte: oben bleibt Karte sichtbar, runterziehen zeigt den aktuellen Ort ── */}
-      {swipeOpen && (
-        <>
-          {/* aktueller Ort — Label auf dem schmalen Karten-Streifen über dem Bild */}
-          {swipeFocus && (
-            <div className="fixed left-1/2 -translate-x-1/2 z-20 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top) + 56px)' }}>
-              <span className="bg-white/90 backdrop-blur px-3 py-1.5 rounded-full text-xs font-bold text-[var(--color-aubergine)] shadow-sm whitespace-nowrap">
-                <i className="fa-solid fa-location-dot text-[var(--color-amber)] mr-1.5" />{swipeFocus.name}
-              </span>
-            </div>
-          )}
-          <div className="fixed left-0 right-0 bottom-0 z-40 overflow-hidden rounded-t-[1.75rem]"
-            style={{ top: '12vh', boxShadow: '0 -8px 30px rgba(52,37,76,0.22)' }}>
-            {/* Full-Bleed: das Bild selbst ist oben abgerundet — kein weißer Hintergrund. Runterziehen (auf dem Bild) → Liste. */}
-            <div className="absolute inset-0">
-              <SwipeDeck places={swipeFeed} onOpenDetail={id => setPlaceOpen(id)} onCardChange={setSwipeFocus} onDragToList={closeSwipeToList} />
-            </div>
-            {/* Zieh-Hinweis (nur Deko) */}
-            <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-              <div className="w-10 h-1.5 rounded-full bg-white/60" />
-            </div>
-            {/* Ansicht wechseln — gleiche Farbe & Position wie „Swipen" in der Liste (amber, oben rechts) */}
-            <button onClick={closeSwipe}
-              className="absolute top-2.5 right-3 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white"
-              style={{ background: 'var(--color-amber)', boxShadow: '0 2px 8px rgba(52,37,76,0.35)' }}>
-              <i className="fa-solid fa-list" />Liste
-            </button>
-          </div>
-        </>
-      )}
 
       {/* ── Orts-Overlay als ziehbares Sheet: Karte bleibt dahinter, Griff runterziehen schließt. ──
            Aus dem Swipe-Modus (hochziehen) fährt es nahtlos über die Karte; runterziehen führt zurück. */}
