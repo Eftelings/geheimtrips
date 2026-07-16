@@ -15,6 +15,7 @@ import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagF
 import type { TagSelection } from '../components/ui/TagFilter.js';
 import { SwipeDeck } from '../components/ui/SwipeDeck.js';
 import { useRequireAuth } from '../hooks/useRequireAuth.js';
+import { useUiStore } from '../store/useUiStore.js';
 import { MAP_LAYERS, TILE_URL, HYBRID_ROADS, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../utils/mapTiles.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
@@ -147,6 +148,9 @@ export function MobileEntdecken() {
     if (mode === 'foryou') {
       // „Für dich" (Standard): Besuchtes raus, nach Affinität sortiert. Gemerkte Gruppen priorisiert.
       const pool = base.filter(p => !visitedIds.has(p.id));
+      // Im Radius alles schon gesehen? Dann lieber wie „Alle" zeigen als eine leere Karte —
+      // eine leere Entdecken-Seite ist die schlechteste aller Antworten.
+      if (!pool.length) return base;
       const likedGroups = new Set(
         places.filter(p => savedIds.has(p.id)).map(p => tagInfoFrom(vocab, p.tagSlug)?.groupSlug).filter(Boolean),
       );
@@ -304,6 +308,10 @@ export function MobileEntdecken() {
     if (!swipeMode) { setSwipeFocus(null); setSwipeArticle(false); return; }
     if (!gate(() => setSwipeFeed(swipePlaces), 'Melde dich an, um den Swipe-Modus zu nutzen.')) setSheetSnap(1);
   }, [swipeMode]); // eslint-disable-line
+  // Im Swipe fährt die Bottom-Nav bis auf den Kompass-Überstand runter. Aufräumen beim Verlassen
+  // ist Pflicht — sonst bliebe sie auf der nächsten Seite versteckt.
+  const setNavPeek = useUiStore(s => s.setNavPeek);
+  useEffect(() => { setNavPeek(swipeMode); return () => setNavPeek(false); }, [swipeMode, setNavPeek]);
 
   // Detail-Overlay: beim Öffnen von unten hereinfahren (Single-Page-Feel, Karte bleibt dahinter)
   useEffect(() => {
@@ -504,10 +512,9 @@ export function MobileEntdecken() {
       )}
 
       {/* Das EINE Overlay: Rast 0/1 = Liste, Rast 2 = Swipe. Kein zweites Sheet, keine neue Seite.
-          Im Swipe muss es über die Bottom-Nav (z-30), sonst verdeckt die die Auswahl-Buttons. */}
-      <div className="fixed left-0 right-0 flex flex-col overflow-hidden rounded-t-[1.75rem]"
+          Liegt immer UNTER der Bottom-Nav (z-50) — die fährt im Swipe selbst aus dem Weg. */}
+      <div className="fixed left-0 right-0 z-20 flex flex-col overflow-hidden rounded-t-[1.75rem]"
         style={{
-          zIndex: swipeMode ? 40 : 20,
           top: snap.top, bottom: 0, background: '#FBF9FC',
           boxShadow: '0 -8px 30px rgba(52,37,76,0.18)',
           transform: `translateY(${sheetDragY}px)`,

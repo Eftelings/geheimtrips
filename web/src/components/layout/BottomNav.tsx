@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useRequireAuth } from '../../hooks/useRequireAuth.js';
+import { useUiStore } from '../../store/useUiStore.js';
 
 const LEFT_TABS = [
   { to: '/meine-orte',  icon: 'fa-bookmark',       label: 'Meine Orte',    reason: 'Melde dich an, um deine gemerkten Orte zu sehen.' },
@@ -13,13 +14,18 @@ const RIGHT_TABS = [
 export function BottomNav() {
   const navigate = useNavigate();
   const { gate, isLoggedIn } = useRequireAuth();
+  const navPeek = useUiStore(s => s.navPeek);
   // Ausgeloggt: Klick öffnet das Login-Lightbox statt zu navigieren
   const tabClick = (e: React.MouseEvent, reason: string) => {
     if (!isLoggedIn) { e.preventDefault(); gate(undefined, reason); }
   };
 
+  // z-50: die Nav liegt ÜBER den Karten-Overlays (Sheet z-20/z-40), nicht darunter.
+  // `navPeek` (Swipe-Modus) schiebt sie um genau ihre eigene Höhe runter — stehen bleibt der
+  // Überstand des Kompasses (der FAB ragt per -mt-5 aus der Leiste heraus).
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--color-bg-soft)] z-30 pb-safe md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--color-bg-soft)] z-50 pb-safe md:hidden"
+      style={{ transform: navPeek ? 'translateY(100%)' : 'translateY(0)', transition: 'transform .34s cubic-bezier(.32,.72,0,1)' }}>
       <div className="flex items-end">
         {/* Links */}
         {LEFT_TABS.map(({ to, icon, label, reason }) => (
@@ -29,7 +35,7 @@ export function BottomNav() {
             onClick={e => tabClick(e, reason)}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors text-xs font-medium ${
-                isActive ? 'text-[var(--color-amber)]' : 'text-[var(--color-lavender-lt)]'
+                isActive ? 'text-[var(--color-amber)]' : 'text-[var(--color-aubergine)]'
               }`
             }
           >
@@ -47,7 +53,7 @@ export function BottomNav() {
           >
             <i className="fa-solid fa-compass text-xl" />
           </button>
-          <span className="text-[9px] font-medium text-[var(--color-lavender-lt)] mt-0.5">Entdecken</span>
+          <span className="text-[9px] font-medium text-[var(--color-aubergine)] mt-0.5">Entdecken</span>
         </div>
 
         {/* Rechts */}
@@ -58,7 +64,7 @@ export function BottomNav() {
             onClick={e => tabClick(e, reason)}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors text-xs font-medium ${
-                isActive ? 'text-[var(--color-amber)]' : 'text-[var(--color-lavender-lt)]'
+                isActive ? 'text-[var(--color-amber)]' : 'text-[var(--color-aubergine)]'
               }`
             }
           >

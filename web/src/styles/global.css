@@ -10,10 +10,14 @@
     /* Verhindert horizontales Scrollen durch versehentlich zu breite Elemente.
        'clip' (statt 'hidden') bricht weder sticky-Header noch vertikales Scrollen. */
     overflow-x: clip;
+    /* Kein Gummiband/Pull-to-Refresh am Seitenrand: sonst lässt sich die ganze Seite samt
+       Header herumwischen. Innere Scroll-Container bleiben davon unberührt. */
+    overscroll-behavior-y: none;
   }
 
   body {
     margin: 0;
+    overscroll-behavior-y: none;
     background: var(--color-bg);
     color: var(--color-body);
     font-family: var(--font-ui);
