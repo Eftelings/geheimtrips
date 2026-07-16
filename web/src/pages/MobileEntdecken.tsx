@@ -107,7 +107,7 @@ function LongPressPick({ onPick }: { onPick: (lat: number, lng: number) => void 
 
 export function MobileEntdecken() {
   const navigate = useNavigate();
-  const { places, loadPlaces, savedIds, visitedIds, nopeIds, resetNopes, funnelAnswers } = useAppStore();
+  const { places, loadPlaces, savedIds, visitedIds, nopeIds, funnelAnswers } = useAppStore();
   const vocab = useTaxVocab();
   const { gate } = useRequireAuth();
 
@@ -139,9 +139,9 @@ export function MobileEntdecken() {
     if (!userCoords) requestGpsPosition().then(setUserCoords).catch(() => {});
   }, []); // eslint-disable-line
 
-  // Orte filtern: Kategorie + Reichweite + Modus. „Nein" (nope) wirkt NUR dort, wo es um Vorschläge
-  // geht (Für dich / Nur neue / Swipe-Feed) — „Alle" heißt alle, sonst wäre der Name gelogen.
-  const shownPlaces = useMemo(() => {
+  // Was überhaupt in Reichweite liegt (Kategorie + Radius/Isochrone) — noch ohne Modus-Regel.
+  // Karte/Liste und Swipe leiten getrennt davon ab: sie brauchen unterschiedliche Regeln.
+  const inRadius = useMemo(() => {
     let base = places.filter(p => p.lat != null && p.lng != null);
     if (catActive) base = base.filter(p => placeMatchesTag(p, tagSel, vocab));
     if (reachCenter) {
@@ -151,6 +151,12 @@ export function MobileEntdecken() {
         : distanceKm(reachCenter, { lat: p.lat!, lng: p.lng! }) <= (EFFECTIVE_SPEED_KMH[reach.travelMode as Transport] * reach.travelMinutes) / 60;
       base = base.filter(within);
     }
+    return base;
+  }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm]);
+
+  // Karte + Liste: Modus-Regel, „Nein" wirkt nur bei Vorschlägen — „Alle" heißt alle.
+  const shownPlaces = useMemo(() => {
+    const base = inRadius;
     if (mode === 'saved') return base.filter(p => savedIds.has(p.id));
     if (mode === 'new')   return base.filter(p => !visitedIds.has(p.id) && !savedIds.has(p.id) && !nopeIds.has(p.id));
     if (mode === 'foryou') {
@@ -169,13 +175,26 @@ export function MobileEntdecken() {
       return [...(primary.length ? primary : pool)].sort((a, b) => (b.match - a.match) || (b.rating - a.rating));
     }
     return base; // 'all' — wirklich alles, auch Weggewischtes und schon Beantwortetes
-  }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm, mode, savedIds, visitedIds, nopeIds]);
+  }, [inRadius, places, vocab, mode, savedIds, visitedIds, nopeIds]);
 
-  // Swipe-Feed: bereits gemerkte („Will ich hin") und weggewischte („Nein") raus — hier hängt das
-  // nicht am Modus, sonst legte „Alle" jedes „Nein" wieder auf den Stapel. „Vielleicht" bleibt
-  // bewusst drin: es hat keine bleibende Wirkung, die Orte kommen künftig weiter vor.
-  const swipePlaces = useMemo(
-    () => shownPlaces.filter(p => !savedIds.has(p.id) && !nopeIds.has(p.id)), [shownPlaces, savedIds, nopeIds]);
+  /**
+   * Der Swipe-Stapel folgt der eingestellten Ansicht:
+   *  · Alle        → wirklich alles im Radius, auch schon Beantwortetes (neue Entscheidung sticht)
+   *  · Nur gemerkte→ Aufräum-Modus über die eigene Sammlung
+   *  · Nur neue    → nur Unberührtes
+   *  · Für dich    → Unberührtes, nach Übereinstimmung sortiert
+   * Bewusst NICHT aus `shownPlaces` abgeleitet: dort greift der „Für dich"-Fallback (zeigt notfalls
+   * alles), wodurch die Liste Orte zeigte, die der Swipe direkt wieder rauswarf — genau der Grund
+   * für „Keine Orte im Filter" trotz Treffern auf der Karte.
+   */
+  const swipePlaces = useMemo(() => {
+    const base = inRadius;
+    if (mode === 'all')   return base;
+    if (mode === 'saved') return base.filter(p => savedIds.has(p.id));
+    const fresh = base.filter(p => !visitedIds.has(p.id) && !savedIds.has(p.id) && !nopeIds.has(p.id));
+    if (mode === 'new')   return fresh;
+    return [...fresh].sort((a, b) => (b.match - a.match) || (b.rating - a.rating));   // 'foryou'
+  }, [inRadius, mode, savedIds, visitedIds, nopeIds]);
 
   // Liste nach Entfernung sortiert (nächste zuerst)
   const listPlaces = useMemo(() => {
@@ -199,6 +218,13 @@ export function MobileEntdecken() {
   const swipeMode = sheetSnap === 2;
   const [swipeArticle, setSwipeArticle] = useState(false);   // Artikel unter dem Bild (gleiche Seite)
   const [reviewsSignal, setReviewsSignal] = useState(0);     // Sterne am Hero → Rezensionen aufklappen
+  // Stapel neu aufnehmen anfordern. Über einen Zähler statt direktem setSwipeFeed: Modus/Filter
+  // wirken erst im nächsten Render, ein Aufruf in derselben Runde griffe auf alte Werte.
+  const [feedNonce, setFeedNonce] = useState(0);
+  const recaptureFeed = () => setFeedNonce(n => n + 1);
+  // „Nochmal zeigen" = die Ansicht „Alle" — dieselbe Wirkung, nur als Knopf. Der Chip oben springt
+  // sichtbar mit, damit klar ist, warum plötzlich alles kommt (und man mit einem Tipp zurückkann).
+  const showAllAgain = () => { setMode('all'); recaptureFeed(); };
   // „Zeig mir DIESEN Ort" (Liste/Pin/ähnlicher Ort) statt „lass mich durchgehen" (Swipe):
   // Einzel-Feed, Artikel sofort offen, keine Entscheidungs-Buttons, runter führt direkt zur Liste.
   const [articleOnly, setArticleOnly] = useState(false);
@@ -335,12 +361,8 @@ export function MobileEntdecken() {
     if (!swipeMode) { setSwipeFocus(null); setSwipeArticle(false); setArticleOnly(false); return; }
     if (articleOnly) return;   // gezielt geöffnet: Einzel-Feed steht schon, kein Gate (Liste ist öffentlich)
     if (!gate(() => setSwipeFeed(swipePlaces), 'Melde dich an, um den Swipe-Modus zu nutzen.')) setSheetSnap(1);
-  }, [swipeMode]); // eslint-disable-line
-  // Feed leer, aber es gäbe Orte? Dann nachfassen — nach „Weggewischte zurückholen", oder wenn die
-  // Orte beim Betreten noch nicht geladen waren. Nur bei leerem Feed, sonst bricht der Snapshot.
-  useEffect(() => {
-    if (swipeMode && !articleOnly && swipeFeed.length === 0 && swipePlaces.length > 0) setSwipeFeed(swipePlaces);
-  }, [swipeMode, articleOnly, swipeFeed.length, swipePlaces]);
+  }, [swipeMode, feedNonce]); // eslint-disable-line
+
   // Im Swipe fährt die Bottom-Nav bis auf den Kompass-Überstand runter. Aufräumen beim Verlassen
   // ist Pflicht — sonst bliebe sie auf der nächsten Seite versteckt.
   const setNavPeek = useUiStore(s => s.setNavPeek);
@@ -367,6 +389,34 @@ export function MobileEntdecken() {
 
   const toolBtn = 'w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0';
   const toolShadow = { boxShadow: '0 2px 10px rgba(52,37,76,0.18)' } as const;
+
+  // Filter direkt auf der leeren Swipe-Seite: Standort, Verkehrsmittel und Radius sind genau die
+  // Stellschrauben, die hier fehlen. Sie schreiben in denselben State wie die Toolbar — die Karte
+  // übernimmt die Einstellung also mit. „Jetzt zeigen" nimmt den Stapel neu auf.
+  const swipeFilters = (
+    <div className="w-full max-w-sm mt-2 flex flex-col gap-2.5 text-left">
+      <button onClick={() => setPanel('loc')}
+        className="w-full flex items-center gap-2 bg-white rounded-xl h-11 px-3.5" style={toolShadow}>
+        <i className="fa-solid fa-location-dot text-sm flex-shrink-0" style={{ color: searchCenter ? '#F99039' : '#34254c' }} />
+        <span className="text-xs font-semibold text-[var(--color-aubergine)] truncate">
+          {searchLabel ?? (userCoords ? 'Mein Standort' : 'Standort wählen')}
+        </span>
+        <i className="fa-solid fa-chevron-right text-[10px] text-[var(--color-lavender-lt)] ml-auto" />
+      </button>
+      <div className="bg-white rounded-2xl p-3" style={toolShadow}>
+        <ReachControls
+          travelMode={reach.travelMode} setTravelMode={reach.setTravelMode}
+          travelMinutes={reach.travelMinutes} setTravelMinutes={reach.setTravelMinutes}
+          radiusKm={radiusKm} setRadiusKm={setRadiusKm}
+          iso={reach.iso} isoLoading={reach.isoLoading} />
+      </div>
+      <button onClick={recaptureFeed}
+        className="w-full h-11 rounded-2xl text-sm font-bold text-white active:scale-95 transition-transform"
+        style={{ background: 'var(--color-aubergine)' }}>
+        Jetzt zeigen
+      </button>
+    </div>
+  );
 
   // Der Ort, auf den die Karte fliegt: im Swipe die aktuelle Karte, sonst der, von dem man
   // zurückkommt. Beim Laden bewusst null — sonst kämen sich Flug und FitReach in die Quere.
@@ -483,7 +533,7 @@ export function MobileEntdecken() {
         <>
           {/* „Daneben tippen schließt" — aber nur NEBEN dem Overlay. Ein Backdrop über das ganze
               Bild würde das Hochziehen des Sheets schlucken, solange ein Filter offen ist. */}
-          <div className="fixed left-0 right-0 top-0 z-30" style={{ height: snap.top + sheetDragY }} onClick={() => setPanel(null)} />
+          <div className="fixed left-0 right-0 top-0 z-30" style={{ height: swipeMode ? vh : snap.top + sheetDragY }} onClick={() => setPanel(null)} />
           <div className="fixed left-3 right-3 z-40 bg-white rounded-2xl p-3.5"
             style={{ top: '108px', boxShadow: '0 14px 40px rgba(52,37,76,0.25)', maxHeight: '58vh', overflowY: 'auto' }}>
             {panel === 'cat' && <TagFilter value={tagSel} onChange={setTagSel} />}
@@ -575,7 +625,8 @@ export function MobileEntdecken() {
               onPullDown={onDeckPull} onPullDownEnd={onDeckPullEnd}
               onBackToList={() => closeSwipeToList()}
               onOpenReviews={() => setReviewsSignal(n => n + 1)}
-              radiusCount={shownPlaces.length} onResetNopes={resetNopes}
+              radiusCount={inRadius.length} onShowAll={mode === 'all' ? undefined : showAllAgain}
+              emptyFilters={swipeFilters}
               reachFrom={reachCenter} travelMode={reach.travelMode}
               articleOpen={swipeArticle}
               onOpenArticle={() => setSwipeArticle(true)}

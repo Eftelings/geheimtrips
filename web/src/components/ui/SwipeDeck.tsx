@@ -38,7 +38,7 @@ function Stars({ rating }: { rating: number }) {
  *  · runter→ bewegt das Overlay selbst (`onPullDown`), die Karte bleibt stehen
  * Bekommt einen stabilen Feed (Snapshot) übergeben, damit der Index beim Weglegen nicht springt.
  */
-export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd, onBackToList, onOpenReviews, radiusCount, onResetNopes, reachFrom, travelMode }: {
+export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd, onBackToList, onOpenReviews, radiusCount, onShowAll, emptyFilters, reachFrom, travelMode }: {
   places: Place[];
   onCardChange?: (p: Place | null) => void;
   /** Artikel unter dem Bild offen (Zustand liegt beim Overlay, das Sheet muss ihn kennen). */
@@ -54,7 +54,10 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   onOpenReviews?: () => void;
   /** Wie viele Orte liegen im Radius? Leerer Feed trotz Orten = alles schon beantwortet. */
   radiusCount?: number;
-  onResetNopes?: () => void;
+  /** „Nochmal zeigen" — entfällt, wenn ohnehin „Alle" eingestellt ist. */
+  onShowAll?: () => void;
+  /** Standort/Verkehrsmittel/Radius zum direkten Nachjustieren auf der leeren Seite. */
+  emptyFilters?: ReactNode;
   /** Startpunkt + Verkehrsmittel der Karte → Entfernung bzw. Fahrzeit am Ort. */
   reachFrom?: { lat: number; lng: number } | null;
   travelMode?: 'radius' | Transport;
@@ -201,29 +204,32 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     //  · Feed leer und nichts im Radius → Filter/Radius zu eng
     //  · Feed hatte Orte, Index durch  → durchgeswipet
     const answered = places.length === 0 && (radiusCount ?? 0) > 0;
+    // Hier ist keine Karte mehr, sondern eine Seite zum Nachjustieren: also scrollbar und ohne
+    // Zieh-Geste (die würde mit den Reglern kollidieren). Zurück geht es über „Liste" oben.
     return (
-      <div className="h-full relative flex flex-col items-center justify-center gap-3 text-center px-8"
-        style={{ background: 'var(--color-bg)', touchAction: 'none' }}
-        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
+      <div className="h-full relative overflow-y-auto overscroll-contain" style={{ background: 'var(--color-bg)' }}>
         {topBar(false)}
-        <i className={`fa-solid ${answered ? 'fa-clipboard-check' : 'fa-champagne-glasses'} text-5xl text-[var(--color-amber)]`} />
-        <p className="font-display font-bold text-xl text-[var(--color-aubergine)]">
-          {answered ? 'Hier kennst du schon alles' : places.length === 0 ? 'Keine Orte im Filter' : 'Alle durchgeswipet!'}
-        </p>
-        <p className="text-sm text-[var(--color-lavender)] max-w-xs">
-          {answered
-            ? `Zu ${radiusCount === 1 ? 'dem Ort' : `allen ${radiusCount} Orten`} in der Nähe hast du dich schon geäußert — gemerkt oder weggewischt. Erweitere den Radius für neue Vorschläge.`
-            : places.length === 0
-              ? 'Passe Radius, Standort oder Filter an — dann tauchen hier Orte zum Swipen auf.'
-              : 'Zieh das Overlay runter oder tippe auf „Liste" — dann kannst du die Filter anpassen.'}
-        </p>
-        {answered && onResetNopes && (
-          <button onClick={onResetNopes}
-            className="mt-1 inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold text-white active:scale-95 transition-transform"
-            style={{ background: 'var(--color-amber)' }}>
-            <i className="fa-solid fa-rotate-left" />Weggewischte zurückholen
-          </button>
-        )}
+        <div className="min-h-full flex flex-col items-center justify-center gap-2.5 text-center px-6 pt-16 pb-8">
+          <i className={`fa-solid ${answered ? 'fa-clipboard-check' : 'fa-champagne-glasses'} text-4xl text-[var(--color-amber)]`} />
+          <p className="font-display font-bold text-xl text-[var(--color-aubergine)]">
+            {answered ? 'Hier kennst du schon alles' : places.length === 0 ? 'Keine Orte im Radius' : 'Alle durchgeswipet!'}
+          </p>
+          <p className="text-sm text-[var(--color-lavender)] max-w-xs">
+            {answered
+              ? `Zu ${radiusCount === 1 ? 'dem Ort' : `allen ${radiusCount} Orten`} hier hast du dich schon geäußert. Zeig sie dir nochmal an — oder erweitere die Reichweite.`
+              : places.length === 0
+                ? 'Erweitere Radius oder Reisezeit, oder wähle einen anderen Startpunkt.'
+                : 'Zieh das Overlay runter oder tippe auf „Liste".'}
+          </p>
+          {onShowAll && (
+            <button onClick={onShowAll}
+              className="mt-1 inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold text-white active:scale-95 transition-transform"
+              style={{ background: 'var(--color-amber)' }}>
+              <i className="fa-solid fa-rotate-left" />Nochmal zeigen
+            </button>
+          )}
+          {emptyFilters}
+        </div>
       </div>
     );
   }
