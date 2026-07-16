@@ -168,6 +168,10 @@ db.run(sql`
   )
 `).catch(console.error);
 
+// Teilungs-Zähler nachrüsten (bestehende DBs haben die Spalte nicht) — schlägt bei erneutem
+// Start mit „duplicate column" fehl, das ist der idempotente Weg hier.
+db.run(sql`ALTER TABLE places ADD COLUMN shares INTEGER NOT NULL DEFAULT 0`).catch(() => {});
+
 // Ensure photo_likes table exists
 db.run(sql`
   CREATE TABLE IF NOT EXISTS photo_likes (
@@ -227,8 +231,21 @@ router.get('/', async (c) => {
     saversBy.set(r.placeId, arr);
   }
 
+  // Foto-Likes je Ort und Foto — der Swipe zeigt den Zähler am Herz, ohne den Ort einzeln zu laden.
+  // Eine Aggregat-Abfrage für alle Orte; Likes sind dünn gesät, das bläht die Antwort kaum auf.
+  const likeRows = await db.select({
+    placeId: photoLikes.placeId, photoUrl: photoLikes.photoUrl, cnt: count(),
+  }).from(photoLikes).groupBy(photoLikes.placeId, photoLikes.photoUrl).all();
+  const likesBy = new Map<string, Record<string, number>>();
+  for (const r of likeRows) {
+    const m = likesBy.get(r.placeId) ?? {};
+    m[r.photoUrl] = r.cnt;
+    likesBy.set(r.placeId, m);
+  }
+
   return c.json(visible.map(p => ({
     ...hydrate(p), savers: saversBy.get(p.id) ?? [], saverCount: saverCnt.get(p.id) ?? 0,
+    photoLikes: likesBy.get(p.id) ?? {},
   })));
 });
 
@@ -663,6 +680,15 @@ router.post('/:id/contribute', requireAuth,
     return c.json({ ok: true });
   }
 );
+
+// POST /places/:id/share — Teilungs-Zähler erhöhen. Bewusst OHNE Auth: teilen kann jede:r, auch
+// ausgeloggt — sonst zählte der Zähler genau die Fälle nicht, für die er gedacht ist.
+router.post('/:id/share', async (c) => {
+  const placeId = c.req.param('id');
+  await db.run(sql`UPDATE places SET shares = COALESCE(shares, 0) + 1 WHERE id = ${placeId}`);
+  const row = await db.select({ shares: places.shares }).from(places).where(eq(places.id, placeId)).get();
+  return c.json({ shares: row?.shares ?? 0 });
+});
 
 // POST /places/:id/photos/like — toggle like on a photo (auth required)
 router.post('/:id/photos/like', requireAuth,

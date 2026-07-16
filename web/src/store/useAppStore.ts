@@ -9,7 +9,8 @@ interface AppState {
   visitedIds: Set<string>;
   ratings:    Record<string, Rating>;
   savedTags:  Record<string, string[]>;   // placeId → eigene Tags
-  photoLikes: Set<string>;                // gelikte Foto-URLs (Likes sortieren die Galerie)
+  /** Foto-URLs, die ICH gelikt habe. Nicht verwechseln mit `place.photoLikes` — das sind die Zähler. */
+  photoLikes: Set<string>;
 
   // ── Swipe-Entscheidungen ─────────────────────────────────────
   nopeIds:    Set<string>;   // „Nicht meins" — fliegt aus dem Feed & wird ausgeblendet
@@ -19,6 +20,7 @@ interface AppState {
   swipeNope:   (placeId: string) => void;   // „Nicht meins" — entmerkt auch
   swipeSkip:   (placeId: string) => void;   // „Nächstes" — nur Signal, keine bleibende Wirkung
   togglePhotoLike: (placeId: string, url: string) => Promise<void>;
+  sharePlace: (placeId: string) => Promise<void>;   // Teilungs-Zähler am Ort
   addRating:   (placeId: string, rating: Rating) => Promise<void>;
   loadSavedTags: () => Promise<void>;
   setPlaceTags:  (placeId: string, tags: string[]) => Promise<void>;
@@ -108,11 +110,22 @@ export const useAppStore = create<AppState>()(
         if (next.has(url)) next.delete(url); else next.add(url);
         set({ photoLikes: next });
         const res = await placesApi.likePhoto(placeId, url).catch(() => null);
-        if (res && res.liked !== get().photoLikes.has(url)) {
-          const fixed = new Set(get().photoLikes);
-          if (res.liked) fixed.add(url); else fixed.delete(url);
-          set({ photoLikes: fixed });
-        }
+        if (!res) return;
+        const fixed = new Set(get().photoLikes);
+        if (res.liked) fixed.add(url); else fixed.delete(url);
+        // Server-Zähler in den Ort schreiben — sonst zeigt die Karte weiter den Stand vom Laden
+        // und der eigene Like bewegt die Zahl nicht.
+        set({
+          photoLikes: fixed,
+          places: get().places.map(p => p.id === placeId
+            ? { ...p, photoLikes: { ...(p.photoLikes ?? {}), [url]: res.count } } : p),
+        });
+      },
+
+      sharePlace: async (placeId) => {
+        const res = await placesApi.share(placeId).catch(() => null);
+        if (!res) return;
+        set({ places: get().places.map(p => p.id === placeId ? { ...p, shares: res.shares } : p) });
       },
 
       addRating: async (placeId, rating) => {

@@ -112,6 +112,7 @@ export const placesApi = {
                     post<{ ok: boolean }>(`/places/${id}/contribute`, { type, value }),
   likePhoto:      (id: string, url: string) =>
                     post<{ liked: boolean; count: number }>(`/places/${id}/photos/like`, { url }),
+  share:          (id: string)       => post<{ shares: number }>(`/places/${id}/share`, {}),
   addMedia:       (id: string, data: { url: string; type?: 'photo' | 'video'; cropX?: number; cropY?: number; caption?: string; lat?: number | null; lng?: number | null }) =>
                     post<{ ok: boolean; visited: boolean; place: Place }>(`/places/${id}/media`, data),
   submit:         (payload: SubmitPlacePayload) =>

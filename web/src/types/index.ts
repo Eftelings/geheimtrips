@@ -38,6 +38,7 @@ export interface Place {
   rating: number;
   reviews: number;
   saves: number;
+  shares?: number;  // wie oft der Ort geteilt wurde (Zähler am Flieger)
   views?: number;   // Aufrufe der Detailseite (ohne Ersteller:in) — v.a. für die/den Ersteller:in
   match: number;
   short: string;

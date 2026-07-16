@@ -62,7 +62,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   reachFrom?: { lat: number; lng: number } | null;
   travelMode?: 'radius' | Transport;
 }) {
-  const { toggleSave, savedIds, swipeNope, swipeSkip, photoLikes, togglePhotoLike } = useAppStore();
+  const { toggleSave, savedIds, swipeNope, swipeSkip, photoLikes, togglePhotoLike, sharePlace } = useAppStore();
   const { gate } = useRequireAuth();
   const [idx, setIdx] = useState(0);
   const [imgIdx, setImgIdx] = useState(0);
@@ -142,8 +142,9 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   const share = () => {
     if (!card) return;
     const url = `${location.origin}/ort/${card.id}`;
-    if (navigator.share) navigator.share({ title: card.name, text: card.short, url }).catch(() => {});
-    else navigator.clipboard?.writeText(url).then(() => showToast('Link kopiert')).catch(() => {});
+    // Zähler erst hochsetzen, wenn wirklich geteilt wurde — der Teilen-Dialog lässt sich abbrechen.
+    if (navigator.share) navigator.share({ title: card.name, text: card.short, url }).then(() => sharePlace(card.id)).catch(() => {});
+    else navigator.clipboard?.writeText(url).then(() => { showToast('Link kopiert'); sharePlace(card.id); }).catch(() => {});
   };
 
   function down(e: React.PointerEvent) {
@@ -252,6 +253,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     : drag ? HEIGHT_T
     : `${HEIGHT_T}, transform .28s cubic-bezier(.2,.8,.3,1)`;
   const nextCard = places[idx + 1];   // liegt als Vorschau unter der aktuellen Karte
+  const photoLikeCount = card.photoLikes?.[cur?.url ?? ''] ?? 0;
   const tags = (card.tagSlugs?.length ? card.tagSlugs : (card.tagSlug ? [card.tagSlug] : [null])).slice(0, 3);
 
   // Kein touchAction:'none' auf der Wurzel — touch-action wirkt über die Vorfahren-Kette und würde
@@ -296,9 +298,17 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
           </div>
         )}
 
-        <div className="absolute top-14 right-3.5 flex flex-col gap-2">
-          <button onClick={share} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center active:scale-90" aria-label="Senden"><i className="fa-solid fa-paper-plane text-sm" /></button>
-          <button onClick={likePhoto} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center active:scale-90" style={{ color: photoLikes.has(cur?.url ?? '') ? '#ff5a7a' : 'white' }} aria-label="Schönes Foto"><i className={`fa-${photoLikes.has(cur?.url ?? '') ? 'solid' : 'regular'} fa-heart text-sm`} /></button>
+        {/* Teilen + Foto-Like, jeweils mit Zähler darunter. Der Like zählt das AKTUELLE Foto
+            (das tut der Knopf auch), der Flieger den Ort. Nullen bleiben leer statt „0". */}
+        <div className="absolute top-14 right-3.5 flex flex-col gap-2.5 items-center">
+          <div className="flex flex-col items-center gap-0.5">
+            <button onClick={share} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center active:scale-90" aria-label="Senden"><i className="fa-solid fa-paper-plane text-sm" /></button>
+            {!!card.shares && <span className="text-white text-[10px] font-bold" style={{ textShadow: '0 1px 4px rgba(0,0,0,.7)' }}>{card.shares}</span>}
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <button onClick={likePhoto} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center active:scale-90" style={{ color: photoLikes.has(cur?.url ?? '') ? '#ff5a7a' : 'white' }} aria-label="Schönes Foto"><i className={`fa-${photoLikes.has(cur?.url ?? '') ? 'solid' : 'regular'} fa-heart text-sm`} /></button>
+            {!!photoLikeCount && <span className="text-white text-[10px] font-bold" style={{ textShadow: '0 1px 4px rgba(0,0,0,.7)' }}>{photoLikeCount}</span>}
+          </div>
         </div>
 
         {/* Hinweis beim Hochziehen (runter bewegt das Overlay — das sieht man ja schon) */}

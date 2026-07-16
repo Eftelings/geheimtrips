@@ -48,6 +48,7 @@ export const places = sqliteTable('places', {
   rating: real('rating').notNull().default(0),
   reviews: integer('reviews').notNull().default(0),
   saves: integer('saves').notNull().default(0),
+  shares: integer('shares').notNull().default(0), // wie oft der Ort geteilt wurde (Zähler, ohne Nutzer-Zuordnung)
   views: integer('views').notNull().default(0), // wie oft die Detailseite geöffnet wurde (ohne Ersteller:in)
   match: integer('match').notNull().default(0), // demo default, computed per user in prod
   short: text('short').notNull(),
