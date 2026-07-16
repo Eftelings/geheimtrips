@@ -191,6 +191,7 @@ export function MobileEntdecken() {
   // Rast 2 IST der Swipe — es gibt kein eigenes Sheet und keine eigene Seite mehr.
   const swipeMode = sheetSnap === 2;
   const [swipeArticle, setSwipeArticle] = useState(false);   // Artikel unter dem Bild (gleiche Seite)
+  const [reviewsSignal, setReviewsSignal] = useState(0);     // Sterne am Hero → Rezensionen aufklappen
   // „Zeig mir DIESEN Ort" (Liste/Pin/ähnlicher Ort) statt „lass mich durchgehen" (Swipe):
   // Einzel-Feed, Artikel sofort offen, keine Entscheidungs-Buttons, runter führt direkt zur Liste.
   const [articleOnly, setArticleOnly] = useState(false);
@@ -547,6 +548,7 @@ export function MobileEntdecken() {
             <SwipeDeck places={swipeFeed} onCardChange={setSwipeFocus}
               onPullDown={onDeckPull} onPullDownEnd={onDeckPullEnd}
               onBackToList={() => closeSwipeToList()}
+              onOpenReviews={() => setReviewsSignal(n => n + 1)}
               reachFrom={reachCenter} travelMode={reach.travelMode}
               articleOpen={swipeArticle}
               onOpenArticle={() => setSwipeArticle(true)}
@@ -554,7 +556,7 @@ export function MobileEntdecken() {
               onCloseArticle={() => (articleOnly ? closeSwipeToList() : setSwipeArticle(false))}
               article={swipeFocus && (
                 <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
-                  <PlaceDetailEmbed key={swipeFocus.id} id={swipeFocus.id} embedded inline onOpenPlace={openPlaceId} />
+                  <PlaceDetailEmbed key={swipeFocus.id} id={swipeFocus.id} embedded inline reviewsSignal={reviewsSignal} onOpenPlace={openPlaceId} />
                 </Suspense>
               )} />
           </div>

@@ -982,7 +982,7 @@ function VisitorContribPanel({ place, user, onDone, showToast }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export function PlaceDetailPage({ id: idProp, embedded, inline, onOpenPlace, onClose }: { id?: string; embedded?: boolean; inline?: boolean; onOpenPlace?: (id: string) => void; onClose?: () => void } = {}) {
+export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, onOpenPlace, onClose }: { id?: string; embedded?: boolean; inline?: boolean; reviewsSignal?: number; onOpenPlace?: (id: string) => void; onClose?: () => void } = {}) {
   const { id: routeId } = useParams<{ id: string }>();
   const id = idProp ?? routeId;
   // Im Overlay: Ort→Ort-Links (z.B. ähnliche Orte) im Overlay öffnen statt Seitenwechsel;
@@ -1019,6 +1019,19 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, onOpenPlace, onC
   const [pendingCat, setPendingCat]       = useState<PhotoCat>('alle');
   const [pendingCcAccepted, setPendingCcAccepted] = useState(false);
   const [showReviews, setShowReviews]  = useState(false);
+  const reviewsRef = useRef<HTMLDivElement>(null);
+  // `inline` hat keinen eigenen Hero und damit keine Sterne — der Anstoß kommt von außen
+  // (Sterne am Swipe-Hero). Zähler statt Boolean, damit erneutes Tippen wieder aufklappt.
+  // Nur auf ÄNDERUNGEN reagieren: beim Ortswechsel montiert die Seite neu (key), und ein alter
+  // Zählerstand würde die Rezensionen sonst ungefragt aufklappen.
+  const seenReviewsSignal = useRef(reviewsSignal);
+  useEffect(() => {
+    if (!reviewsSignal || reviewsSignal === seenReviewsSignal.current) return;
+    seenReviewsSignal.current = reviewsSignal;
+    setShowReviews(true);
+    const t = setTimeout(() => reviewsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    return () => clearTimeout(t);
+  }, [reviewsSignal]);
   const [claimOpen, setClaimOpen]      = useState(false);
   const [lightboxIdx, setLightboxIdx]  = useState<number | null>(null);
   const [claimSent, setClaimSent]      = useState(false);
@@ -2118,7 +2131,7 @@ async function handleVerifyToggle() {
 
       {/* ── Rezensionen panel ─────────────────────────────────────────────────── */}
       {showReviews && (
-        <div className="border-b border-[var(--color-bg-soft)]" style={{ background: '#faf8fc' }}>
+        <div ref={reviewsRef} className="border-b border-[var(--color-bg-soft)]" style={{ background: '#faf8fc' }}>
           <div className="max-w-7xl mx-auto px-4 py-6">
             <div className="flex items-center justify-between mb-5">
               <div>

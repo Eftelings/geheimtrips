@@ -9,15 +9,16 @@ interface AppState {
   visitedIds: Set<string>;
   ratings:    Record<string, Rating>;
   savedTags:  Record<string, string[]>;   // placeId → eigene Tags
+  photoLikes: Set<string>;                // gelikte Foto-URLs (Likes sortieren die Galerie)
 
   // ── Swipe-Entscheidungen ─────────────────────────────────────
-  nopeIds:    Set<string>;   // „Nein" — fliegt aus dem Feed & wird ausgeblendet
-  maybeIds:   Set<string>;   // „Vielleicht" — aus dem Swipe-Feed, bleibt aber auf Karte/Liste
+  nopeIds:    Set<string>;   // „Nicht meins" — fliegt aus dem Feed & wird ausgeblendet
 
   toggleSave:  (placeId: string) => Promise<void>;
   markVisited: (placeId: string) => Promise<void>;
-  swipeNope:   (placeId: string) => void;   // „Nein"
-  swipeMaybe:  (placeId: string) => void;   // „Vielleicht"
+  swipeNope:   (placeId: string) => void;   // „Nicht meins"
+  swipeSkip:   (placeId: string) => void;   // „Nächstes" — nur Signal, keine bleibende Wirkung
+  togglePhotoLike: (placeId: string, url: string) => Promise<void>;
   addRating:   (placeId: string, rating: Rating) => Promise<void>;
   loadSavedTags: () => Promise<void>;
   setPlaceTags:  (placeId: string, tags: string[]) => Promise<void>;
@@ -60,7 +61,7 @@ export const useAppStore = create<AppState>()(
       savedIds:   new Set<string>(),
       visitedIds: new Set<string>(),
       nopeIds:    new Set<string>(),
-      maybeIds:   new Set<string>(),
+      photoLikes: new Set<string>(),
       ratings:    {},
       savedTags:  {},
       places:        [],
@@ -89,13 +90,25 @@ export const useAppStore = create<AppState>()(
 
       swipeNope: (placeId) => {
         discoverApi.swipe(placeId, 'dislike').catch(() => {});
-        set({ nopeIds: new Set(get().nopeIds).add(placeId),
-              maybeIds: (() => { const m = new Set(get().maybeIds); m.delete(placeId); return m; })() });
+        set({ nopeIds: new Set(get().nopeIds).add(placeId) });
       },
 
-      swipeMaybe: (placeId) => {
-        discoverApi.swipe(placeId, 'maybe').catch(() => {});
-        set({ maybeIds: new Set(get().maybeIds).add(placeId) });
+      // „Nächstes": nur weiterblättern. Bewusst KEIN Merk-Set — der Ort kommt künftig wieder vor;
+      // ans Backend geht ein „skip" (mildes Minus), nicht das alte „maybe" (+0.3 wäre gelogen).
+      swipeSkip: (placeId) => { discoverApi.swipe(placeId, 'skip').catch(() => {}); },
+
+      // Foto-Likes sortieren die Galerie (und damit das Titelbild). Zustand liegt wie savedIds
+      // lokal + gespiegelt beim Server; die Server-Antwort gewinnt, falls wir danebenlagen.
+      togglePhotoLike: async (placeId, url) => {
+        const next = new Set(get().photoLikes);
+        if (next.has(url)) next.delete(url); else next.add(url);
+        set({ photoLikes: next });
+        const res = await placesApi.likePhoto(placeId, url).catch(() => null);
+        if (res && res.liked !== get().photoLikes.has(url)) {
+          const fixed = new Set(get().photoLikes);
+          if (res.liked) fixed.add(url); else fixed.delete(url);
+          set({ photoLikes: fixed });
+        }
       },
 
       addRating: async (placeId, rating) => {
@@ -161,7 +174,7 @@ export const useAppStore = create<AppState>()(
         savedIds:    [...s.savedIds],
         visitedIds:  [...s.visitedIds],
         nopeIds:     [...s.nopeIds],
-        maybeIds:    [...s.maybeIds],
+        photoLikes:  [...s.photoLikes],
         ratings:     s.ratings,
         savedTags:   s.savedTags,
         funnelAnswers: s.funnelAnswers,
@@ -173,7 +186,7 @@ export const useAppStore = create<AppState>()(
         savedIds:   new Set<string>(persisted?.savedIds  ?? []),
         visitedIds: new Set<string>(persisted?.visitedIds ?? []),
         nopeIds:    new Set<string>(persisted?.nopeIds  ?? []),
-        maybeIds:   new Set<string>(persisted?.maybeIds ?? []),
+        photoLikes: new Set<string>(persisted?.photoLikes ?? []),
       }),
     }
   )

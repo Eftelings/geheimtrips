@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Place, Transport } from '../../types/index.js';
 import { useAppStore } from '../../store/useAppStore.js';
-import { discoverApi, placesApi } from '../../services/api.js';
+import { useRequireAuth } from '../../hooks/useRequireAuth.js';
+import { discoverApi } from '../../services/api.js';
 import { distanceKm } from '../../services/geoService.js';
 import { EFFECTIVE_SPEED_KMH } from '../../utils/geo.js';
 import { formatDuration } from '../../services/routeService.js';
@@ -37,7 +38,7 @@ function Stars({ rating }: { rating: number }) {
  *  · runter→ bewegt das Overlay selbst (`onPullDown`), die Karte bleibt stehen
  * Bekommt einen stabilen Feed (Snapshot) übergeben, damit der Index beim Weglegen nicht springt.
  */
-export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd, onBackToList, reachFrom, travelMode }: {
+export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd, onBackToList, onOpenReviews, reachFrom, travelMode }: {
   places: Place[];
   onCardChange?: (p: Place | null) => void;
   /** Artikel unter dem Bild offen (Zustand liegt beim Overlay, das Sheet muss ihn kennen). */
@@ -49,21 +50,25 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   onPullDown?: (dy: number) => void;
   onPullDownEnd?: (dy: number) => void;
   onBackToList?: () => void;
+  /** Sterne am Hero angetippt → Rezensionen im Artikel aufklappen. */
+  onOpenReviews?: () => void;
   /** Startpunkt + Verkehrsmittel der Karte → Entfernung bzw. Fahrzeit am Ort. */
   reachFrom?: { lat: number; lng: number } | null;
   travelMode?: 'radius' | Transport;
 }) {
-  const { toggleSave, savedIds, swipeNope, swipeMaybe } = useAppStore();
+  const { toggleSave, savedIds, swipeNope, swipeSkip, photoLikes, togglePhotoLike } = useAppStore();
+  const { gate } = useRequireAuth();
   const [idx, setIdx] = useState(0);
   const [imgIdx, setImgIdx] = useState(0);
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
-  const [flyOut, setFlyOut] = useState<'left' | 'right' | 'maybe' | null>(null);   // nur Button-Entscheidungen
+  // Karten fliegen IMMER nach links raus, die nächste kommt von rechts rein ('enter').
+  const [flyOut, setFlyOut] = useState(false);
+  const [enter, setEnter] = useState(false);
   const start = useRef<{ x: number; y: number } | null>(null);
   const dragRef = useRef({ x: 0, y: 0 });   // Loslassen darf nicht auf den State warten (sonst verschluckte Wische)
   const pulling = useRef(false);            // Zug gehört dem Overlay (runter) statt der Karte
   const scrollRef = useRef<HTMLDivElement>(null);
   const shownAt = useRef(Date.now());
-  const [likedPhotos, setLikedPhotos] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
 
   const card = places[idx];
@@ -87,13 +92,19 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
 
   const showToast = (m: string) => { if (!m) return; setToast(m); setTimeout(() => setToast(null), 1400); };
 
-  const decide = (action: 'nope' | 'maybe' | 'want') => {
+  const decide = (action: 'nope' | 'skip' | 'save') => {
     if (!card) return;
-    if (action === 'nope')  swipeNope(card.id);
-    else if (action === 'maybe') swipeMaybe(card.id);
+    if (action === 'nope')      swipeNope(card.id);
+    else if (action === 'skip') swipeSkip(card.id);
     else { if (!savedIds.has(card.id)) toggleSave(card.id); discoverApi.swipe(card.id, 'like', Date.now() - shownAt.current).catch(() => {}); }
-    setFlyOut(action === 'nope' ? 'left' : action === 'want' ? 'right' : 'maybe');
-    setTimeout(() => { setFlyOut(null); setDrag(null); setImgIdx(0); setIdx(i => i + 1); shownAt.current = Date.now(); }, 240);
+    setFlyOut(true);
+    setTimeout(() => {
+      setFlyOut(false); setDrag(null); setImgIdx(0); setIdx(i => i + 1); shownAt.current = Date.now();
+      // Nächste Karte erst rechts absetzen (ohne Transition), dann reinfahren lassen. Zwei Frames,
+      // sonst fasst der Browser beides zu einem Paint zusammen und es gibt gar keine Bewegung.
+      setEnter(true);
+      requestAnimationFrame(() => requestAnimationFrame(() => setEnter(false)));
+    }, 240);
   };
   const openArticle = () => {
     if (!card || articleOpen) return;
@@ -107,12 +118,15 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [articleOpen, card?.id]);
   const nextImg = (dir: 1 | -1) => { if (media.length > 1) setImgIdx(i => (i + dir + media.length) % media.length); };
+  // Der Server verlangt ein Konto — ohne Gate lief der Like ins Leere (401 wurde verschluckt)
+  // und der Zustand hing nur lokal im Deck. Beides liegt jetzt im Store (persistiert + gespiegelt).
   const likePhoto = () => {
     if (!card || !cur) return;
-    const u = cur.url; const was = likedPhotos.has(u);
-    setLikedPhotos(s => { const n = new Set(s); if (was) n.delete(u); else n.add(u); return n; });
-    showToast(was ? '' : 'Schönes Foto! ❤');
-    placesApi.likePhoto(card.id, u).catch(() => {});
+    gate(() => {
+      const liked = photoLikes.has(cur.url);
+      togglePhotoLike(card.id, cur.url);
+      showToast(liked ? '' : 'Schönes Foto! ❤');
+    }, 'Melde dich an, um Fotos zu liken.');
   };
   const share = () => {
     if (!card) return;
@@ -187,17 +201,19 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     );
   }
 
-  // Horizontal nur bei Button-Entscheidung (Fly-out). Nach oben hebt die Karte an (Artikel-Hinweis);
-  // nach unten bewegt sich das OVERLAY, nicht die Karte → hier bewusst kein Schrumpfen/Morph.
-  const dx = flyOut === 'right' ? 600 : flyOut === 'left' ? -600 : 0;
+  // Entschieden wird nur über die Buttons: die Karte fliegt IMMER nach links raus, die nächste
+  // kommt von rechts rein. Nach oben hebt sie an (Artikel-Hinweis); nach unten bewegt sich das
+  // OVERLAY, nicht die Karte → hier bewusst kein Schrumpfen/Morph.
+  const dx = flyOut ? -620 : enter ? 620 : 0;
   // Mit offenem Artikel hebt sich der Hero nicht mehr an — dort ist Hochziehen sinnlos (Artikel ist ja da).
   const dragY = drag && !flyOut && !articleOpen ? Math.min(0, drag.y) : 0;
-  const rot = dx / 22;
-  const cardOp = flyOut === 'maybe' ? 0 : 1;
+  const rot = dx / 90;
   const detailOp = articleOpen ? 0 : Math.min(1, Math.max(0, -dragY / 70));
   // Höhe fährt immer weich (Bild → Hero); der Transform hängt am Finger und darf dabei NICHT federn.
+  // `enter` ist der Frame, in dem die neue Karte rechts abgesetzt wird — der muss ohne Transition sein.
   const HEIGHT_T = 'height .34s cubic-bezier(.32,.72,0,1)';
-  const cardTransition = flyOut ? `${HEIGHT_T}, transform .22s ease-in, opacity .22s ease-in`
+  const cardTransition = enter ? HEIGHT_T
+    : flyOut ? `${HEIGHT_T}, transform .22s ease-in`
     : drag ? HEIGHT_T
     : `${HEIGHT_T}, transform .28s cubic-bezier(.2,.8,.3,1)`;
   const tags = (card.tagSlugs?.length ? card.tagSlugs : (card.tagSlug ? [card.tagSlug] : [null])).slice(0, 3);
@@ -216,7 +232,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
 
       {/* Das Bild. touchAction:none, sonst fängt iOS Safari die vertikalen Wische selbst ab. */}
       <div className="relative overflow-hidden bg-black cursor-grab active:cursor-grabbing"
-        style={{ height: articleOpen ? HERO_H : '100%', transform: `translate(${dx}px, ${dragY}px) rotate(${rot}deg)`, opacity: cardOp, touchAction: 'none', transition: cardTransition }}
+        style={{ height: articleOpen ? HERO_H : '100%', transform: `translate(${dx}px, ${dragY}px) rotate(${rot}deg)`, touchAction: 'none', transition: cardTransition }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
         {cur?.video
           ? <video src={cur.url} autoPlay muted loop playsInline className="w-full h-full object-cover pointer-events-none" />
@@ -237,7 +253,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
 
         <div className="absolute top-14 right-3.5 flex flex-col gap-2">
           <button onClick={share} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center active:scale-90" aria-label="Senden"><i className="fa-solid fa-paper-plane text-sm" /></button>
-          <button onClick={likePhoto} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center active:scale-90" style={{ color: likedPhotos.has(cur?.url ?? '') ? '#ff5a7a' : 'white' }} aria-label="Schönes Foto"><i className={`fa-${likedPhotos.has(cur?.url ?? '') ? 'solid' : 'regular'} fa-heart text-sm`} /></button>
+          <button onClick={likePhoto} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center active:scale-90" style={{ color: photoLikes.has(cur?.url ?? '') ? '#ff5a7a' : 'white' }} aria-label="Schönes Foto"><i className={`fa-${photoLikes.has(cur?.url ?? '') ? 'solid' : 'regular'} fa-heart text-sm`} /></button>
         </div>
 
         {/* Hinweis beim Hochziehen (runter bewegt das Overlay — das sieht man ja schon) */}
@@ -261,11 +277,11 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
                   <i className={`fa-solid ${travel.icon} text-[10px]`} style={{ color: 'var(--color-amber)' }} />{travel.text}
                 </span>
               )}
-              <span className="flex items-center gap-1.5">
+              <button onClick={onOpenReviews} className="pointer-events-auto flex items-center gap-1.5 active:opacity-70">
                 <Stars rating={card.rating} />
                 <span className="text-white/90 text-xs font-semibold">{card.rating}</span>
-                <span className="text-white/60 text-[10px]">({card.reviews})</span>
-              </span>
+                <span className="text-white/60 text-[10px] underline underline-offset-2">({card.reviews})</span>
+              </button>
             </div>
           ) : (
             <button onClick={openArticle} className="pointer-events-auto mt-2 inline-flex items-center gap-1.5 text-white/90 text-xs font-bold bg-white/15 backdrop-blur rounded-full px-3 py-1.5">
@@ -284,17 +300,17 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
       {!articleOpen && (
       <div className="absolute left-0 right-0 z-30 flex items-stretch gap-2 px-4"
         style={{ bottom: 'calc(env(safe-area-inset-bottom) + 30px)', opacity: 1 - detailOp, pointerEvents: detailOp > 0.4 ? 'none' : 'auto', transition: drag ? 'none' : 'opacity .2s ease' }}>
-        <button onClick={() => decide('nope')} aria-label="Nein"
+        <button onClick={() => decide('nope')} aria-label="Nicht meins"
           className="flex-1 h-12 rounded-2xl bg-white/95 backdrop-blur shadow-lg flex items-center justify-center gap-2 text-[#E5484D] font-bold text-sm active:scale-95 transition-transform">
-          <i className="fa-solid fa-xmark text-lg" />Nein
+          <i className="fa-solid fa-xmark text-lg" />Nicht meins
         </button>
-        <button onClick={() => decide('maybe')} aria-label="Vielleicht"
-          className="flex-1 h-12 rounded-2xl bg-white/95 backdrop-blur shadow-lg flex items-center justify-center gap-2 font-bold text-sm active:scale-95 transition-transform" style={{ color: 'var(--color-amber)' }}>
-          <i className="fa-solid fa-clock-rotate-left text-base" />Vielleicht
+        <button onClick={() => decide('save')} aria-label="Merken"
+          className="flex-1 h-12 rounded-2xl bg-white/95 backdrop-blur shadow-lg flex items-center justify-center gap-2 font-bold text-sm active:scale-95 transition-transform" style={{ color: 'var(--color-success)' }}>
+          <i className={`fa-${savedIds.has(card.id) ? 'solid' : 'regular'} fa-bookmark text-base`} />Merken
         </button>
-        <button onClick={() => decide('want')} aria-label="Will ich hin"
-          className="flex-[1.3] h-12 rounded-2xl shadow-lg flex items-center justify-center gap-2 text-white font-bold text-sm active:scale-95 transition-transform" style={{ background: 'var(--color-aubergine)' }}>
-          <i className="fa-solid fa-heart text-base" />Will ich hin
+        <button onClick={() => decide('skip')} aria-label="Nächstes"
+          className="flex-1 h-12 rounded-2xl bg-white/95 backdrop-blur shadow-lg flex items-center justify-center gap-2 font-bold text-sm active:scale-95 transition-transform" style={{ color: 'var(--color-lavender)' }}>
+          Nächstes<i className="fa-solid fa-arrow-right text-base" />
         </button>
       </div>
       )}
