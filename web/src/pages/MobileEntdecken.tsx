@@ -83,9 +83,13 @@ const entdeckenCache = {
   travelMode: 'radius' as 'radius' | Transport,
   travelMinutes: 45,
   selectedId: null as string | null,
-  sheetExpanded: false,
+  sheetSnap: 0 as SheetSnap,
   scrollTop: 0,
 };
+
+/** Rasten des Listen-Overlays: 0 = Peek (Kopf + erster Ort), 1 = Halb (wie bisher), 2 = Groß (~90% — oben bleibt Header + Kartenstreifen). */
+type SheetSnap = 0 | 1 | 2;
+const HEADER_H = 48;   // AppShell-Mobile-Header (h-12)
 
 // Langes Drücken (mobil) bzw. Rechtsklick (Desktop) auf die Karte → Startpunkt für den Radius
 function LongPressPick({ onPick }: { onPick: (lat: number, lng: number) => void }) {
@@ -173,7 +177,7 @@ export function MobileEntdecken() {
 
   // ── Ziehbares Listen-Sheet ────────────────────────────────────────────────
   const listRef = useRef<HTMLDivElement>(null);
-  const [sheetExpanded, setSheetExpanded] = useState(entdeckenCache.sheetExpanded);
+  const [sheetSnap, setSheetSnap] = useState<SheetSnap>(entdeckenCache.sheetSnap);
   const [swipeOpen, setSwipeOpen] = useState(false);   // Swipe-Sheet über der Karte
   const [swipeFeed, setSwipeFeed] = useState<Place[]>([]);   // stabiler Snapshot beim Öffnen (Index springt sonst)
   const [swipeFocus, setSwipeFocus] = useState<Place | null>(null);   // aktueller Swipe-Ort (Karte fokussiert ihn)
@@ -190,7 +194,7 @@ export function MobileEntdecken() {
     closeSwipe();
     if (focusId) {
       setSelectedId(focusId);
-      setSheetExpanded(true);
+      setSheetSnap(1);
       setTimeout(() => listRef.current?.querySelector(`[data-place-id="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 90);
     }
   };
@@ -199,26 +203,35 @@ export function MobileEntdecken() {
   const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
   const listSwipe = useRef<{ x: number; y: number } | null>(null);
   const justSwiped = useRef(false);
-  // Peek-Höhe so wählen, dass Griff + Kopf + der erste Ort ÜBER der Bottom-Nav sichtbar sind.
-  // Sheet-Oberkante (eingeklappt) = 0.38·H (top:38vh) + Offset; sichtbar = H − Offset − 0.38·H.
-  const peekOffset = () => {
-    const H = typeof window !== 'undefined' ? window.innerHeight : 800;
-    return Math.max(120, Math.round(H * 0.62 - 238)); // 238 = Nav(76) + Griff/Kopf(70) + erster Eintrag(92)
-  };
+  const [vh, setVh] = useState(() => typeof window !== 'undefined' ? window.innerHeight : 800);
+  useEffect(() => {
+    const on = () => setVh(window.innerHeight);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+
+  // Das Sheet steht per CSS auf seiner OBERSTEN Rast (top) und wird für die anderen
+  // beiden nur nach unten geschoben (translateY) — verschieben ist billig, `top` animieren nicht.
+  //  · Rast 2 „Groß": Oberkante ~10vh → darüber bleiben Header + ein schmaler Kartenstreifen.
+  //  · Rast 1 „Halb": Oberkante 38vh (wie bisher).
+  //  · Rast 0 „Peek": 238px sichtbar = Nav(76) + Griff/Kopf(70) + erster Eintrag(92).
+  const snap = useMemo(() => {
+    const top = Math.max(HEADER_H + 22, Math.round(vh * 0.10));
+    const mid = Math.max(0, Math.round(vh * 0.38) - top);
+    const peek = Math.max(mid + 80, vh - 238 - top);
+    return { top, offs: [peek, mid, 0] as [number, number, number] };
+  }, [vh]);
   useEffect(() => {
     if (sheetDragging) return;
-    const apply = () => setSheetDragY(sheetExpanded ? 0 : peekOffset());
-    apply();
-    window.addEventListener('resize', apply);
-    return () => window.removeEventListener('resize', apply);
-  }, [sheetExpanded, sheetDragging]);
+    setSheetDragY(snap.offs[sheetSnap]);
+  }, [sheetSnap, sheetDragging, snap]);
 
   // Einstellungen für „Zurück" merken — jeder Render hält den Cache aktuell
   useEffect(() => {
     Object.assign(entdeckenCache, {
       searchCenter, searchLabel, userCoords, radiusKm, mode, tagSel,
       travelMode: reach.travelMode, travelMinutes: reach.travelMinutes,
-      selectedId, sheetExpanded, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
+      selectedId, sheetSnap, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
     });
   });
   // Beim Öffnen zuletzt gemerkte Scroll-Position der Liste wiederherstellen
@@ -254,13 +267,16 @@ export function MobileEntdecken() {
     const d = sheetDrag.current; if (!d) return;
     const delta = e.touches[0].clientY - d.startY;
     d.moved = Math.max(d.moved, Math.abs(delta));
-    setSheetDragY(Math.min(Math.max(d.startOffset + delta, 0), peekOffset()));
+    setSheetDragY(Math.min(Math.max(d.startOffset + delta, 0), snap.offs[0]));
   }
   function onSheetTouchEnd() {
-    const d = sheetDrag.current; setSheetDragging(false);
+    const d = sheetDrag.current; sheetDrag.current = null; setSheetDragging(false);
     if (!d) return;
-    if (d.moved < 6) { setSheetExpanded(v => !v); return; }
-    setSheetExpanded(sheetDragY < peekOffset() / 2);
+    if (d.moved < 6) { setSheetSnap(s => (s === 1 ? 0 : 1)); return; }   // Tippen = eine Stufe
+    // In die nächstgelegene Rast einrasten
+    let best: SheetSnap = 0, bd = Infinity;
+    snap.offs.forEach((v, i) => { const dist = Math.abs(v - sheetDragY); if (dist < bd) { bd = dist; best = i as SheetSnap; } });
+    setSheetSnap(best);
   }
   // Swipe-Sheet über der Karte — Snapshot des gefilterten Feeds (stabiler Index beim Weglegen)
   function goSwipe() { gate(() => { setSwipeFeed(swipePlaces); setSwipeOpen(true); }, 'Melde dich an, um den Swipe-Modus zu nutzen.'); }
@@ -298,6 +314,9 @@ export function MobileEntdecken() {
     }
   }
   const fmtDist = (d: number) => d < 1 ? `${Math.round(d * 1000)} m` : `${d < 10 ? d.toFixed(1) : Math.round(d)} km`;
+
+  // Ganz hochgezogenes Overlay (Rast 2) bzw. Swipe → die Filter räumen hinter dem Header das Feld.
+  const filtersAway = swipeOpen || sheetSnap === 2;
 
   const toolBtn = 'w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0';
   const toolShadow = { boxShadow: '0 2px 10px rgba(52,37,76,0.18)' } as const;
@@ -340,14 +359,15 @@ export function MobileEntdecken() {
         </div>
       )}
 
-      {/* Toolbar — direkt unter dem Standard-Header. Beim Swipen fliegt sie nach oben HINTER den
-          (opaken) Header (z unter Header z-20), nicht darüber. */}
+      {/* Toolbar — direkt unter dem Standard-Header. Sobald das Overlay ganz hoch geht (Rast 2)
+          bzw. beim Swipen fliegt sie nach oben HINTER den (opaken) Header (z unter Header z-20),
+          nicht darüber — dort wäre sie sonst vom Sheet verdeckt. */}
       <div className="fixed left-0 right-0 z-[15] px-3 flex flex-col gap-2"
         style={{
           top: '52px',
-          transform: swipeOpen ? 'translateY(-160%)' : 'translateY(0)',
-          opacity: swipeOpen ? 0 : 1,
-          pointerEvents: swipeOpen ? 'none' : 'auto',
+          transform: filtersAway ? 'translateY(-160%)' : 'translateY(0)',
+          opacity: filtersAway ? 0 : 1,
+          pointerEvents: filtersAway ? 'none' : 'auto',
           transition: 'transform .32s cubic-bezier(.32,.72,0,1), opacity .28s ease',
         }}>
         <div className="flex items-center gap-1.5">
@@ -458,7 +478,7 @@ export function MobileEntdecken() {
       {/* Orts-Liste als ziehbares Bottom-Sheet (nach Entfernung sortiert) — beim Swipen ausgeblendet */}
       <div className="fixed left-0 right-0 z-20 flex flex-col overflow-hidden rounded-t-[1.75rem]"
         style={{
-          top: '38vh', bottom: 0, background: '#FBF9FC',
+          top: snap.top, bottom: 0, background: '#FBF9FC',
           boxShadow: '0 -8px 30px rgba(52,37,76,0.18)',
           transform: `translateY(${sheetDragY}px)`,
           transition: sheetDragging ? 'none' : 'transform .34s cubic-bezier(.32,.72,0,1)',
@@ -480,8 +500,11 @@ export function MobileEntdecken() {
           </div>
         </div>
         {/* Scrollbare Liste — nach rechts wischen startet den Swipe-Modus */}
+        {/* Scroll-Fuß = Bottom-Nav + der Teil des Sheets, der in dieser Rast unter dem Bildschirmrand
+            hängt — sonst wären die letzten Orte nicht erreichbar. Bewusst an der RAST statt am
+            laufenden Zug: sonst würde die Liste bei jedem Frame neu umbrechen. */}
         <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain px-3"
-          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}
+          style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + ${88 + snap.offs[sheetSnap]}px)` }}
           onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd}>
           {listPlaces.length === 0 ? (
             <div className="text-center py-12 text-[var(--color-lavender)] text-sm">
