@@ -22,8 +22,9 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange, onDragToList }: 
   const [idx, setIdx] = useState(0);
   const [imgIdx, setImgIdx] = useState(0);
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
-  const [flyOut, setFlyOut] = useState<'left' | 'right' | 'up' | 'maybe' | null>(null);
+  const [flyOut, setFlyOut] = useState<'left' | 'right' | 'up' | 'down' | 'maybe' | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
+  const dragRef = useRef({ x: 0, y: 0 });   // Loslassen darf nicht auf den State warten (sonst verschluckte Wische)
   const shownAt = useRef(Date.now());
   const [likedPhotos, setLikedPhotos] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
@@ -67,17 +68,36 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange, onDragToList }: 
     else navigator.clipboard?.writeText(url).then(() => showToast('Link kopiert')).catch(() => {});
   };
 
-  function down(e: React.PointerEvent) { start.current = { x: e.clientX, y: e.clientY }; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); }
-  function move(e: React.PointerEvent) { if (start.current) setDrag({ x: e.clientX - start.current.x, y: e.clientY - start.current.y }); }
-  function up() {
+  const toList = () => {
+    // Erst zu Ende schrumpfen (Richtung Liste), dann übergeben — sonst schneidet der Wechsel hart ab.
+    setFlyOut('down');
+    setTimeout(() => { setFlyOut(null); setDrag(null); onDragToList?.(); }, 200);
+  };
+
+  function down(e: React.PointerEvent) {
+    // Taps auf echte Bedienelemente (Teilen/Herz/Details) sind kein Zieh-Start.
+    if ((e.target as HTMLElement).closest('button')) { start.current = null; return; }
+    start.current = { x: e.clientX, y: e.clientY };
+    dragRef.current = { x: 0, y: 0 };
+    // WICHTIG: auf die Karte fangen (nicht auf e.target) — die hat touchAction:'none'.
+    // Sonst reißt der Browser den Zug nach unten als Pull-to-Refresh an sich → pointercancel.
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function move(e: React.PointerEvent) {
     if (!start.current) return;
-    const dx = drag?.x ?? 0, dy = drag?.y ?? 0; start.current = null;
+    dragRef.current = { x: e.clientX - start.current.x, y: e.clientY - start.current.y };
+    setDrag(dragRef.current);
+  }
+  function up(e: React.PointerEvent) {
+    if (!start.current) return;
+    const { x: dx, y: dy } = dragRef.current; start.current = null;
+    const w = e.currentTarget.clientWidth || window.innerWidth;
     // Entscheidungen laufen NUR über die Buttons. Wischen = Bilder blättern, hoch = Detail, runter = Liste.
-    if (dy < -70 && Math.abs(dy) > Math.abs(dx)) openDetail();          // hoch = Detailansicht
-    else if (dy > 100 && Math.abs(dy) > Math.abs(dx)) onDragToList?.(); // runter = zurück zur Liste
-    else if (dx > 55) nextImg(-1);                                       // rechts wischen = vorheriges Bild
-    else if (dx < -55) nextImg(1);                                       // links wischen = nächstes Bild
-    else if (Math.abs(dx) < 6 && Math.abs(dy) < 6) nextImg(1);           // Tap = nächstes Bild
+    if (dy < -60 && Math.abs(dy) > Math.abs(dx)) openDetail();            // hoch = Detailansicht
+    else if (dy > 60 && Math.abs(dy) > Math.abs(dx)) { toList(); return; } // runter = zurück zur Liste
+    else if (dx > 50) nextImg(-1);                                        // rechts wischen = vorheriges Bild
+    else if (dx < -50) nextImg(1);                                        // links wischen = nächstes Bild
+    else if (Math.abs(dx) < 8 && Math.abs(dy) < 8) nextImg(e.clientX < w / 3 ? -1 : 1);   // Tap links = zurück, sonst weiter
     setDrag(null);
   }
 
@@ -94,35 +114,38 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange, onDragToList }: 
   // Horizontal nur bei Button-Entscheidung (Fly-out). Drag hoch = Detail-Hinweis, runter = Morph zur Liste.
   const dx = flyOut === 'right' ? 600 : flyOut === 'left' ? -600 : 0;
   const dragY = drag && !flyOut ? drag.y : 0;
-  const dy = flyOut === 'up' ? -800 : dragY;
+  const dy = flyOut === 'up' ? -800 : flyOut === 'down' ? 300 : dragY;
   const rot = dx / 22;
-  const scale = dragY > 0 ? Math.max(0.8, 1 - dragY / 700) : 1;   // runterziehen → Bild schrumpft (Richtung Liste)
-  const detailOp = Math.min(1, Math.max(0, -dragY / 90));
-  const listOp   = Math.min(1, Math.max(0, dragY / 130));
+  // Runterziehen → Bild schrumpft zur Unterkante (dort kommt die Liste hoch) = Morph-Gefühl.
+  const scale = flyOut === 'down' ? 0.5 : dragY > 0 ? Math.max(0.7, 1 - dragY / 600) : 1;
+  const cardOp = flyOut === 'maybe' ? 0 : flyOut === 'down' ? 0.2 : 1;
+  const detailOp = Math.min(1, Math.max(0, -dragY / 70));
+  const listOp   = Math.min(1, Math.max(0, dragY / 70));
   const tags = (card.tagSlugs?.length ? card.tagSlugs : (card.tagSlug ? [card.tagSlug] : [null])).slice(0, 3);
 
   return (
-    <div className="h-full relative select-none overflow-hidden" style={{ background: 'var(--color-bg)' }}>
+    <div className="h-full relative select-none overflow-hidden" style={{ background: 'var(--color-bg)', touchAction: 'none', overscrollBehavior: 'none' }}>
       {toast && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-[var(--color-aubergine)] text-white text-xs font-bold px-3.5 py-2 rounded-full shadow-lg pointer-events-none">{toast}</div>
       )}
 
-      {/* Full-Bleed-Karte — schrumpft beim Runterziehen Richtung Liste (Morph-Gefühl) */}
+      {/* Full-Bleed-Karte — schrumpft beim Runterziehen Richtung Liste (Morph-Gefühl).
+          touchAction:none, sonst fängt iOS Safari die vertikalen Wische selbst ab. */}
       <div className="absolute inset-0 overflow-hidden bg-black cursor-grab active:cursor-grabbing"
-        style={{ transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg) scale(${scale})`, transformOrigin: 'bottom center', opacity: flyOut === 'maybe' ? 0 : 1, transition: flyOut ? 'transform .22s ease-in, opacity .22s ease-in' : drag ? 'none' : 'transform .28s cubic-bezier(.2,.8,.3,1)' }}
+        style={{ transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg) scale(${scale})`, transformOrigin: 'bottom center', opacity: cardOp, touchAction: 'none', transition: flyOut ? 'transform .22s ease-in, opacity .22s ease-in' : drag ? 'none' : 'transform .28s cubic-bezier(.2,.8,.3,1)' }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { start.current = null; setDrag(null); }}>
         {cur?.video
           ? <video src={cur.url} autoPlay muted loop playsInline className="w-full h-full object-cover pointer-events-none" />
           : <PlaceImage src={cur?.url ?? ''} category="" alt={card.name} className="w-full h-full object-cover pointer-events-none" iconClass="text-6xl" eager />}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/25 pointer-events-none" />
 
-        {media.length > 1 && (<>
-          <button onClick={() => nextImg(-1)} className="absolute left-0 top-16 bottom-40 w-1/3" aria-label="Vorheriges Bild" />
-          <button onClick={() => nextImg(1)} className="absolute right-0 top-16 bottom-40 w-1/3" aria-label="Nächstes Bild" />
+        {/* Kein Button-Layer fürs Blättern: Tippen/Wischen macht das die Karte selbst (siehe up()).
+            Buttons hätten touch-action:auto (nicht vererbt) und würden den Zug nach unten schlucken. */}
+        {media.length > 1 && (
           <div className="absolute top-8 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
             {media.map((_, i) => <span key={i} className="h-1 rounded-full transition-all" style={{ width: i === imgIdx ? 20 : 6, background: i === imgIdx ? 'white' : 'rgba(255,255,255,.5)' }} />)}
           </div>
-        </>)}
+        )}
 
         <div className="absolute top-14 right-3.5 flex flex-col gap-2">
           <button onClick={share} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center active:scale-90" aria-label="Senden"><i className="fa-solid fa-paper-plane text-sm" /></button>
@@ -149,7 +172,7 @@ export function SwipeDeck({ places, onOpenDetail, onCardChange, onDragToList }: 
       {/* Entscheidungs-Buttons als Layer über dem Bild (etwas höher), abgerundete Brand-Rechtecke.
           Beim Ziehen (hoch = Detail, runter = Liste) faden sie aus. */}
       <div className="absolute left-0 right-0 z-30 flex items-stretch gap-2 px-4"
-        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 30px)', opacity: 1 - Math.max(detailOp, listOp), transition: drag ? 'none' : 'opacity .2s ease' }}>
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 30px)', opacity: flyOut === 'down' ? 0 : 1 - Math.max(detailOp, listOp), pointerEvents: Math.max(detailOp, listOp) > 0.4 ? 'none' : 'auto', transition: drag ? 'none' : 'opacity .2s ease' }}>
         <button onClick={() => decide('nope')} aria-label="Nein"
           className="flex-1 h-12 rounded-2xl bg-white/95 backdrop-blur shadow-lg flex items-center justify-center gap-2 text-[#E5484D] font-bold text-sm active:scale-95 transition-transform">
           <i className="fa-solid fa-xmark text-lg" />Nein
