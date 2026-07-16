@@ -1019,18 +1019,16 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, o
   const [pendingCat, setPendingCat]       = useState<PhotoCat>('alle');
   const [pendingCcAccepted, setPendingCcAccepted] = useState(false);
   const [showReviews, setShowReviews]  = useState(false);
-  const reviewsRef = useRef<HTMLDivElement>(null);
   // `inline` hat keinen eigenen Hero und damit keine Sterne — der Anstoß kommt von außen
-  // (Sterne am Swipe-Hero). Zähler statt Boolean, damit erneutes Tippen wieder aufklappt.
+  // (Sterne am Swipe-Hero). Zähler statt Boolean, damit jedes Tippen erneut umschaltet.
+  // Bewusst OHNE scrollIntoView: die Rezensionen klappen unter dem Bild auf, das Bild bleibt stehen.
   // Nur auf ÄNDERUNGEN reagieren: beim Ortswechsel montiert die Seite neu (key), und ein alter
   // Zählerstand würde die Rezensionen sonst ungefragt aufklappen.
   const seenReviewsSignal = useRef(reviewsSignal);
   useEffect(() => {
     if (!reviewsSignal || reviewsSignal === seenReviewsSignal.current) return;
     seenReviewsSignal.current = reviewsSignal;
-    setShowReviews(true);
-    const t = setTimeout(() => reviewsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
-    return () => clearTimeout(t);
+    setShowReviews(v => !v);   // nochmal auf die Sterne = wieder zu (wie das X)
   }, [reviewsSignal]);
   const [claimOpen, setClaimOpen]      = useState(false);
   const [lightboxIdx, setLightboxIdx]  = useState<number | null>(null);
@@ -2131,11 +2129,10 @@ async function handleVerifyToggle() {
 
       {/* ── Rezensionen panel ─────────────────────────────────────────────────── */}
       {showReviews && (
-        <div ref={reviewsRef} className="border-b border-[var(--color-bg-soft)]" style={{ background: '#faf8fc' }}>
+        <div className="border-b border-[var(--color-bg-soft)]" style={{ background: '#faf8fc' }}>
           <div className="max-w-7xl mx-auto px-4 py-6">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: '#71587a' }}>Gemeinschaft</p>
                 <h2 className="font-display font-bold leading-tight" style={{ fontSize: '1.6rem', letterSpacing: '-0.02em', color: '#34254c' }}>
                   <em className="italic" style={{ color: '#71587a' }}>Rezensionen</em>
                 </h2>

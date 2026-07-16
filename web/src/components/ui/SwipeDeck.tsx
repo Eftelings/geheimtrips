@@ -110,8 +110,9 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     setFlyOut(true);
     setTimeout(() => {
       setFlyOut(false); setDrag(null); setImgIdx(0); setIdx(i => i + 1); shownAt.current = Date.now();
-      // Nächste Karte erst rechts absetzen (ohne Transition), dann reinfahren lassen. Zwei Frames,
-      // sonst fasst der Browser beides zu einem Paint zusammen und es gibt gar keine Bewegung.
+      // Die neue Karte sitzt schon dort, wo eben die Vorschau lag — sie darf NICHT von -620
+      // zurückfahren. Ein Frame ohne Transform-Transition setzt sie still auf 0; zwei rAF, sonst
+      // fasst der Browser das mit dem Wiedereinschalten zu einem Paint zusammen.
       setEnter(true);
       requestAnimationFrame(() => requestAnimationFrame(() => setEnter(false)));
     }, 240);
@@ -234,21 +235,23 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     );
   }
 
-  // Entschieden wird nur über die Buttons: die Karte fliegt IMMER nach links raus, die nächste
-  // kommt von rechts rein. Nach oben hebt sie an (Artikel-Hinweis); nach unten bewegt sich das
-  // OVERLAY, nicht die Karte → hier bewusst kein Schrumpfen/Morph.
-  const dx = flyOut ? -620 : enter ? 620 : 0;
+  // Entschieden wird nur über die Buttons: die Karte fliegt IMMER nach links raus und gibt den
+  // nächsten Ort frei, der schon darunter liegt. Nach oben hebt sie an (Artikel-Hinweis); nach
+  // unten bewegt sich das OVERLAY, nicht die Karte → hier bewusst kein Schrumpfen/Morph.
+  const dx = flyOut ? -620 : 0;
   // Mit offenem Artikel hebt sich der Hero nicht mehr an — dort ist Hochziehen sinnlos (Artikel ist ja da).
   const dragY = drag && !flyOut && !articleOpen ? Math.min(0, drag.y) : 0;
   const rot = dx / 90;
   const detailOp = articleOpen ? 0 : Math.min(1, Math.max(0, -dragY / 70));
   // Höhe fährt immer weich (Bild → Hero); der Transform hängt am Finger und darf dabei NICHT federn.
-  // `enter` ist der Frame, in dem die neue Karte rechts abgesetzt wird — der muss ohne Transition sein.
+  // `enter` ist der Frame, in dem die neue Karte still auf 0 gesetzt wird — der muss ohne Transition
+  // sein, sonst führe sie von -620 sichtbar zurück.
   const HEIGHT_T = 'height .34s cubic-bezier(.32,.72,0,1)';
   const cardTransition = enter ? HEIGHT_T
     : flyOut ? `${HEIGHT_T}, transform .22s ease-in`
     : drag ? HEIGHT_T
     : `${HEIGHT_T}, transform .28s cubic-bezier(.2,.8,.3,1)`;
+  const nextCard = places[idx + 1];   // liegt als Vorschau unter der aktuellen Karte
   const tags = (card.tagSlugs?.length ? card.tagSlugs : (card.tagSlug ? [card.tagSlug] : [null])).slice(0, 3);
 
   // Kein touchAction:'none' auf der Wurzel — touch-action wirkt über die Vorfahren-Kette und würde
@@ -261,7 +264,16 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
 
       {/* Scroll-Ebene: ohne Artikel füllt das Bild das ganze Overlay, mit Artikel wird es zum Hero
           und der Artikel liegt DARUNTER — dieselbe Seite, kein zweites Overlay. */}
-      <div ref={scrollRef} className="absolute inset-0" style={{ overflowY: articleOpen ? 'auto' : 'hidden', overscrollBehavior: 'contain' }}>
+      <div ref={scrollRef} className="absolute inset-0" style={{ overflowY: articleOpen ? 'auto' : 'hidden', overscrollBehavior: 'contain', background: articleOpen ? undefined : '#000' }}>
+
+      {/* Der nächste Ort liegt schon bereit — beim Wegfliegen sieht man ihn statt des hellen
+          Sheet-Hintergrunds. Steht vor der Karte im DOM, beide positioniert → Karte liegt darüber. */}
+      {nextCard && !articleOpen && (
+        <div className="absolute inset-0 overflow-hidden bg-black pointer-events-none">
+          <PlaceImage src={nextCard.hero ?? ''} category="" alt="" className="w-full h-full object-cover" iconClass="text-6xl" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/25" />
+        </div>
+      )}
 
       {/* Das Bild. touchAction:none, sonst fängt iOS Safari die vertikalen Wische selbst ab. */}
       <div className="relative overflow-hidden bg-black cursor-grab active:cursor-grabbing"
@@ -338,7 +350,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
           <i className="fa-solid fa-xmark text-lg" />Nicht meins
         </button>
         <button onClick={() => decide('save')} aria-label="Merken"
-          className="flex-1 h-12 rounded-2xl bg-white/95 backdrop-blur shadow-lg flex items-center justify-center gap-2 font-bold text-sm active:scale-95 transition-transform" style={{ color: 'var(--color-success)' }}>
+          className="flex-1 h-12 rounded-2xl bg-white/95 backdrop-blur shadow-lg flex items-center justify-center gap-2 font-bold text-sm active:scale-95 transition-transform" style={{ color: 'var(--color-amber)' }}>
           <i className={`fa-${savedIds.has(card.id) ? 'solid' : 'regular'} fa-bookmark text-base`} />Merken
         </button>
         <button onClick={() => decide('skip')} aria-label="Nächstes"
