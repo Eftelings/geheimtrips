@@ -38,7 +38,7 @@ function Stars({ rating }: { rating: number }) {
  *  · runter→ bewegt das Overlay selbst (`onPullDown`), die Karte bleibt stehen
  * Bekommt einen stabilen Feed (Snapshot) übergeben, damit der Index beim Weglegen nicht springt.
  */
-export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd, onBackToList, onOpenReviews, reachFrom, travelMode }: {
+export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenArticle, onCloseArticle, onPullDown, onPullDownEnd, onBackToList, onOpenReviews, radiusCount, onResetNopes, reachFrom, travelMode }: {
   places: Place[];
   onCardChange?: (p: Place | null) => void;
   /** Artikel unter dem Bild offen (Zustand liegt beim Overlay, das Sheet muss ihn kennen). */
@@ -52,6 +52,9 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   onBackToList?: () => void;
   /** Sterne am Hero angetippt → Rezensionen im Artikel aufklappen. */
   onOpenReviews?: () => void;
+  /** Wie viele Orte liegen im Radius? Leerer Feed trotz Orten = alles schon beantwortet. */
+  radiusCount?: number;
+  onResetNopes?: () => void;
   /** Startpunkt + Verkehrsmittel der Karte → Entfernung bzw. Fahrzeit am Ort. */
   reachFrom?: { lat: number; lng: number } | null;
   travelMode?: 'radius' | Transport;
@@ -70,6 +73,10 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   const scrollRef = useRef<HTMLDivElement>(null);
   const shownAt = useRef(Date.now());
   const [toast, setToast] = useState<string | null>(null);
+
+  // Neuer Feed (z.B. „Weggewischte zurückholen", oder Orte luden erst nach) → wieder vorne
+  // anfangen. Ohne das zeigte der alte Index ins Leere und der Swipe bliebe leer.
+  useEffect(() => { setIdx(0); }, [places]);
 
   const card = places[idx];
   const media = useMemo(() => {
@@ -189,14 +196,34 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   );
 
   if (!card) {
+    // Drei verschiedene Sackgassen, die sich nicht gleich anfühlen dürfen:
+    //  · Feed leer, aber Orte im Radius → alles schon beantwortet (der häufigste Fall!)
+    //  · Feed leer und nichts im Radius → Filter/Radius zu eng
+    //  · Feed hatte Orte, Index durch  → durchgeswipet
+    const answered = places.length === 0 && (radiusCount ?? 0) > 0;
     return (
       <div className="h-full relative flex flex-col items-center justify-center gap-3 text-center px-8"
         style={{ background: 'var(--color-bg)', touchAction: 'none' }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
         {topBar(false)}
-        <i className="fa-solid fa-champagne-glasses text-5xl text-[var(--color-amber)]" />
-        <p className="font-display font-bold text-xl text-[var(--color-aubergine)]">{places.length === 0 ? 'Keine Orte im Filter' : 'Alle durchgeswipet!'}</p>
-        <p className="text-sm text-[var(--color-lavender)] max-w-xs">{places.length === 0 ? 'Passe Radius, Standort oder Filter an — dann tauchen hier Orte zum Swipen auf.' : 'Zieh das Overlay runter oder tippe auf „Liste" — dann kannst du die Filter anpassen.'}</p>
+        <i className={`fa-solid ${answered ? 'fa-clipboard-check' : 'fa-champagne-glasses'} text-5xl text-[var(--color-amber)]`} />
+        <p className="font-display font-bold text-xl text-[var(--color-aubergine)]">
+          {answered ? 'Hier kennst du schon alles' : places.length === 0 ? 'Keine Orte im Filter' : 'Alle durchgeswipet!'}
+        </p>
+        <p className="text-sm text-[var(--color-lavender)] max-w-xs">
+          {answered
+            ? `Zu ${radiusCount === 1 ? 'dem Ort' : `allen ${radiusCount} Orten`} in der Nähe hast du dich schon geäußert — gemerkt oder weggewischt. Erweitere den Radius für neue Vorschläge.`
+            : places.length === 0
+              ? 'Passe Radius, Standort oder Filter an — dann tauchen hier Orte zum Swipen auf.'
+              : 'Zieh das Overlay runter oder tippe auf „Liste" — dann kannst du die Filter anpassen.'}
+        </p>
+        {answered && onResetNopes && (
+          <button onClick={onResetNopes}
+            className="mt-1 inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold text-white active:scale-95 transition-transform"
+            style={{ background: 'var(--color-amber)' }}>
+            <i className="fa-solid fa-rotate-left" />Weggewischte zurückholen
+          </button>
+        )}
       </div>
     );
   }

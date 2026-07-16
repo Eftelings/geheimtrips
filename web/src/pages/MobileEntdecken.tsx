@@ -63,12 +63,19 @@ function FitReach({ center, travel, radiusKm, fallback }: {
   return null;
 }
 
-// Karte auf den aktuellen Swipe-Ort fliegen (damit man beim Runterziehen sieht, wo er liegt)
-function SwipeFlyTo({ lat, lng }: { lat: number | null; lng: number | null }) {
+/**
+ * Karte auf einen Ort fliegen — aber in die MITTE des sichtbaren Kartenstreifens (zwischen Filtern
+ * und Overlay), nicht in die Mitte des Viewports: dort läge der Pin hinter dem Overlay.
+ * `offsetY` verschiebt das Kartenzentrum in Pixeln, damit der Ort im Streifen landet.
+ */
+function FlyToPlace({ lat, lng, offsetY }: { lat: number | null; lng: number | null; offsetY: number }) {
   const map = useMap();
   useEffect(() => {
-    if (lat != null && lng != null) map.flyTo([lat, lng], Math.max(map.getZoom(), 11), { duration: 0.6 });
-  }, [lat, lng]); // eslint-disable-line
+    if (lat == null || lng == null) return;
+    const z = Math.max(map.getZoom(), 11);
+    const target = map.unproject(map.project([lat, lng], z).add([0, offsetY]), z);
+    map.flyTo(target, z, { duration: 0.6 });
+  }, [lat, lng, offsetY]); // eslint-disable-line
   return null;
 }
 
@@ -100,7 +107,7 @@ function LongPressPick({ onPick }: { onPick: (lat: number, lng: number) => void 
 
 export function MobileEntdecken() {
   const navigate = useNavigate();
-  const { places, loadPlaces, savedIds, visitedIds, nopeIds, funnelAnswers } = useAppStore();
+  const { places, loadPlaces, savedIds, visitedIds, nopeIds, resetNopes, funnelAnswers } = useAppStore();
   const vocab = useTaxVocab();
   const { gate } = useRequireAuth();
 
@@ -195,10 +202,13 @@ export function MobileEntdecken() {
   // „Zeig mir DIESEN Ort" (Liste/Pin/ähnlicher Ort) statt „lass mich durchgehen" (Swipe):
   // Einzel-Feed, Artikel sofort offen, keine Entscheidungs-Buttons, runter führt direkt zur Liste.
   const [articleOnly, setArticleOnly] = useState(false);
+  const [listFocus, setListFocus] = useState<Place | null>(null);   // Ort, von dem man zurückkommt
   // Aus dem Swipe zurück in die Liste und zu dem Ort scrollen, auf dem man war
   const closeSwipeToList = (to: SheetSnap = 1) => {
-    const focusId = swipeFocus?.id ?? null;
+    const focus = swipeFocus;
+    const focusId = focus?.id ?? null;
     setSheetSnap(to);
+    setListFocus(focus);   // Karte zeigt ihn danach im sichtbaren Streifen (lila, mittig)
     if (focusId) {
       setSelectedId(focusId);
       setTimeout(() => listRef.current?.querySelector(`[data-place-id="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: 'auto' }), 90);
@@ -326,6 +336,11 @@ export function MobileEntdecken() {
     if (articleOnly) return;   // gezielt geöffnet: Einzel-Feed steht schon, kein Gate (Liste ist öffentlich)
     if (!gate(() => setSwipeFeed(swipePlaces), 'Melde dich an, um den Swipe-Modus zu nutzen.')) setSheetSnap(1);
   }, [swipeMode]); // eslint-disable-line
+  // Feed leer, aber es gäbe Orte? Dann nachfassen — nach „Weggewischte zurückholen", oder wenn die
+  // Orte beim Betreten noch nicht geladen waren. Nur bei leerem Feed, sonst bricht der Snapshot.
+  useEffect(() => {
+    if (swipeMode && !articleOnly && swipeFeed.length === 0 && swipePlaces.length > 0) setSwipeFeed(swipePlaces);
+  }, [swipeMode, articleOnly, swipeFeed.length, swipePlaces]);
   // Im Swipe fährt die Bottom-Nav bis auf den Kompass-Überstand runter. Aufräumen beim Verlassen
   // ist Pflicht — sonst bliebe sie auf der nächsten Seite versteckt.
   const setNavPeek = useUiStore(s => s.setNavPeek);
@@ -353,6 +368,17 @@ export function MobileEntdecken() {
   const toolBtn = 'w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0';
   const toolShadow = { boxShadow: '0 2px 10px rgba(52,37,76,0.18)' } as const;
 
+  // Der Ort, auf den die Karte fliegt: im Swipe die aktuelle Karte, sonst der, von dem man
+  // zurückkommt. Beim Laden bewusst null — sonst kämen sich Flug und FitReach in die Quere.
+  const mapFocus = swipeMode ? swipeFocus : listFocus;
+  // Pixel-Versatz, damit der Ort im sichtbaren Streifen landet statt hinter dem Overlay.
+  // Hängt an der RAST, nicht am laufenden Zug — sonst flöge die Karte in jedem Frame neu.
+  const mapFocusOffset = useMemo(() => {
+    const top = swipeMode ? HEADER_H + 4 : 140;             // unter dem Header bzw. unter den Filtern
+    const bottom = Math.max(top + 60, snap.top + snap.offs[sheetSnap]);   // Oberkante des Overlays
+    return Math.round(vh / 2 - (top + bottom) / 2);
+  }, [vh, swipeMode, snap, sheetSnap]);
+
   // Marker memoisieren → beim Sheet-Ziehen (häufige Re-Renders) werden NICHT alle Leaflet-Marker
   // neu gebunden (das war die Hänger-Ursache auf Mobil).
   const highlightId = swipeMode ? swipeFocus?.id : preview?.id;
@@ -378,7 +404,7 @@ export function MobileEntdecken() {
           <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
           {markerEls}
           <FitReach center={reachCenter} travel={travel} radiusKm={radiusKm} fallback={fallbackPts} />
-          <SwipeFlyTo lat={swipeMode ? swipeFocus?.lat ?? null : null} lng={swipeMode ? swipeFocus?.lng ?? null : null} />
+          <FlyToPlace lat={mapFocus?.lat ?? null} lng={mapFocus?.lng ?? null} offsetY={mapFocusOffset} />
         </MapContainer>
       </div>
 
@@ -549,6 +575,7 @@ export function MobileEntdecken() {
               onPullDown={onDeckPull} onPullDownEnd={onDeckPullEnd}
               onBackToList={() => closeSwipeToList()}
               onOpenReviews={() => setReviewsSignal(n => n + 1)}
+              radiusCount={shownPlaces.length} onResetNopes={resetNopes}
               reachFrom={reachCenter} travelMode={reach.travelMode}
               articleOpen={swipeArticle}
               onOpenArticle={() => setSwipeArticle(true)}

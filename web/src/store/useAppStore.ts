@@ -18,6 +18,7 @@ interface AppState {
   markVisited: (placeId: string) => Promise<void>;
   swipeNope:   (placeId: string) => void;   // „Nicht meins"
   swipeSkip:   (placeId: string) => void;   // „Nächstes" — nur Signal, keine bleibende Wirkung
+  resetNopes:  () => void;                  // Weggewischte zurückholen (Sackgasse im Swipe)
   togglePhotoLike: (placeId: string, url: string) => Promise<void>;
   addRating:   (placeId: string, rating: Rating) => Promise<void>;
   loadSavedTags: () => Promise<void>;
@@ -96,6 +97,10 @@ export const useAppStore = create<AppState>()(
       // „Nächstes": nur weiterblättern. Bewusst KEIN Merk-Set — der Ort kommt künftig wieder vor;
       // ans Backend geht ein „skip" (mildes Minus), nicht das alte „maybe" (+0.3 wäre gelogen).
       swipeSkip: (placeId) => { discoverApi.swipe(placeId, 'skip').catch(() => {}); },
+
+      // Hat man in der Nähe alles weggewischt, ist der Swipe leer und es gibt keinen Weg zurück.
+      // Die gelernte Affinität im Backend bleibt bewusst stehen — zurückgeholt wird die Sichtbarkeit.
+      resetNopes: () => set({ nopeIds: new Set<string>() }),
 
       // Foto-Likes sortieren die Galerie (und damit das Titelbild). Zustand liegt wie savedIds
       // lokal + gespiegelt beim Server; die Server-Antwort gewinnt, falls wir danebenlagen.
