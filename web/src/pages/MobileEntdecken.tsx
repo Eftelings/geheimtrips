@@ -23,17 +23,36 @@ const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ 
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place, Transport } from '../types/index.js';
 
-const orangeMarker = L.divIcon({
-  html: `<div style="width:15px;height:15px;border-radius:50%;background:#F99039;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(52,37,76,0.35);"></div>`,
-  iconSize: [15, 15], iconAnchor: [7, 7], className: '',
-});
-const purpleMarker = L.divIcon({
-  html: `<div style="position:relative;width:26px;height:26px;">
-    <div style="position:absolute;inset:0;border-radius:50%;background:rgba(124,58,237,0.22);transform:scale(1.9);"></div>
-    <div style="position:absolute;inset:0;border-radius:50%;background:#7c3aed;border:3px solid #fff;box-shadow:0 3px 9px rgba(52,37,76,0.5);"></div>
-  </div>`,
-  iconSize: [26, 26], iconAnchor: [13, 13], className: '',
-});
+/**
+ * Karten-Pin: weißer Kreis mit dem Icon der Ortskategorie — orange, der fokussierte Ort lila
+ * (mit Halo, damit er sich weiter abhebt). FontAwesome liegt als CSS-Webfont vor, deshalb greift
+ * die Icon-Klasse auch in dem HTML, das Leaflet nachträglich einhängt.
+ * Icons werden je Kategorie/Zustand EINMAL gebaut — ein L.divIcon pro Ort und Render wäre auf der
+ * Karte spürbar (die Marker werden ohnehin schon deshalb memoisiert).
+ */
+const markerCache = new Map<string, L.DivIcon>();
+function catMarker(icon: string, active: boolean): L.DivIcon {
+  const key = `${icon}|${active}`;
+  const hit = markerCache.get(key);
+  if (hit) return hit;
+  const made = L.divIcon({
+    html: active
+      ? `<div style="position:relative;width:30px;height:30px;">
+           <div style="position:absolute;inset:0;border-radius:50%;background:rgba(124,58,237,0.22);transform:scale(1.7);"></div>
+           <div style="position:absolute;inset:0;border-radius:50%;background:#fff;border:2.5px solid #7c3aed;box-shadow:0 3px 9px rgba(52,37,76,0.5);display:flex;align-items:center;justify-content:center;">
+             <i class="fa-solid ${icon}" style="font-size:13px;line-height:1;color:#7c3aed"></i>
+           </div>
+         </div>`
+      : `<div style="width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 7px rgba(52,37,76,0.4);display:flex;align-items:center;justify-content:center;">
+           <i class="fa-solid ${icon}" style="font-size:12px;line-height:1;color:#F99039"></i>
+         </div>`,
+    iconSize: active ? [30, 30] : [26, 26],
+    iconAnchor: active ? [15, 15] : [13, 13],
+    className: '',
+  });
+  markerCache.set(key, made);
+  return made;
+}
 
 const T_ICON: Record<string, string> = {
   radius: 'fa-circle-dot', walk: 'fa-person-walking', bike: 'fa-bicycle',
@@ -221,6 +240,7 @@ export function MobileEntdecken() {
   // Stapel neu aufnehmen anfordern. Über einen Zähler statt direktem setSwipeFeed: Modus/Filter
   // wirken erst im nächsten Render, ein Aufruf in derselben Runde griffe auf alte Werte.
   const [feedNonce, setFeedNonce] = useState(0);
+  const [swipeLocOpen, setSwipeLocOpen] = useState(false);   // Ortssuche auf der leeren Swipe-Seite
   const recaptureFeed = () => setFeedNonce(n => n + 1);
   // „Nochmal zeigen" = die Ansicht „Alle" — dieselbe Wirkung, nur als Knopf. Der Chip oben springt
   // sichtbar mit, damit klar ist, warum plötzlich alles kommt (und man mit einem Tipp zurückkann).
@@ -307,7 +327,7 @@ export function MobileEntdecken() {
   }
   function pickCenter(s: GeoLocation) {
     setSearchCenter(s.coords); setSearchLabel(s.displayName);
-    setSearchQuery(''); setGeoSug([]); setPanel(null);
+    setSearchQuery(''); setGeoSug([]); setPanel(null); setSwipeLocOpen(false);
   }
   function resetToGps() { setSearchCenter(null); setSearchLabel(null); setSearchQuery(''); setGeoSug([]); }
   // Langes Drücken auf die Karte → diesen Punkt als Radius-Startpunkt setzen
@@ -390,19 +410,62 @@ export function MobileEntdecken() {
   const toolBtn = 'w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0';
   const toolShadow = { boxShadow: '0 2px 10px rgba(52,37,76,0.18)' } as const;
 
+  // Ortssuche — einmal gebaut, zweimal benutzt: im Popover der Toolbar und direkt auf der leeren
+  // Swipe-Seite. Dort darf sie NICHT als Popover oben aufspringen, sondern muss dort aufklappen,
+  // wo der Knopf steht — sonst springt die Eingabe quer über den Bildschirm.
+  const locSearch = (
+    <div>
+      <div className="flex items-center gap-2 bg-[var(--color-bg-soft)] rounded-xl px-3 h-10 mb-2">
+        <i className="fa-solid fa-magnifying-glass text-[var(--color-lavender)] text-sm" />
+        <input autoFocus value={searchQuery} onChange={e => onSearchInput(e.target.value)}
+          placeholder="Stadt oder Adresse…"
+          className="flex-1 min-w-0 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]" />
+      </div>
+      <p className="text-[11px] text-[var(--color-lavender)] mb-2 px-1">
+        <i className="fa-solid fa-hand-pointer text-[var(--color-amber)] mr-1.5" />Tipp: lange auf die Karte drücken, um direkt einen Startpunkt zu setzen.
+      </p>
+      {geoSug.length > 0 ? geoSug.map((s, i) => (
+        <button key={i} onClick={() => pickCenter(s)}
+          className="w-full flex items-start gap-3 px-2 py-2 text-left rounded-xl hover:bg-[var(--color-bg-soft)]">
+          <i className="fa-solid fa-location-dot text-[var(--color-amber)] mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{s.displayName}</p>
+            <p className="text-xs text-[var(--color-lavender)] truncate">{s.fullAddress}</p>
+          </div>
+        </button>
+      )) : (
+        <div className="flex items-center justify-between px-1 py-1.5">
+          <span className="text-xs text-[var(--color-lavender)] truncate">
+            <i className="fa-solid fa-location-crosshairs text-[var(--color-amber)] mr-1.5" />
+            {searchLabel ?? (userCoords ? 'Mein Standort' : 'Kein Standort')}
+          </span>
+          {searchCenter && (
+            <button onClick={resetToGps} className="text-xs font-semibold flex-shrink-0" style={{ color: '#7c3aed' }}>
+              <i className="fa-solid fa-location-arrow mr-1" />GPS
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   // Filter direkt auf der leeren Swipe-Seite: Standort, Verkehrsmittel und Radius sind genau die
   // Stellschrauben, die hier fehlen. Sie schreiben in denselben State wie die Toolbar — die Karte
   // übernimmt die Einstellung also mit. „Jetzt zeigen" nimmt den Stapel neu auf.
   const swipeFilters = (
     <div className="w-full max-w-sm mt-2 flex flex-col gap-2.5 text-left">
-      <button onClick={() => setPanel('loc')}
-        className="w-full flex items-center gap-2 bg-white rounded-xl h-11 px-3.5" style={toolShadow}>
-        <i className="fa-solid fa-location-dot text-sm flex-shrink-0" style={{ color: searchCenter ? '#F99039' : '#34254c' }} />
-        <span className="text-xs font-semibold text-[var(--color-aubergine)] truncate">
-          {searchLabel ?? (userCoords ? 'Mein Standort' : 'Standort wählen')}
-        </span>
-        <i className="fa-solid fa-chevron-right text-[10px] text-[var(--color-lavender-lt)] ml-auto" />
-      </button>
+      <div className="bg-white rounded-2xl overflow-hidden" style={toolShadow}>
+        <button onClick={() => setSwipeLocOpen(v => !v)} className="w-full flex items-center gap-2 h-11 px-3.5">
+          <i className="fa-solid fa-location-dot text-sm flex-shrink-0" style={{ color: searchCenter ? '#F99039' : '#34254c' }} />
+          <span className="text-xs font-semibold text-[var(--color-aubergine)] truncate">
+            {searchLabel ?? (userCoords ? 'Mein Standort' : 'Standort wählen')}
+          </span>
+          <i className={`fa-solid fa-chevron-down text-[10px] text-[var(--color-lavender-lt)] ml-auto transition-transform ${swipeLocOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {swipeLocOpen && (
+          <div className="px-3 pb-3 pt-2.5 border-t border-[var(--color-bg-soft)]">{locSearch}</div>
+        )}
+      </div>
       <div className="bg-white rounded-2xl p-3" style={toolShadow}>
         <ReachControls
           travelMode={reach.travelMode} setTravelMode={reach.setTravelMode}
@@ -433,12 +496,15 @@ export function MobileEntdecken() {
   // neu gebunden (das war die Hänger-Ursache auf Mobil).
   const highlightId = swipeMode ? swipeFocus?.id : preview?.id;
   // Pin-Klick öffnet direkt das Orts-Overlay (nicht erst die Liste)
-  const markerEls = useMemo(() => shownPlaces.map(p => (
-    <Marker key={p.id} position={[p.lat!, p.lng!]}
-      icon={p.id === highlightId ? purpleMarker : orangeMarker}
-      zIndexOffset={p.id === highlightId ? 1000 : 0}
-      eventHandlers={{ click: () => openPlace(p) }} />
-  )), [shownPlaces, highlightId]);
+  const markerEls = useMemo(() => shownPlaces.map(p => {
+    const active = p.id === highlightId;
+    return (
+      <Marker key={p.id} position={[p.lat!, p.lng!]}
+        icon={catMarker(tagInfoFrom(vocab, p.tagSlug)?.icon ?? 'fa-location-dot', active)}
+        zIndexOffset={active ? 1000 : 0}
+        eventHandlers={{ click: () => openPlace(p) }} />
+    );
+  }), [shownPlaces, highlightId, vocab]); // eslint-disable-line
 
   return (
     <AppShell>
@@ -539,41 +605,7 @@ export function MobileEntdecken() {
             {panel === 'cat' && <TagFilter value={tagSel} onChange={setTagSel} />}
 
             {/* Nur Standort — Klick auf „Mein Standort" öffnet direkt die Ortssuche */}
-            {panel === 'loc' && (
-              <div>
-                <div className="flex items-center gap-2 bg-[var(--color-bg-soft)] rounded-xl px-3 h-10 mb-2">
-                  <i className="fa-solid fa-magnifying-glass text-[var(--color-lavender)] text-sm" />
-                  <input autoFocus value={searchQuery} onChange={e => onSearchInput(e.target.value)}
-                    placeholder="Stadt oder Adresse…"
-                    className="flex-1 bg-transparent outline-none text-sm text-[var(--color-aubergine)] placeholder:text-[var(--color-lavender-lt)]" />
-                </div>
-                <p className="text-[11px] text-[var(--color-lavender)] mb-2 px-1">
-                  <i className="fa-solid fa-hand-pointer text-[var(--color-amber)] mr-1.5" />Tipp: lange auf die Karte drücken, um direkt einen Startpunkt zu setzen.
-                </p>
-                {geoSug.length > 0 ? geoSug.map((s, i) => (
-                  <button key={i} onClick={() => pickCenter(s)}
-                    className="w-full flex items-start gap-3 px-2 py-2 text-left rounded-xl hover:bg-[var(--color-bg-soft)]">
-                    <i className="fa-solid fa-location-dot text-[var(--color-amber)] mt-0.5" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{s.displayName}</p>
-                      <p className="text-xs text-[var(--color-lavender)] truncate">{s.fullAddress}</p>
-                    </div>
-                  </button>
-                )) : (
-                  <div className="flex items-center justify-between px-1 py-1.5">
-                    <span className="text-xs text-[var(--color-lavender)]">
-                      <i className="fa-solid fa-location-crosshairs text-[var(--color-amber)] mr-1.5" />
-                      {searchLabel ?? (userCoords ? 'Mein Standort' : 'Kein Standort')}
-                    </span>
-                    {searchCenter && (
-                      <button onClick={resetToGps} className="text-xs font-semibold" style={{ color: '#7c3aed' }}>
-                        <i className="fa-solid fa-location-arrow mr-1" />GPS
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            {panel === 'loc' && locSearch}
 
             {/* Nur Reichweite — Klick auf die km/Min-Angabe: Verkehrsmittel + Radius/Reisezeit, ohne Ortssuche */}
             {panel === 'reach' && (
