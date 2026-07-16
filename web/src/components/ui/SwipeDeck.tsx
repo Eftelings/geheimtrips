@@ -206,31 +206,36 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     //  · Feed leer und nichts im Radius → Filter/Radius zu eng
     //  · Feed hatte Orte, Index durch  → durchgeswipet
     const answered = places.length === 0 && (radiusCount ?? 0) > 0;
-    // Hier ist keine Karte mehr, sondern eine Seite zum Nachjustieren: also scrollbar und ohne
-    // Zieh-Geste (die würde mit den Reglern kollidieren). Zurück geht es über „Liste" oben.
+    // Keine Karte mehr, sondern eine Seite zum Nachjustieren — also scrollbar. Der obere Teil
+    // bleibt aber ziehbar (runter = Overlay klein), nur die Regler darunter sind ausgenommen:
+    // dort kämpfte der Zug sonst mit Schieberegler und Scrollen.
     return (
       <div className="h-full relative overflow-y-auto overscroll-contain" style={{ background: 'var(--color-bg)' }}>
         {topBar(false)}
-        <div className="min-h-full flex flex-col items-center justify-center gap-2.5 text-center px-6 pt-16 pb-8">
-          <i className={`fa-solid ${answered ? 'fa-clipboard-check' : 'fa-champagne-glasses'} text-4xl text-[var(--color-amber)]`} />
-          <p className="font-display font-bold text-xl text-[var(--color-aubergine)]">
-            {answered ? 'Hier kennst du schon alles' : places.length === 0 ? 'Keine Orte im Radius' : 'Alle durchgeswipet!'}
-          </p>
-          <p className="text-sm text-[var(--color-lavender)] max-w-xs">
-            {answered
-              ? `Zu ${radiusCount === 1 ? 'dem Ort' : `allen ${radiusCount} Orten`} hier hast du dich schon geäußert. Zeig sie dir nochmal an — oder erweitere die Reichweite.`
-              : places.length === 0
-                ? 'Erweitere Radius oder Reisezeit, oder wähle einen anderen Startpunkt.'
-                : 'Zieh das Overlay runter oder tippe auf „Liste".'}
-          </p>
-          {onShowAll && (
-            <button onClick={onShowAll}
-              className="mt-1 inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold text-white active:scale-95 transition-transform"
-              style={{ background: 'var(--color-amber)' }}>
-              <i className="fa-solid fa-rotate-left" />Nochmal zeigen
-            </button>
-          )}
-          {emptyFilters}
+        <div className="min-h-full flex flex-col">
+          <div className="flex-1 flex flex-col items-center justify-end gap-2.5 text-center px-6 pt-16 pb-5"
+            style={{ touchAction: 'none' }}
+            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
+            <i className={`fa-solid ${answered ? 'fa-clipboard-check' : 'fa-champagne-glasses'} text-4xl text-[var(--color-amber)]`} />
+            <p className="font-display font-bold text-xl text-[var(--color-aubergine)]">
+              {answered ? 'Hier kennst du schon alles' : places.length === 0 ? 'Keine Orte im Radius' : 'Alle durchgeswipet!'}
+            </p>
+            <p className="text-sm text-[var(--color-lavender)] max-w-xs">
+              {answered
+                ? `Zu ${radiusCount === 1 ? 'dem Ort' : `allen ${radiusCount} Orten`} hier hast du dich schon geäußert. Zeig sie dir nochmal an — oder erweitere die Reichweite.`
+                : places.length === 0
+                  ? 'Erweitere Radius oder Reisezeit, oder wähle einen anderen Startpunkt.'
+                  : 'Zieh das Overlay runter oder tippe auf „Liste".'}
+            </p>
+            {onShowAll && (
+              <button onClick={onShowAll}
+                className="mt-1 inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold text-white active:scale-95 transition-transform"
+                style={{ background: 'var(--color-amber)' }}>
+                <i className="fa-solid fa-rotate-left" />Nochmal zeigen
+              </button>
+            )}
+          </div>
+          <div className="px-6 pb-8 flex justify-center">{emptyFilters}</div>
         </div>
       </div>
     );
