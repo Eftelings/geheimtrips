@@ -1004,6 +1004,11 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, o
   const [answerInput, setAnswerInput]  = useState('');
   const [newQuestion, setNewQuestion]  = useState('');
   const [ratingOpen, setRatingOpen]    = useState(false);
+  // Bewerten nur nach Besuch. Ohne Besuch: „Warst du da?" + Foto als Beweis (optional zum Beitrag).
+  const [proofOpen, setProofOpen]      = useState(false);
+  const [proofBusy, setProofBusy]      = useState(false);
+  const [proofToPost, setProofToPost]  = useState(true);
+  const proofInputRef = useRef<HTMLInputElement>(null);
   const [addTripOpen, setAddTripOpen]  = useState(false);
   const [gpsLoading, setGpsLoading]    = useState(false);
   const [toastMsg, setToastMsg]        = useState('');
@@ -1546,6 +1551,35 @@ async function handleVerifyToggle() {
     finally { setGpsLoading(false); }
   }
 
+  // Einstieg ins Bewerten: besucht → direkt bewerten, sonst erst der Beweis-Ablauf.
+  function startRating() {
+    if (!gate(undefined, 'Melde dich an, um zu bewerten.')) return;
+    if (isVisited) setRatingOpen(true); else setProofOpen(true);
+  }
+
+  // Beweis-Foto: hochladen → als besucht markieren → optional in die Galerie → bewerten öffnen.
+  async function handleProofFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !place || proofBusy) return;
+    setProofBusy(true);
+    try {
+      const { url } = await mediaApi.upload(file);
+      if (proofToPost) {
+        // Ins Beitragsalbum: markiert den Ort auch als besucht (Server-Logik), Ort neu laden.
+        await placesApi.addMedia(place.id, { url, type: file.type.startsWith('video/') ? 'video' : 'photo', cropX: 0.5, cropY: 0.5 }).catch(() => {});
+        const fresh = await placesApi.get(place.id).catch(() => null);
+        if (fresh) setPlace(fresh);
+      }
+      await markVisited(place.id).catch(() => {});
+      setProofOpen(false);
+      showToast('Danke — als besucht markiert ✓');
+      setRatingOpen(true);
+    } catch {
+      showToast('Foto konnte nicht hochgeladen werden. Bitte versuch es erneut.');
+    } finally { setProofBusy(false); }
+  }
+
   function handleRatingSubmit() {
     setRatingOpen(false);
     showToast('Bewertung gespeichert! +10 Punkte');
@@ -1935,14 +1969,12 @@ async function handleVerifyToggle() {
             <VisitedToggle isVisited={isVisited} gpsLoading={gpsLoading} onToggle={handleVerifyToggle} />
           )}
 
-          {/* Bewerten — nur wenn besucht */}
-          {isVisited && (
-            <button onClick={() => setRatingOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold flex-shrink-0 transition-all hover:brightness-110 active:scale-95"
-              style={{ background: 'var(--color-amber)', color: 'white' }}>
-              <i className="fa-solid fa-star text-[11px]" /> Bewerten
-            </button>
-          )}
+          {/* Bewerten — immer sichtbar; ohne Besuch führt es erst durch den Beweis-Ablauf. */}
+          <button onClick={startRating}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold flex-shrink-0 transition-all hover:brightness-110 active:scale-95"
+            style={{ background: 'var(--color-amber)', color: 'white' }}>
+            <i className="fa-solid fa-star text-[11px]" /> Bewerten
+          </button>
 
           {/* Foto/Video hinzufügen */}
           <button onClick={() => gate(() => fileInputRef.current?.click(), 'Melde dich an, um Fotos zu diesem Ort hinzuzufügen.')} title="Foto oder Video hinzufügen"
@@ -2152,7 +2184,7 @@ async function handleVerifyToggle() {
                 <p className="text-sm mt-1" style={{ color: '#71587a' }}>
                   Besuche den Ort und hinterlasse die erste Bewertung!
                 </p>
-                <button onClick={() => gate(() => { setShowReviews(false); setRatingOpen(true); }, 'Melde dich an, um eine Rezension zu hinterlassen.')}
+                <button onClick={() => { setShowReviews(false); startRating(); }}
                   className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold text-white transition-all hover:brightness-110"
                   style={{ background: 'var(--color-amber)' }}>
                   <i className="fa-solid fa-star" /> Jetzt bewerten
@@ -3079,6 +3111,40 @@ async function handleVerifyToggle() {
       )}
 
       {/* ── Rating modal ──────────────────────────────────────────────────────── */}
+      {/* „Warst du da?" — Beweis-Ablauf vor dem Bewerten (nur wenn nicht besucht). */}
+      {proofOpen && (
+        <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center p-0 md:p-4"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
+          onClick={e => { if (e.target === e.currentTarget && !proofBusy) setProofOpen(false); }}>
+          <input ref={proofInputRef} type="file" accept="image/*" onChange={handleProofFile} className="hidden" />
+          <div className="w-full md:max-w-md rounded-t-3xl md:rounded-3xl p-6" style={{ background: '#FBF9FC' }}>
+            <div className="flex justify-center mb-3">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(249,144,57,0.15)' }}>
+                <i className="fa-solid fa-camera text-2xl text-[var(--color-amber)]" />
+              </div>
+            </div>
+            <h3 className="font-display font-bold text-[var(--color-aubergine)] text-xl text-center leading-tight mb-1">Warst du schon dort?</h3>
+            <p className="text-sm text-[var(--color-lavender)] text-center mb-5 leading-relaxed">
+              Bewerten kann, wer da war. Lad ein eigenes Foto vom Ort als Beweis hoch — dann geht’s zur Bewertung.
+            </p>
+            <label className="flex items-center gap-2.5 mb-4 px-1 cursor-pointer">
+              <input type="checkbox" checked={proofToPost} onChange={e => setProofToPost(e.target.checked)}
+                className="w-4 h-4 accent-[var(--color-amber)] flex-shrink-0" />
+              <span className="text-sm text-[var(--color-aubergine)]">Foto zum Beitrag hinzufügen (in der Galerie zeigen)</span>
+            </label>
+            <button onClick={() => proofInputRef.current?.click()} disabled={proofBusy}
+              className="w-full py-3.5 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{ background: 'var(--color-amber)' }}>
+              {proofBusy
+                ? <><i className="fa-solid fa-circle-notch fa-spin" /> Wird hochgeladen…</>
+                : <><i className="fa-solid fa-camera" /> Foto auswählen</>}
+            </button>
+            <button onClick={() => !proofBusy && setProofOpen(false)}
+              className="w-full mt-2 py-2 text-sm font-semibold text-[var(--color-lavender)]">Abbrechen</button>
+          </div>
+        </div>
+      )}
+
       {ratingOpen && (
         <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center p-0 md:p-4"
           style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
