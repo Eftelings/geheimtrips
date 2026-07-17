@@ -336,8 +336,8 @@ function MiniRichText({
           onKeyUp={saveSelection}
           onMouseUp={saveSelection}
           onBlur={saveSelection}
-          style={{ minHeight }}
-          className="px-4 py-3 text-sm text-[#34254C] outline-none leading-relaxed [&_img.gt-embed]:rounded-xl [&_img.gt-embed]:my-2 [&_img.gt-embed]:max-h-60 [&_img.gt-embed]:w-auto [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline"
+          style={{ minHeight, overflowWrap: 'anywhere' }}
+          className="px-4 py-3 text-sm text-[#34254C] outline-none leading-relaxed break-words [&_img.gt-embed]:rounded-xl [&_img.gt-embed]:my-2 [&_img.gt-embed]:max-h-60 [&_img.gt-embed]:w-auto [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline"
         />
       </div>
       {/* Char counter */}
@@ -2327,7 +2327,7 @@ export function SubmitPage() {
   ];
 
   return (
-    <AppShell title={`${isEdit ? 'Bearbeiten' : 'Einreichen'} · ${STEP_TITLES[step - 1]}`} showBack>
+    <AppShell title={`${isEdit ? 'Bearbeiten' : 'Einreichen'} · ${STEP_TITLES[step - 1]}`} showBack noBottomNav>
       <div ref={topRef} className="max-w-xl mx-auto px-5 py-8 pb-32">
         <ProgressBar step={step} />
 
@@ -2363,7 +2363,7 @@ export function SubmitPage() {
         {/* Sticky bottom nav — letzter Schritt schickt ab */}
         <div
           className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#E4DCF0]"
-          style={{ background: 'rgba(251,249,252,0.97)', backdropFilter: 'blur(12px)' }}
+          style={{ background: 'rgba(251,249,252,0.97)', backdropFilter: 'blur(12px)', paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           <div className="max-w-xl mx-auto px-5 py-4 flex gap-3">
             {step > 1 && (

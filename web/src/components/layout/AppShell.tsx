@@ -21,9 +21,12 @@ interface Props {
   noHeader?: boolean;
   /** Eingebettet (z.B. im Karten-Overlay): ohne Sidebar/BottomNav/Header — nur der Inhalt */
   bare?: boolean;
+  /** Fokus-Flow (z.B. Einreichen): globale Tab-Leiste ausblenden — sie kollidiert sonst mit der
+   *  seiteneigenen Weiter/Zurück-Leiste. Header bleibt. */
+  noBottomNav?: boolean;
 }
 
-export function AppShell({ children, showBack, title, headerRight, noHeader, bare }: Props) {
+export function AppShell({ children, showBack, title, headerRight, noHeader, bare, noBottomNav }: Props) {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { gate } = useRequireAuth();
@@ -97,13 +100,14 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
           </header>
         )}
 
-        {/* Page content */}
-        <main className="flex-1 flex flex-col pb-20 md:pb-0 bg-[var(--color-bg)]">
+        {/* Page content. overflow-x-clip: kein versehentlich zu breites Kind kann die ganze Seite
+            seitlich scrollbar machen (fiel auf kleinen Handys beim Einreichen auf). */}
+        <main className={`flex-1 flex flex-col overflow-x-clip bg-[var(--color-bg)] ${noBottomNav ? '' : 'pb-20 md:pb-0'}`}>
           {children}
         </main>
       </div>
 
-      <BottomNav />
+      {!noBottomNav && <BottomNav />}
       </div>{/* end max-width wrapper */}
     </div>
   );
