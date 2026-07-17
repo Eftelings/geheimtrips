@@ -17,6 +17,7 @@ import { SwipeDeck } from '../components/ui/SwipeDeck.js';
 import { useRequireAuth } from '../hooks/useRequireAuth.js';
 import { useUiStore } from '../store/useUiStore.js';
 import { MAP_LAYERS, TILE_URL, HYBRID_ROADS, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../utils/mapTiles.js';
+import { imgUrl } from '../utils/img.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
 const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
@@ -735,7 +736,7 @@ export function MobileEntdecken() {
               className="w-full flex items-center gap-3 py-2 px-2 rounded-2xl text-left transition-colors active:scale-[0.99]"
               style={{ background: p.id === selectedId ? '#F1ECF4' : 'transparent' }}>
               <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
-                <img src={p.hero} alt={p.name} className="w-full h-full object-cover" />
+                <img src={imgUrl(p.hero, 64)} alt={p.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-[var(--color-aubergine)] truncate">{p.name}</p>

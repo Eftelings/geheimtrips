@@ -298,7 +298,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
         {cur?.video
           ? <video src={cur.url} autoPlay muted loop playsInline className="w-full h-full object-cover pointer-events-none" />
-          : <PlaceImage src={cur?.url ?? ''} category="" alt={card.name} className="w-full h-full object-cover pointer-events-none" iconClass="text-6xl" eager />}
+          : <PlaceImage src={cur?.url ?? ''} category="" alt={card.name} className="w-full h-full object-cover pointer-events-none" iconClass="text-6xl" eager width={600} />}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/25 pointer-events-none" />
 
         {/* Griff + „Liste" liegen IM Bild (nicht im Sheet-Kopf) — sie scrollen mit dem Hero weg,

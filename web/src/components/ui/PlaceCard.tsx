@@ -36,7 +36,7 @@ export function PlaceCard({ place, showMatch, className = '', distanceKm, onOpen
       className={`bg-white rounded-[var(--radius-card)] shadow-[var(--shadow-card)] overflow-hidden cursor-pointer active:scale-[0.98] transition-transform ${className}`}
     >
       <div className="relative aspect-[16/9] overflow-hidden">
-        <PlaceImage src={place.hero} category={place.category} alt={place.name} className="w-full h-full object-cover" />
+        <PlaceImage src={place.hero} category={place.category} alt={place.name} className="w-full h-full object-cover" width={360} />
         {showMatch && (
           <div className="absolute bottom-2 left-2 bg-[var(--color-amber)] text-white text-xs font-bold px-2.5 py-1 rounded-full">
             {place.match}% Match

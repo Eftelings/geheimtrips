@@ -115,6 +115,11 @@ uploadRouter.post('/upload', requireAuth, async (c) => {
 // ── Serve router (mounted at /uploads) ────────────────────────────────────────
 export const serveRouter = new Hono();
 
+// Erlaubte Zielbreiten für `?w=` — kein freier Wert, sonst ließe sich der Cache mit beliebigen
+// Größen zumüllen (und es wäre ein DoS-Hebel). Deckt Thumbnail bis Hero ab.
+const THUMB_WIDTHS = [160, 320, 480, 800, 1200];
+const RESIZABLE = new Set(['jpg', 'jpeg', 'png', 'webp']);
+
 serveRouter.get('/:filename', async (c) => {
   const filename = c.req.param('filename');
 
@@ -127,6 +132,39 @@ serveRouter.get('/:filename', async (c) => {
   if (!fs.existsSync(filepath)) return c.json({ error: 'Nicht gefunden.' }, 404);
 
   const ext  = path.extname(filename).slice(1).toLowerCase();
+
+  // ── Größenvariante (`?w=`): einmal erzeugen, auf Platte cachen, als WebP ausliefern. ──────────
+  // Grund: Listen-Thumbnails (64–150px) haben Original-Uploads bis 4000px+ geladen (mehrere MB je
+  // Bild). Das war der mit Abstand größte Ladezeit-Fresser. Videos/GIFs bleiben unangetastet.
+  const wRaw = Number(c.req.query('w'));
+  if (wRaw && RESIZABLE.has(ext)) {
+    const w = THUMB_WIDTHS.reduce((a, b) => (Math.abs(b - wRaw) < Math.abs(a - wRaw) ? b : a));
+    const cacheName = `${filename}.w${w}.webp`;
+    const cachePath = path.join(UPLOAD_DIR, cacheName);
+    try {
+      if (!fs.existsSync(cachePath)) {
+        const sharp = (await import('sharp')).default;
+        const out = await sharp(fs.readFileSync(filepath))
+          .rotate()
+          .resize({ width: w, withoutEnlargement: true })
+          .webp({ quality: 78 })
+          .toBuffer();
+        fs.writeFileSync(cachePath, out);
+      }
+      const data = fs.readFileSync(cachePath);
+      return new Response(data, {
+        headers: {
+          'Content-Type': 'image/webp',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Content-Length': String(data.length),
+        },
+      });
+    } catch (e) {
+      console.error('Resize fehlgeschlagen, liefere Original:', e);
+      // fällt unten aufs Original zurück
+    }
+  }
+
   const mime = SERVE_MIME[ext] ?? 'application/octet-stream';
   const total = fs.statSync(filepath).size;
 
