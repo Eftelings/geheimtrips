@@ -150,7 +150,10 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
    * dort gibt es das Overlay nicht.
    */
   const openInOverlay = (p: Place) =>
-    navigate('/', { state: { openPlace: p.id, mode: 'saved', from: '/meine-orte' } });
+    // `place` als Fallback mitgeben: selbst eingereichte Orte (in Prüfung) sind aus /api/places
+    // gefiltert und liegen NICHT im Store — ohne das Objekt fände das Overlay sie nicht.
+    // mode nur bei gemerkten Orten setzen; Beigetragene passen nicht zu „nur gemerkt".
+    navigate('/', { state: { openPlace: p.id, place: p, mode: orteView === 'beigetragen' ? undefined : 'saved', from: '/meine-orte' } });
 
   useEffect(() => { loadPlaces(); loadTrips(); loadSavedTags(); }, []); // eslint-disable-line
   useEffect(() => { setMapReady(true); }, []);

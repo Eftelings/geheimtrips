@@ -397,9 +397,10 @@ export function MobileEntdecken() {
    * der Router-State geleert, sonst risse ein Zurück/Reload den Ort erneut auf.
    */
   useEffect(() => {
-    const st = location.state as { openPlace?: string; mode?: Mode; from?: string } | null;
+    const st = location.state as { openPlace?: string; place?: Place; mode?: Mode; from?: string } | null;
     if (!st?.openPlace) return;
-    const p = places.find(x => x.id === st.openPlace);
+    // Eingereichte Orte (in Prüfung) sind nicht im Store → das mitgegebene Objekt als Fallback.
+    const p = places.find(x => x.id === st.openPlace) ?? st.place;
     if (!p) return;
     if (st.mode) setMode(st.mode);
     // Der Ort wird zum Standort. Man kommt her, um IHN anzusehen — mit dem alten Standort läge er
