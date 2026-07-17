@@ -401,6 +401,11 @@ export function MobileEntdecken() {
     const p = places.find(x => x.id === st.openPlace);
     if (!p) return;
     if (st.mode) setMode(st.mode);
+    // Der Ort wird zum Standort. Man kommt her, um IHN anzusehen — mit dem alten Standort läge er
+    // womöglich weit außerhalb der eingestellten Reichweite: die Karte zeigte ihn nicht und die
+    // Liste kennt ihn nicht. So ist er der Mittelpunkt, und die Liste zeigt, was in seiner Nähe
+    // liegt. Sichtbar und umkehrbar — in der Standort-Leiste steht sein Name, daneben „GPS".
+    if (p.lat != null && p.lng != null) { setSearchCenter({ lat: p.lat, lng: p.lng }); setSearchLabel(p.name); }
     setBackTo(st.from ?? null);
     openPlace(p);
     navigate('.', { replace: true, state: null });
