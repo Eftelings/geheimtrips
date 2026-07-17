@@ -261,9 +261,11 @@ export function OnboardingPage() {
           </button>
         </div>
         {!editMode && (
-          <button onClick={() => navigate('/', { replace: true })}
+          // Überspringen betrifft nur DIESE Seite — nicht den ganzen Prozess. Auf der letzten Seite
+          // (optionale Angaben) schließt es ab und führt zur Kalibrierung, statt alles wegzuwerfen.
+          <button onClick={() => step < steps.length - 1 ? setStep(s => s + 1) : finish()}
             className="text-center text-xs text-[var(--color-lavender-lt)] mt-4">
-            Überspringen
+            Diese Frage überspringen
           </button>
         )}
       </div>
