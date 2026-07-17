@@ -515,11 +515,24 @@ export function MobileEntdecken() {
     return Math.round(vh / 2 - (top + bottom) / 2);
   }, [vh, swipeMode, snap, sheetSnap]);
 
+  // Der Ort, den man gerade ansieht, ist immer der hervorgehobene — sonst bekäme beim Zurück aus
+  // „Meine Orte" der erste Listeneintrag den lila Pin, weil `preview` ihn nicht findet.
+  const highlightId = mapFocus?.id ?? preview?.id;
+  /**
+   * Der angesehene Ort gehört IMMER auf die Karte — auch außerhalb der Reichweite. Aus „Meine Orte"
+   * geöffnet kann er 200 km weg liegen, während hier 10 km eingestellt sind: `shownPlaces` filtert
+   * ihn dann raus, die Karte fliegt hin und dort ist nichts. Nur der Pin, nicht die Liste — deren
+   * Zähler („N Orte in der Nähe") würde sonst lügen.
+   */
+  const markerPlaces = useMemo(() => (
+    mapFocus && mapFocus.lat != null && !shownPlaces.some(p => p.id === mapFocus.id)
+      ? [...shownPlaces, mapFocus] : shownPlaces
+  ), [shownPlaces, mapFocus]);
+
   // Marker memoisieren → beim Sheet-Ziehen (häufige Re-Renders) werden NICHT alle Leaflet-Marker
   // neu gebunden (das war die Hänger-Ursache auf Mobil).
-  const highlightId = swipeMode ? swipeFocus?.id : preview?.id;
   // Pin-Klick öffnet direkt das Orts-Overlay (nicht erst die Liste)
-  const markerEls = useMemo(() => shownPlaces.map(p => {
+  const markerEls = useMemo(() => markerPlaces.map(p => {
     const active = p.id === highlightId;
     return (
       <Marker key={p.id} position={[p.lat!, p.lng!]}
@@ -527,7 +540,7 @@ export function MobileEntdecken() {
         zIndexOffset={active ? 1000 : 0}
         eventHandlers={{ click: () => openPlace(p) }} />
     );
-  }), [shownPlaces, highlightId, vocab]); // eslint-disable-line
+  }), [markerPlaces, highlightId, vocab]); // eslint-disable-line
 
   return (
     <AppShell>
