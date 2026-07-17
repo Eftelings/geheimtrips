@@ -2662,7 +2662,7 @@ async function handleVerifyToggle() {
 
             {/* Mobile only: Wetter — after Q&A */}
             <div className="lg:hidden order-2 lg:order-none">
-              <WeatherForecast lat={place.lat} lng={place.lng} placeId={place.id} />
+              <WeatherForecast lat={place.lat} lng={place.lng} placeId={place.id} name={place.name} />
             </div>
 
             {/* Datei-Input fürs Hochladen (vom Header-Kamera-Button + der Galerie genutzt) */}
@@ -2936,7 +2936,7 @@ async function handleVerifyToggle() {
             )}
 
             <div className="hidden lg:block">
-              <WeatherForecast lat={place.lat} lng={place.lng} placeId={place.id} />
+              <WeatherForecast lat={place.lat} lng={place.lng} placeId={place.id} name={place.name} />
             </div>
 
             {similar.length > 0 && (

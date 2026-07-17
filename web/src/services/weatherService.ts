@@ -21,9 +21,18 @@ export interface DayForecast {
   rainPct: number;        // Regenwahrscheinlichkeit 0–100
 }
 
+export interface HourForecast {
+  hour: string;           // "14"
+  code: number;
+  icon: string;
+  temp: number;
+  rainPct: number;
+}
+
 export interface WeatherData {
   current: CurrentWeather;
   forecast: DayForecast[];  // 3 Tage
+  hours: HourForecast[];    // Tagesverlauf: ab der aktuellen Stunde, 12 Stunden
   fetchedAt: number;         // timestamp
 }
 
@@ -58,6 +67,7 @@ export async function getWeather(lat: number, lng: number, cacheKey?: string): P
     `https://api.open-meteo.com/v1/forecast` +
     `?latitude=${lat}&longitude=${lng}` +
     `&current=temperature_2m,weathercode,wind_speed_10m,is_day` +
+    `&hourly=temperature_2m,weathercode,precipitation_probability` +
     `&daily=weathercode,temperature_2m_max,precipitation_probability_max` +
     `&timezone=Europe%2FBerlin&forecast_days=4`;
 
@@ -93,7 +103,29 @@ export async function getWeather(lat: number, lng: number, cacheKey?: string): P
     };
   });
 
-  const result: WeatherData = { current, forecast, fetchedAt: Date.now() };
+  // Tagesverlauf ab der laufenden Stunde. Open-Meteo liefert die Zeiten in der angefragten Zone
+  // ohne Offset ("2026-07-17T14:00") — deshalb wird hier NICHT nach UTC verglichen, sondern der
+  // Startindex über die lokale Stunde gesucht. Sonst zeigte der Verlauf zwei Stunden daneben.
+  const hours: HourForecast[] = (() => {
+    const times: string[] = raw.hourly?.time ?? [];
+    if (!times.length) return [];
+    const nowKey = new Date().toISOString().slice(0, 13);   // nur als Fallback
+    let start = times.findIndex((t: string) => t.slice(0, 13) >= (cur.time?.slice(0, 13) ?? nowKey));
+    if (start < 0) start = 0;
+    return times.slice(start, start + 12).map((t: string, i: number) => {
+      const idx = start + i;
+      const code = raw.hourly.weathercode[idx];
+      return {
+        hour: t.slice(11, 13),
+        code,
+        icon: decodeWMO(code, Number(t.slice(11, 13)) >= 7 && Number(t.slice(11, 13)) <= 20).icon,
+        temp: Math.round(raw.hourly.temperature_2m[idx]),
+        rainPct: raw.hourly.precipitation_probability?.[idx] ?? 0,
+      };
+    });
+  })();
+
+  const result: WeatherData = { current, forecast, hours, fetchedAt: Date.now() };
   cache.set(key, result);
   return result;
 }

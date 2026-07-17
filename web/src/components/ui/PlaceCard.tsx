@@ -66,7 +66,7 @@ export function PlaceCard({ place, showMatch, className = '', distanceKm, onOpen
           <span className="text-xs text-[var(--color-lavender)] whitespace-nowrap">
             {distanceKm != null ? fmtKm(distanceKm) : place.distanceLabel}
           </span>
-          <WeatherBadge lat={place.lat} lng={place.lng} placeId={place.id} compact />
+          <WeatherBadge lat={place.lat} lng={place.lng} placeId={place.id} name={place.name} compact />
         </div>
         {(place.saverCount ?? 0) > 0 && (
           <div className="flex items-center gap-1.5 mt-2">
