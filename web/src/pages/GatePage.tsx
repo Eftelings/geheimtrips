@@ -193,11 +193,16 @@ export function GatePage() {
                   onChange={e => setName(e.target.value)} required
                   className="w-full bg-white/15 border border-white/20 rounded-[var(--radius-input)] px-4 py-2.5 text-white placeholder-white/50 text-sm outline-none focus:border-[var(--color-amber)] transition-colors"
                 />
-                <input
-                  type="text" placeholder="Handle (z.B. lena_entdeckt)" value={handle}
-                  onChange={e => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} required
-                  className="w-full bg-white/15 border border-white/20 rounded-[var(--radius-input)] px-4 py-2.5 text-white placeholder-white/50 text-sm outline-none focus:border-[var(--color-amber)] transition-colors"
-                />
+                {/* Handle ist optional — leer lassen erzeugt automatisch einen aus dem Namen. Das @
+                    ist reine Deko im Feld, eingegeben wird es nicht (wird ohnehin rausgefiltert). */}
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 text-sm pointer-events-none">@</span>
+                  <input
+                    type="text" placeholder="Handle (optional)" value={handle}
+                    onChange={e => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    className="w-full bg-white/15 border border-white/20 rounded-[var(--radius-input)] pl-8 pr-4 py-2.5 text-white placeholder-white/50 text-sm outline-none focus:border-[var(--color-amber)] transition-colors"
+                  />
+                </div>
               </>
             )}
             <input

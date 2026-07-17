@@ -14,6 +14,38 @@ import { checkUserNaming, containsBannedWord } from '../lib/moderation.js';
 // E-Mail: Format inkl. gültiger Domain-Endung (Zod .email() lässt „a@b" ohne TLD zu)
 const emailField = z.string().email().refine(e => /@[^@\s]+\.[a-z]{2,}$/i.test(e), 'Bitte eine gültige E-Mail-Adresse angeben.');
 
+// zValidator mit lesbarer Fehlermeldung. Ohne Hook liefert Hono bei Validierungsfehlern die rohe
+// ZodError-Struktur — der Client zeigt daraus „[object Object]". Wir übersetzen die erste Issue.
+function jsonBody<T extends z.ZodTypeAny>(schema: T) {
+  const map: Record<string, string> = {
+    email:    'Bitte eine gültige E-Mail-Adresse angeben.',
+    password: 'Das Passwort muss mindestens 6 Zeichen haben.',
+    name:     'Bitte gib einen Namen an.',
+    handle:   'Der Handle darf nur Kleinbuchstaben, Zahlen und _ enthalten.',
+  };
+  return zValidator('json', schema, (result, c) => {
+    if (!result.success) {
+      const issue = result.error.issues[0];
+      const field = String(issue?.path[0] ?? '');
+      return c.json({ error: map[field] ?? issue?.message ?? 'Eingabe ungültig.' }, 400);
+    }
+  });
+}
+
+// Handle aus Name/E-Mail ableiten, falls keiner angegeben — und eindeutig machen.
+function slugHandle(s: string): string {
+  return s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g, '').slice(0, 20);
+}
+async function uniqueHandle(base: string): Promise<string> {
+  const root = (slugHandle(base) || 'entdecker').padEnd(2, '1');
+  for (let i = 0; i < 25; i++) {
+    const cand = i === 0 ? root : `${root}${Math.floor(1000 + Math.random() * 9000)}`;
+    const taken = await db.select().from(users).where(eq(users.handle, cand)).get();
+    if (!taken) return cand;
+  }
+  return `${root}${randomBytes(3).toString('hex')}`;
+}
+
 const router = new Hono();
 
 // Tabelle für Passwort-Reset-Tokens (Laufzeit-Anlage, keine Migration nötig).
@@ -52,10 +84,11 @@ const registerSchema = z.object({
   email: emailField,
   password: z.string().min(6),
   name: z.string().min(1).max(60),
-  handle: z.string().min(2).max(30).regex(/^[a-z0-9_]+$/),
+  // Optional: leer/fehlend → wird serverseitig aus dem Namen erzeugt. Nur Format prüfen, wenn da.
+  handle: z.string().max(30).regex(/^[a-z0-9_]*$/, 'Der Handle darf nur Kleinbuchstaben, Zahlen und _ enthalten.').optional(),
 });
 
-router.post('/login', zValidator('json', loginSchema), async (c) => {
+router.post('/login', jsonBody(loginSchema), async (c) => {
   const { email, password } = c.req.valid('json');
   const user = await db.select().from(users).where(eq(users.email, email)).get();
   if (!user) return c.json({ error: 'E-Mail oder Passwort falsch.' }, 401);
@@ -66,15 +99,18 @@ router.post('/login', zValidator('json', loginSchema), async (c) => {
   return c.json({ token, user: safeUser });
 });
 
-router.post('/register', zValidator('json', registerSchema), async (c) => {
-  const { email, password, name, handle } = c.req.valid('json');
+router.post('/register', jsonBody(registerSchema), async (c) => {
+  const { email, password, name } = c.req.valid('json');
+  // Handle optional: getippten übernehmen (mind. 2 Zeichen), sonst aus dem Namen erzeugen.
+  let handle = (c.req.valid('json').handle ?? '').trim().toLowerCase();
+  if (!/^[a-z0-9_]{2,30}$/.test(handle)) handle = await uniqueHandle(name || email.split('@')[0]);
   // Blacklist: Schimpfwörter / Hassrede in Name oder Handle blockieren
   const namingError = checkUserNaming(name, handle);
   if (namingError) return c.json({ error: namingError }, 400);
   const existing = await db.select().from(users).where(eq(users.email, email)).get();
   if (existing) return c.json({ error: 'Diese E-Mail ist bereits registriert.' }, 409);
   const handleTaken = await db.select().from(users).where(eq(users.handle, handle)).get();
-  if (handleTaken) return c.json({ error: 'Dieser Handle ist bereits vergeben.' }, 409);
+  if (handleTaken) return c.json({ error: 'Dieser Handle ist bereits vergeben. Wähle einen anderen.' }, 409);
   const passwordHash = await bcrypt.hash(password, 10);
   const [user] = await db.insert(users).values({ email, passwordHash, name, handle }).returning();
   const token = await makeToken(user.id);

@@ -22,7 +22,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
   const data = await res.json().catch(() => ({}));
 
-  if (!res.ok) throw new ApiError(res.status, data.error ?? 'Unbekannter Fehler.');
+  if (!res.ok) {
+    // `data.error` MUSS ein String werden. Manche Fehler (z.B. rohe Zod-Validierung) liefern hier
+    // ein Objekt — ungeschützt rendert React daraus „[object Object]" in der Fehlermeldung.
+    const raw = data?.error;
+    const msg = typeof raw === 'string' ? raw
+      : typeof data?.message === 'string' ? data.message
+      : 'Etwas ist schiefgelaufen. Bitte versuch es noch einmal.';
+    throw new ApiError(res.status, msg);
+  }
   return data as T;
 }
 
