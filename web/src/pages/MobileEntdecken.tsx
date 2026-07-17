@@ -619,6 +619,38 @@ export function MobileEntdecken() {
             <i className="fa-solid fa-layer-group" />
           </button>
         </div>
+
+        {/* Aufklappung DIREKT unter der Leiste (kein schwebender Popover, kein Backdrop) — die
+            Modus-Chips darunter rücken dadurch nach unten, und die Karte bleibt bedienbar. */}
+        {panel && (
+          <div className="bg-white rounded-2xl p-3.5" style={{ boxShadow: '0 14px 40px rgba(52,37,76,0.22)', maxHeight: '56vh', overflowY: 'auto' }}>
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-xs font-bold text-[var(--color-aubergine)]">
+                {panel === 'cat' ? 'Filter' : panel === 'loc' ? 'Standort' : 'Reichweite'}
+              </p>
+              <div className="flex items-center gap-3">
+                {panel === 'cat' && catActive && (
+                  <button onClick={() => setTagSel(EMPTY_TAG_SEL)} className="text-[11px] font-bold text-[var(--color-amber)]">
+                    <i className="fa-solid fa-rotate-left mr-1" />Zurücksetzen
+                  </button>
+                )}
+                <button onClick={() => setPanel(null)} className="text-[var(--color-lavender)]" aria-label="Schließen">
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              </div>
+            </div>
+            {panel === 'cat' && <TagFilter value={tagSel} onChange={setTagSel} />}
+            {panel === 'loc' && locSearch}
+            {panel === 'reach' && (
+              <ReachControls
+                travelMode={reach.travelMode} setTravelMode={reach.setTravelMode}
+                travelMinutes={reach.travelMinutes} setTravelMinutes={reach.setTravelMinutes}
+                radiusKm={radiusKm} setRadiusKm={setRadiusKm}
+                iso={reach.iso} isoLoading={reach.isoLoading} />
+            )}
+          </div>
+        )}
+
         <div className="flex gap-1.5 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
           {MODES.map(m => (
             <button key={m.id} onClick={() => m.id === 'saved'
@@ -633,31 +665,6 @@ export function MobileEntdecken() {
           ))}
         </div>
       </div>
-
-      {/* Popovers */}
-      {panel && (
-        <>
-          {/* „Daneben tippen schließt" — aber nur NEBEN dem Overlay. Ein Backdrop über das ganze
-              Bild würde das Hochziehen des Sheets schlucken, solange ein Filter offen ist. */}
-          <div className="fixed left-0 right-0 top-0 z-30" style={{ height: swipeMode ? vh : snap.top + sheetDragY }} onClick={() => setPanel(null)} />
-          <div className="fixed left-3 right-3 z-40 bg-white rounded-2xl p-3.5"
-            style={{ top: '108px', boxShadow: '0 14px 40px rgba(52,37,76,0.25)', maxHeight: '58vh', overflowY: 'auto' }}>
-            {panel === 'cat' && <TagFilter value={tagSel} onChange={setTagSel} />}
-
-            {/* Nur Standort — Klick auf „Mein Standort" öffnet direkt die Ortssuche */}
-            {panel === 'loc' && locSearch}
-
-            {/* Nur Reichweite — Klick auf die km/Min-Angabe: Verkehrsmittel + Radius/Reisezeit, ohne Ortssuche */}
-            {panel === 'reach' && (
-              <ReachControls
-                travelMode={reach.travelMode} setTravelMode={reach.setTravelMode}
-                travelMinutes={reach.travelMinutes} setTravelMinutes={reach.setTravelMinutes}
-                radiusKm={radiusKm} setRadiusKm={setRadiusKm}
-                iso={reach.iso} isoLoading={reach.isoLoading} />
-            )}
-          </div>
-        </>
-      )}
 
       {/* Das EINE Overlay: Rast 0/1 = Liste, Rast 2 = Swipe. Kein zweites Sheet, keine neue Seite.
           Liegt immer UNTER der Bottom-Nav (z-50) — die fährt im Swipe selbst aus dem Weg. */}
