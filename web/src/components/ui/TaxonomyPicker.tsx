@@ -9,20 +9,31 @@ const MAX_TAGS = 3;
 const VIBE_HINTS = ['z.B. gemütlich', 'z.B. aufregend', 'z.B. romantisch', 'z.B. mystisch', 'z.B. entspannt', 'z.B. lebhaft'];
 const shortGroup = (label: string) => label.split(/[,&]/)[0].trim();
 
-// E: grobe Prüfung, ob eine Eingabe ein Adjektiv ist (für „Wie fühlt es sich an?")
+// Häufige Adjektive OHNE typische Endung — die würden sonst durchs Raster fallen.
+const COMMON_ADJ = new Set([
+  'gut', 'cool', 'nett', 'wild', 'leer', 'nass', 'rau', 'rauh', 'weit', 'eng', 'alt', 'neu', 'laut',
+  'leise', 'warm', 'kalt', 'klar', 'fein', 'frei', 'fern', 'nah', 'schön', 'schoen', 'ruhig', 'hip',
+  'chic', 'schick', 'edel', 'pur', 'echt', 'frisch', 'bunt', 'grau', 'wach', 'still', 'weich', 'hart',
+  'glatt', 'steil', 'flach', 'tief', 'hoch', 'breit', 'schmal', 'sauber', 'grün', 'gruen', 'idyllisch',
+  'modern', 'urban', 'roh', 'satt', 'karg', 'mild', 'zart', 'süß', 'suess', 'herb', 'wuchtig',
+]);
+
+// E: grobe Prüfung, ob eine Eingabe ein Adjektiv ist (für „Wie fühlt es sich an?").
+// Bewusst eher streng: im Zweifel lieber nachfragen (Hinweis) als ein Nomen als „Vibe" durchlassen.
 export function looksLikeAdjective(raw: string): boolean {
   const w = raw.trim();
   const words = w.split(/\s+/);
   if (!w || words.length > 2) return false;
   const last = words[words.length - 1];      // Kopfwort (bei „sehr gemütlich" = „gemütlich")
   const lower = last.toLowerCase();
+  if (COMMON_ADJ.has(lower)) return true;
   // typische Nomen-Endungen → ablehnen (inkl. Komposita wie „Kaffeehaus", „Freizeitpark")
-  if (/(ung|heit|keit|schaft|tion|taet|tät|ismus|nis|tum|ling|haus|platz|garten|halle|park|welt|zimmer|raum|weg|berg|see|bau|stadt|dorf|hof|markt|museum|bad)$/.test(lower)) return false;
+  // „bar"/„club" bewusst NICHT hier — sonst fiele das Adjektiv „wunderbar" durchs Nomen-Raster.
+  if (/(ung|heit|keit|schaft|tion|taet|tät|ismus|nis|tum|ling|haus|platz|garten|halle|park|welt|zimmer|raum|weg|berg|see|bau|stadt|dorf|hof|markt|museum|bad|cafe|café|kaffee|musik|sonne)$/.test(lower)) return false;
   // typische Adjektiv-Endungen → ok
   if (/(ig|lich|isch|sam|bar|haft|los|voll|iv|oes|ös|os|ern|ell|al|ant|ent)$/.test(lower)) return true;
-  // zweiwortig + Kopfwort großgeschrieben → sehr wahrscheinlich Nomen → ablehnen
-  if (words.length === 2 && last[0] !== lower[0]) return false;
-  return lower.length <= 16;
+  // Alles andere (Nomen ohne typische Endung, „Kaffee", „Musik" …) → lieber Hinweis geben.
+  return false;
 }
 
 /**
@@ -212,6 +223,15 @@ function TermSection({ title, hint, selected, suggestions, query, setQuery, comb
     if (isNew && validateNew && !validateNew(label)) { setWarn(invalidHint ?? 'Ungültig.'); return; }
     setWarn(''); onToggle(label); setQuery('');
   };
+  // Enter übernimmt die Eingabe: exakter Treffer aus der Liste, sonst als neuer Begriff (der dann
+  // die Validierung durchläuft und ggf. den Hinweis zeigt). Vorher tat Enter gar nichts — deshalb
+  // sah man den Adjektiv-Hinweis nie, wenn man einfach tippte und Enter drückte.
+  const submitQuery = () => {
+    const q = query.trim();
+    if (!q) return;
+    const exact = combo.find(r => !r.isNew && r.label.toLowerCase() === q.toLowerCase());
+    if (exact) add(exact.label, false); else add(q, true);
+  };
   return (
     <div>
       <p className="text-sm font-bold text-[var(--color-aubergine)] mb-0.5">{title}</p>
@@ -238,6 +258,7 @@ function TermSection({ title, hint, selected, suggestions, query, setQuery, comb
       )}
       <div className="relative">
         <input value={query} onChange={e => { setQuery(e.target.value); if (warn) setWarn(''); }} placeholder={placeholder}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitQuery(); } }}
           className="w-full rounded-xl px-3 py-2 text-sm outline-none bg-white" style={{ border: `1px solid ${warn ? '#E5484D' : '#E4DCF0'}`, color: '#34254C' }} />
         {combo.length > 0 && (
           <div className="absolute z-10 left-0 right-0 mt-1 rounded-xl overflow-hidden bg-white" style={{ border: '1px solid #E4DCF0', boxShadow: '0 8px 24px rgba(52,37,76,0.15)' }}>
