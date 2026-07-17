@@ -462,17 +462,14 @@ export function MobileEntdecken() {
           </div>
         </button>
       )) : (
-        <div className="flex items-center justify-between px-1 py-1.5">
-          <span className="text-xs text-[var(--color-lavender)] truncate">
-            <i className="fa-solid fa-location-crosshairs text-[var(--color-amber)] mr-1.5" />
-            {searchLabel ?? (userCoords ? 'Mein Standort' : 'Kein Standort')}
-          </span>
-          {searchCenter && (
-            <button onClick={resetToGps} className="text-xs font-semibold flex-shrink-0" style={{ color: '#7c3aed' }}>
-              <i className="fa-solid fa-location-arrow mr-1" />GPS
-            </button>
-          )}
-        </div>
+        // Nur der Weg zurück zum eigenen Standort — welcher Ort gerade gesetzt ist, steht schon in
+        // der Leiste darüber. Ohne GPS-Erlaubnis fragt der Tipp danach, statt „Kein Standort" zu
+        // melden und den Weg raus offen zu lassen.
+        <button onClick={() => { resetToGps(); if (!userCoords) requestGpsPosition().then(setUserCoords).catch(() => {}); }}
+          className="w-full flex items-center gap-1.5 px-1 py-2 text-left rounded-xl active:bg-[var(--color-bg-soft)]">
+          <i className="fa-solid fa-location-crosshairs text-[var(--color-amber)]" />
+          <span className="text-xs font-semibold text-[var(--color-aubergine)]">Mein Standort</span>
+        </button>
       )}
     </div>
   );
