@@ -223,6 +223,37 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orteBase, q, tagSel, catActive, vocab, tagFilter, savedTags, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso, sortBy]);
 
+  // Sortierleiste — für Orte wie Trips. Ohne Standort ist „Entfernung" faktisch A–Z (siehe oben).
+  const sortBar = (
+    <div className="flex items-center gap-1.5 mb-3 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+      <span className="text-[11px] font-semibold text-[var(--color-lavender)] flex-shrink-0 pr-0.5">Sortieren:</span>
+      {SORTS.map(s => (
+        <button key={s.id} onClick={() => setSortBy(s.id)}
+          className="text-[11px] font-semibold rounded-full px-3 py-1.5 flex-shrink-0 transition-colors inline-flex items-center gap-1.5"
+          style={sortBy === s.id
+            ? { background: 'var(--color-amber)', color: 'white' }
+            : { background: 'white', color: 'var(--color-aubergine)', boxShadow: '0 2px 8px rgba(52,37,76,0.08)' }}>
+          <i className={`fa-solid ${s.icon} text-[10px]`} />{s.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  // Ein Trip hat selbst keine Entfernung und keine Übereinstimmung — beides leitet sich aus seinen
+  // Orten ab: Entfernung = nächstgelegener Ort (so weit muss man mindestens fahren), Übereinstimmung
+  // = Durchschnitt der Orte (ein einzelner Treffer macht noch keinen passenden Trip).
+  const tripDist = (t: Trip) => {
+    if (!activeCenter) return Infinity;
+    const ds = t.places
+      .filter(tp => tp.place?.lat != null && tp.place?.lng != null)
+      .map(tp => distanceKm(activeCenter, { lat: tp.place!.lat!, lng: tp.place!.lng! }));
+    return ds.length ? Math.min(...ds) : Infinity;
+  };
+  const tripMatch = (t: Trip) => {
+    const ms = t.places.map(tp => tp.place?.match ?? 0).filter(m => m > 0);
+    return ms.length ? ms.reduce((s, m) => s + m, 0) / ms.length : 0;
+  };
+
   // ── Gefilterte Trips: Kategorie-Tag + Freitext + Reichweite ──────────────
   const filteredTrips = useMemo(() => {
     let list: Trip[] = trips;
@@ -235,24 +266,23 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
     }
     // Reichweiten-Filter nur im „Anreisezeit"-Modus
     if (tripView === 'anreise' && reachActive && activeCenter) {
-      list = list
-        .map(t => {
-          const pts = t.places.filter(tp => tp.place?.lat != null && tp.place?.lng != null);
-          const inReach = pts.some(tp => withinReach(tp.place!.lat!, tp.place!.lng!));
-          const dists = pts.map(tp => distanceKm(activeCenter, { lat: tp.place!.lat!, lng: tp.place!.lng! }));
-          return { t, inReach, min: dists.length ? Math.min(...dists) : Infinity };
-        })
-        .filter(x => x.inReach)
-        .sort((a, b) => a.min - b.min)
-        .map(x => x.t);
-    } else if (tripView === 'datum') {
-      // Nach Datum: geplantes Startdatum, sonst Erstellungsdatum — neueste zuerst (wie besuchte Orte)
-      list = [...list].sort((a, b) =>
+      list = list.filter(t => t.places.some(tp =>
+        tp.place?.lat != null && tp.place?.lng != null && withinReach(tp.place.lat, tp.place.lng)));
+    }
+    // „Datum" ist eine eigene Sortierung (neueste zuerst) — die Sortierleiste ist dort ausgeblendet.
+    if (tripView === 'datum') {
+      return [...list].sort((a, b) =>
         (b.startDate ?? b.createdAt ?? '').localeCompare(a.startDate ?? a.createdAt ?? ''));
     }
-    return list;
+    const byTitle = (a: Trip, b: Trip) => a.title.localeCompare(b.title, 'de');
+    const sorted = [...list];
+    if (sortBy === 'az') sorted.sort(byTitle);
+    else if (sortBy === 'match') sorted.sort((a, b) => (tripMatch(b) - tripMatch(a)) || byTitle(a, b));
+    // Ohne Standort ist jede Entfernung Infinity → fällt sauber auf A–Z zurück.
+    else sorted.sort((a, b) => (tripDist(a) - tripDist(b)) || byTitle(a, b));
+    return sorted;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trips, q, tagSel, catActive, vocab, tripView, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso]);
+  }, [trips, q, tagSel, catActive, vocab, tripView, reachActive, activeCenter, radiusKm, travelMode, travelMinutes, iso, sortBy]);
 
   // Orte aller gefilterten Trips (dedupliziert) für die Trip-Karte
   const tripMapPlaces = useMemo(() => {
@@ -520,19 +550,7 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
                     ))}
                   </div>
                 )}
-                {/* Sortierung — ohne Standort ist „Entfernung" faktisch A–Z (siehe filteredPlaces) */}
-                <div className="flex items-center gap-1.5 mb-3 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
-                  <span className="text-[11px] font-semibold text-[var(--color-lavender)] flex-shrink-0 pr-0.5">Sortieren:</span>
-                  {SORTS.map(s => (
-                    <button key={s.id} onClick={() => setSortBy(s.id)}
-                      className="text-[11px] font-semibold rounded-full px-3 py-1.5 flex-shrink-0 transition-colors inline-flex items-center gap-1.5"
-                      style={sortBy === s.id
-                        ? { background: 'var(--color-amber)', color: 'white' }
-                        : { background: 'white', color: 'var(--color-aubergine)', boxShadow: '0 2px 8px rgba(52,37,76,0.08)' }}>
-                      <i className={`fa-solid ${s.icon} text-[10px]`} />{s.label}
-                    </button>
-                  ))}
-                </div>
+                {sortBar}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {filteredPlaces.map(p => {
                     const tags = savedTags[p.id] ?? [];
@@ -597,6 +615,9 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
               <i className="fa-solid fa-plus text-lg" />
               Neuen Trip erstellen
             </button>
+
+            {/* „Datum" IST schon eine Sortierung — dort wäre die Leiste ein Widerspruch. */}
+            {tripView !== 'datum' && trips.length > 1 && sortBar}
 
             {filteredTrips.length === 0 && (q.trim() || catActive || (tripView === 'anreise' && reachActive)) ? (
               <div className="text-center py-10 text-[var(--color-lavender)]">
