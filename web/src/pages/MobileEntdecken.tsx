@@ -11,8 +11,9 @@ import { EFFECTIVE_SPEED_KMH, pointInGeoJSON, reachBBoxPoints } from '../utils/g
 import { useTravelReach } from '../hooks/useTravelReach.js';
 import { ReachControls } from '../components/ui/ReachControls.js';
 import { ReachLayer } from '../components/map/ReachLayer.js';
-import { TagFilter, placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagFilter.js';
+import { placeMatchesTag, EMPTY_TAG_SEL } from '../components/ui/TagFilter.js';
 import type { TagSelection } from '../components/ui/TagFilter.js';
+import { PlaceFilters, EMPTY_FACETS, facetsActive, type Facets } from '../components/ui/PlaceFilters.js';
 import { SwipeDeck } from '../components/ui/SwipeDeck.js';
 import { useRequireAuth } from '../hooks/useRequireAuth.js';
 import { useUiStore } from '../store/useUiStore.js';
@@ -108,6 +109,7 @@ const entdeckenCache = {
   radiusKm: 10,   // Standard vorerst 10 km — Karte zoomt beim Laden genau auf diesen Radius
   mode: 'foryou' as Mode,   // Standard „Für dich": Besuchte + weggewischte Orte sind ausgeblendet
   tagSel: EMPTY_TAG_SEL as TagSelection,
+  facets: EMPTY_FACETS as Facets,   // Merkmale/Vibe/Bewertung/Budget/Zielgruppe
   travelMode: 'radius' as 'radius' | Transport,
   travelMinutes: 45,
   selectedId: null as string | null,
@@ -140,6 +142,7 @@ export function MobileEntdecken() {
   const [radiusKm, setRadiusKm] = useState(entdeckenCache.radiusKm);
   const [mode, setMode] = useState<Mode>(entdeckenCache.mode);
   const [tagSel, setTagSel] = useState<TagSelection>(entdeckenCache.tagSel);
+  const [facets, setFacets] = useState<Facets>(entdeckenCache.facets);
   const [selectedId, setSelectedId] = useState<string | null>(entdeckenCache.selectedId);
   const [panel, setPanel] = useState<null | 'cat' | 'loc' | 'reach'>(null);
   const [mapLayer, setMapLayer] = useState<MapLayer>('standard');   // Standard/Satellit/Hybrid
@@ -154,17 +157,36 @@ export function MobileEntdecken() {
   const travel = useMemo(() => ({ mode: reach.travelMode, minutes: reach.travelMinutes, iso: reach.iso, loading: reach.isoLoading }),
     [reach.travelMode, reach.travelMinutes, reach.iso, reach.isoLoading]);
   const catActive = tagSel.group !== null || tagSel.tag !== null;
+  const anyFilter = facetsActive(tagSel, facets);   // steuert Icon-Highlight + „Zurücksetzen"
 
   useEffect(() => {
     loadPlaces();
     if (!userCoords) requestGpsPosition().then(setUserCoords).catch(() => {});
   }, []); // eslint-disable-line
 
-  // Was überhaupt in Reichweite liegt (Kategorie + Radius/Isochrone) — noch ohne Modus-Regel.
+  // Was überhaupt in Reichweite liegt (Kategorie + Facetten + Radius/Isochrone) — noch ohne Modus-Regel.
   // Karte/Liste und Swipe leiten getrennt davon ab: sie brauchen unterschiedliche Regeln.
   const inRadius = useMemo(() => {
+    // Merkmale/Vibes liegen in attributes; Zielgruppe in attributes.answers.audience.
+    const attrArr = (p: Place, key: 'merkmale' | 'vibes'): string[] => {
+      const v = (p.attributes as Record<string, unknown>)?.[key];
+      return Array.isArray(v) ? (v as string[]) : [];
+    };
+    const audienceArr = (p: Place): string[] => {
+      const ans = (p.attributes as Record<string, unknown>)?.answers as Record<string, unknown> | undefined;
+      const v = ans?.audience;
+      return Array.isArray(v) ? (v as string[]) : [];
+    };
+    const hasAny = (have: string[], want: string[]) => want.some(w => have.includes(w));
+
     let base = places.filter(p => p.lat != null && p.lng != null);
     if (catActive) base = base.filter(p => placeMatchesTag(p, tagSel, vocab));
+    // Facetten: OR innerhalb einer Facette, AND über die Facetten hinweg (narrows, aber nicht leer).
+    if (facets.merkmale.length) base = base.filter(p => hasAny(attrArr(p, 'merkmale'), facets.merkmale));
+    if (facets.vibes.length)    base = base.filter(p => hasAny(attrArr(p, 'vibes'), facets.vibes));
+    if (facets.audience.length) base = base.filter(p => hasAny(audienceArr(p), facets.audience));
+    if (facets.minRating)       base = base.filter(p => (p.rating ?? 0) >= facets.minRating);
+    if (facets.maxCost)         base = base.filter(p => (p.cost ?? 99) <= facets.maxCost);
     if (reachCenter) {
       const within = (p: Place) =>
         reach.travelMode === 'radius' ? distanceKm(reachCenter, { lat: p.lat!, lng: p.lng! }) <= radiusKm
@@ -173,7 +195,7 @@ export function MobileEntdecken() {
       base = base.filter(within);
     }
     return base;
-  }, [places, tagSel, catActive, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm]);
+  }, [places, tagSel, catActive, facets, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm]);
 
   // Karte + Liste: Modus-Regel, „Nein" wirkt nur bei Vorschlägen — „Alle" heißt alle.
   const shownPlaces = useMemo(() => {
@@ -308,7 +330,7 @@ export function MobileEntdecken() {
   // Einstellungen für „Zurück" merken — jeder Render hält den Cache aktuell
   useEffect(() => {
     Object.assign(entdeckenCache, {
-      searchCenter, searchLabel, userCoords, radiusKm, mode, tagSel,
+      searchCenter, searchLabel, userCoords, radiusKm, mode, tagSel, facets,
       travelMode: reach.travelMode, travelMinutes: reach.travelMinutes,
       selectedId, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
       // Rast 2 NICHT merken: der Swipe-Feed ist ein Snapshot dieser Sitzung — beim Neuaufbau
@@ -588,7 +610,7 @@ export function MobileEntdecken() {
         }}>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setPanel(panel === 'cat' ? null : 'cat')} className={toolBtn}
-            style={{ ...toolShadow, color: catActive ? '#F99039' : '#34254c' }} aria-label="Filter">
+            style={{ ...toolShadow, color: anyFilter ? '#F99039' : '#34254c' }} aria-label="Filter">
             <i className="fa-solid fa-filter" />
           </button>
           {/* Eine weiße Leiste, zwei Tippziele: links Standort ändern, rechts Reichweite einstellen */}
@@ -629,9 +651,9 @@ export function MobileEntdecken() {
                 {panel === 'cat' ? 'Filter' : panel === 'loc' ? 'Standort' : 'Reichweite'}
               </p>
               <div className="flex items-center gap-3">
-                {panel === 'cat' && catActive && (
-                  <button onClick={() => setTagSel(EMPTY_TAG_SEL)} className="text-[11px] font-bold text-[var(--color-amber)]">
-                    <i className="fa-solid fa-rotate-left mr-1" />Zurücksetzen
+                {panel === 'cat' && anyFilter && (
+                  <button onClick={() => { setTagSel(EMPTY_TAG_SEL); setFacets(EMPTY_FACETS); }} className="text-[11px] font-bold text-[var(--color-amber)]">
+                    <i className="fa-solid fa-rotate-left mr-1" />Alle zurücksetzen
                   </button>
                 )}
                 <button onClick={() => setPanel(null)} className="text-[var(--color-lavender)]" aria-label="Schließen">
@@ -639,7 +661,7 @@ export function MobileEntdecken() {
                 </button>
               </div>
             </div>
-            {panel === 'cat' && <TagFilter value={tagSel} onChange={setTagSel} />}
+            {panel === 'cat' && <PlaceFilters vocab={vocab} sel={tagSel} onSel={setTagSel} facets={facets} onFacets={setFacets} />}
             {panel === 'loc' && locSearch}
             {panel === 'reach' && (
               <ReachControls

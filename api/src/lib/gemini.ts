@@ -200,3 +200,29 @@ export async function proofreadSafe(text: string): Promise<string> {
   if (!geminiConfigured) return text;
   try { return await proofread(text); } catch { return text; }
 }
+
+/**
+ * Filter-Synonyme: bildet einen freien Suchbegriff auf die passenden vorhandenen Vokabular-Slugs ab
+ * (z.B. „Tee" → Café/Kaffeehaus-nahe Merkmale). Bekommt die Kandidaten mitgeliefert (Slug|Label),
+ * damit der Server kein Vokabular laden muss; gibt NUR Slugs aus dieser Liste zurück.
+ */
+export async function matchTerms(q: string, kind: 'merkmale' | 'vibes', candidates: { slug: string; label: string }[]): Promise<string[]> {
+  const query = (q ?? '').trim();
+  if (!query || candidates.length === 0) return [];
+  const valid = new Set(candidates.map(c => c.slug));
+  const list = candidates.slice(0, 200).map(c => `${c.slug} | ${c.label}`).join('\n');
+  const what = kind === 'vibes' ? 'Vibes (Stimmung/Atmosphäre)' : 'Merkmale (was es dort gibt/zu sehen ist)';
+  const prompt =
+`Ein Nutzer sucht in einem Filter für Ausflugsorte nach: „${query}".
+Unten stehen verfügbare ${what} im Format „slug | Label".
+Gib die slugs zurück, die inhaltlich zum Suchbegriff passen – auch Synonyme, Ober-/Unterbegriffe und
+verwandte Konzepte (Beispiel: „Tee" passt zu Café/Kaffeehaus-nahen Begriffen). Höchstens 8, beste zuerst.
+Antworte NUR mit den slugs, kommagetrennt, ohne Erklärung, ausschließlich slugs aus der Liste.
+
+${list}`;
+  const out = await callGemini(prompt, 120);
+  return out
+    .split(/[,\n]/).map(s => s.trim().replace(/^["„»]+|["“«]+$/g, ''))
+    .filter(s => valid.has(s))
+    .slice(0, 8);
+}

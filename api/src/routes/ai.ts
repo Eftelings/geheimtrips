@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { generateSummary, generateTips, generateDescription, generateRecommendation, proofread, geminiConfigured } from '../lib/gemini.js';
+import { generateSummary, generateTips, generateDescription, generateRecommendation, proofread, matchTerms, geminiConfigured } from '../lib/gemini.js';
 
 const router = new Hono();
 
@@ -76,6 +76,22 @@ router.post('/proofread', zValidator('json', z.object({ text: z.string().max(800
     return c.json({ text });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 502);
+  }
+});
+
+// POST /ai/match-terms — freien Suchbegriff auf passende Vokabular-Slugs abbilden (Filter-Synonyme)
+router.post('/match-terms', zValidator('json', z.object({
+  q:    z.string().max(80),
+  kind: z.enum(['merkmale', 'vibes']),
+  candidates: z.array(z.object({ slug: z.string(), label: z.string() })).max(300),
+})), async (c) => {
+  if (!geminiConfigured) return c.json({ slugs: [] });   // kein Fehler — der lokale Filter bleibt nutzbar
+  try {
+    const { q, kind, candidates } = c.req.valid('json');
+    const slugs = await matchTerms(q, kind, candidates);
+    return c.json({ slugs });
+  } catch (e) {
+    return c.json({ error: (e as Error).message, slugs: [] }, 502);
   }
 });
 

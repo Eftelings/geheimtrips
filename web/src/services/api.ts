@@ -160,6 +160,8 @@ export const aiApi = {
   placeRecommend:  (ctx: { name?: string; location?: string; imageUrls?: string[] }) =>
                      post<{ description: string }>('/ai/place-recommend', ctx),
   proofread:       (text: string)      => post<{ text: string }>('/ai/proofread', { text }),
+  matchTerms:      (body: { q: string; kind: 'merkmale' | 'vibes'; candidates: { slug: string; label: string }[] }) =>
+                     post<{ slugs: string[] }>('/ai/match-terms', body),
 };
 
 // ─── Trips ─────────────────────────────────────────────────────────────────────
