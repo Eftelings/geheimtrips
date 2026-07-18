@@ -101,8 +101,10 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
         )}
 
         {/* Page content. overflow-x-clip: kein versehentlich zu breites Kind kann die ganze Seite
-            seitlich scrollbar machen (fiel auf kleinen Handys beim Einreichen auf). */}
-        <main className={`flex-1 flex flex-col overflow-x-clip bg-[var(--color-bg)] ${noBottomNav ? '' : 'pb-20 md:pb-0'}`}>
+            seitlich scrollbar machen (fiel auf kleinen Handys beim Einreichen auf).
+            Unterer Abstand = BottomNav-Höhe + Safe-Area, sonst verdeckt die Nav (z-50) auf Geräten
+            mit Home-Indicator den letzten Button (fiel auf der Profil-Seite auf). */}
+        <main className={`flex-1 flex flex-col overflow-x-clip bg-[var(--color-bg)] ${noBottomNav ? '' : 'pb-[calc(env(safe-area-inset-bottom)+84px)] md:pb-0'}`}>
           {children}
         </main>
       </div>

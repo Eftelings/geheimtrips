@@ -226,18 +226,6 @@ export function OnboardingPage() {
                 </div>
               </div>
 
-              {!editMode && (
-                <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: 'var(--color-aubergine)' }}>
-                  <i className="fa-solid fa-compass text-2xl text-[var(--color-amber)] mt-0.5" />
-                  <div>
-                    <p className="font-display font-bold text-white text-base leading-tight mb-1">Gleich lernen wir deinen Geschmack kennen</p>
-                    <p className="text-white/75 text-[13px] leading-relaxed">
-                      Wir zeigen dir <strong className="text-white">12 Orte</strong> — wische nach <strong className="text-white">rechts</strong>, was dir gefällt,
-                      nach <strong className="text-white">links</strong>, was nicht. So finden wir deine Geheimtipps. 🧭
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
