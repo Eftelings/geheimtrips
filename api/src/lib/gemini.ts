@@ -155,20 +155,23 @@ ${hasDraft ? `Notizen: ${draft}` : ''}`;
   return out.replace(/^["„»]+|["“«]+$/g, '').trim();
 }
 
-/** B: Text-Empfehlung aus den hochgeladenen Fotos + Name + Standort (Gemini Vision). */
+/** „Hilf mir beim Schreiben": Beschreibung aus Stichpunkten UND/ODER Fotos + Name + Standort. */
 export async function generateRecommendation(input: {
-  name?: string; location?: string; imageUrls?: string[];
+  name?: string; location?: string; imageUrls?: string[]; notes?: string;
 }): Promise<string> {
   const imageParts = await loadImageParts(input.imageUrls ?? []);
-  if (imageParts.length === 0) {
-    throw new Error('Für eine Foto-Empfehlung lade zuerst mindestens ein Foto hoch.');
+  const notes = stripHtml(input.notes ?? '');
+  if (imageParts.length === 0 && notes.length < 3) {
+    throw new Error('Gib ein paar Stichpunkte ein oder lade ein Foto hoch – dann schreibe ich los.');
   }
+  const hasImg = imageParts.length > 0;
   const prompt =
 `Du hilfst beim Beschreiben eines Ausflugsorts für eine App mit Geheimtipps in Deutschland.
-Schau dir die beigefügten Fotos an und schreibe eine lebendige, einladende deutsche Beschreibung (3–5 Sätze),
-die zu den Fotos, dem Namen und dem Standort passt. Beschreibe nur, was plausibel zu sehen/erkennbar ist –
-erfinde keine falschen Fakten (keine Öffnungszeiten, Preise o.Ä.). Atmosphärisch und konkret, kein Werbe-Blabla,
-keine Floskeln, keine Überschrift, keine Anführungszeichen. Gib NUR den Beschreibungstext aus.
+Schreibe eine lebendige, einladende deutsche Beschreibung (3–5 Sätze) aus Ich-Perspektive des Autors.
+${hasImg ? 'Beziehe die beigefügten Fotos ein – beschreibe nur, was plausibel erkennbar ist.' : ''}
+${notes ? `Bau die folgenden Stichpunkte des Autors ein und behalte alle genannten Fakten bei:\n${notes}` : ''}
+Erfinde keine falschen Fakten (keine Öffnungszeiten/Preise o.Ä.). Atmosphärisch und konkret, kein
+Werbe-Blabla, keine Floskeln, keine Überschrift, keine Anführungszeichen. Gib NUR den Beschreibungstext aus.
 
 Name: ${input.name || '—'}
 Standort: ${input.location || '—'}`;

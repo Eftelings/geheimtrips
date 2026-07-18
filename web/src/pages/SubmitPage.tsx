@@ -1737,6 +1737,25 @@ function AiButton({ onClick, loading, disabled, label }: {
   );
 }
 
+// Kleines „i" neben einer Überschrift — Klick zeigt die Erklärung in einem Popover (weniger Text im Formular).
+function InfoDot({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-block align-middle">
+      <button type="button" onClick={() => setOpen(o => !o)} aria-label="Mehr Infos"
+        className="w-4 h-4 rounded-full text-[10px] font-bold inline-flex items-center justify-center"
+        style={{ background: '#E9E1F3', color: '#7C3AED' }}>i</button>
+      {open && (
+        <>
+          <span className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <span className="absolute left-0 top-6 z-30 block w-64 rounded-xl bg-white p-3 text-[11px] leading-snug text-[#71587a] shadow-[0_8px_24px_rgba(52,37,76,0.18)]"
+            style={{ border: '1px solid #EFEAF5' }}>{children}</span>
+        </>
+      )}
+    </span>
+  );
+}
+
 function StepStory({
   state, set, excludeId = null,
 }: {
@@ -1754,40 +1773,29 @@ function StepStory({
     .filter(p => p.id !== excludeId)
     .map(p => ({ id: p.id, name: p.name }));
 
-  // ── KI-Unterstützung (Gemini) ────────────────────────────────────────────
+  // ── KI-Unterstützung ──────────────────────────────────────────────────────
   const [aiOn, setAiOn]           = useState(false);
-  const [descLoading, setDescLoad]= useState(false);   // Stichpunkte → Text
-  const [recLoading, setRecLoad]  = useState(false);   // Fotos → Text
-  const [proofLoading, setProofLoad] = useState(false);// Rechtschreib-Pass
-  const [proofDone, setProofDone] = useState(false);
   const [descErr, setDescErr]     = useState('');
   useEffect(() => { aiApi.status().then(s => setAiOn(s.configured)).catch(() => {}); }, []);
   const hasPhotos = state.media.filter(m => m.type === 'image' && m.serverUrl).length > 0;
 
-  // Aus den getippten Stichpunkten/Notizen einen ausformulierten Text machen.
-  async function genFromNotes() {
-    setDescErr(''); setProofDone(false); setDescLoad(true);
-    try {
-      const { description } = await aiApi.placeDescription({
-        name: state.name, long: state.long, location: state.locationText, category: state.tags[0] ?? '',
-      });
-      set('long', description);
-    } catch (e) { setDescErr((e as Error).message || 'Konnte keinen Text erzeugen.'); }
-    setDescLoad(false);
-  }
-
-  // Text-Empfehlung aus den hochgeladenen Fotos + Name + Standort.
-  async function genRecommend() {
-    setDescErr(''); setProofDone(false); setRecLoad(true);
+  // „Hilf mir beim Schreiben": Modal fragt nach Stichpunkten; die KI baut daraus (und aus den
+  // Fotos, falls vorhanden) einen Text. Rechtschreibung läuft automatisch beim Absenden.
+  const [helpOpen, setHelpOpen]   = useState(false);
+  const [helpNotes, setHelpNotes] = useState('');
+  const [helpLoading, setHelpLoad]= useState(false);
+  async function runHelp() {
+    setDescErr(''); setHelpLoad(true);
     try {
       const imageUrls = state.media.filter(m => m.type === 'image' && m.serverUrl).map(m => m.serverUrl!);
-      const { description } = await aiApi.placeRecommend({ name: state.name, location: state.locationText, imageUrls });
+      const { description } = await aiApi.placeRecommend({ name: state.name, location: state.locationText, imageUrls, notes: helpNotes });
       set('long', description);
-    } catch (e) { setDescErr((e as Error).message || 'Empfehlung fehlgeschlagen.'); }
-    setRecLoad(false);
+      setHelpOpen(false); setHelpNotes('');
+    } catch (e) { setDescErr((e as Error).message || 'Konnte keinen Text erzeugen.'); }
+    setHelpLoad(false);
   }
 
-  // „Der Ort in zwei Sätzen" — von Gemini aus dem Fließtext verfasst (ersetzt das alte „Besonderheit").
+  // „Der Ort in zwei Sätzen" — von der KI aus dem Fließtext verfasst (ersetzt das alte „Besonderheit").
   const [sumLoading, setSumLoad]  = useState(false);
   const [sumErr, setSumErr]       = useState('');
   async function genSummary() {
@@ -1801,17 +1809,6 @@ function StepStory({
     setSumLoad(false);
   }
 
-  // Reiner Rechtschreib-/Grammatik-Pass — ändert nur Fehler, nicht den Inhalt.
-  async function runProofread() {
-    setDescErr(''); setProofDone(false); setProofLoad(true);
-    try {
-      const { text } = await aiApi.proofread(state.long);
-      set('long', text);
-      setProofDone(true);
-    } catch (e) { setDescErr((e as Error).message || 'Prüfung fehlgeschlagen.'); }
-    setProofLoad(false);
-  }
-
   return (
     <div className="space-y-7">
       <div>
@@ -1823,17 +1820,19 @@ function StepStory({
         </StepSub>
       </div>
 
-      {/* 1) Ausführliche Beschreibung — Pflicht, mind. 200 Zeichen */}
+      {/* 1) Ausführliche Beschreibung — Pflicht, mind. 200 Zeichen. Erklärungen hinter dem „i". */}
       <div className="space-y-1.5">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
           <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
             Ausführliche Beschreibung <span className="text-[#C96442]">*</span>
           </label>
+          <InfoDot>
+            Atmosphäre, was dich überrascht hat, was andere übersehen. Nutze <strong>Fett</strong>,{' '}
+            <em>Kursiv</em> oder <u>Unterstrichen</u> für Betonung.
+            {linkPlaces.length > 0 && <> Du kannst auch andere Geheimtrips im Text verlinken (z.B. Spots
+            in einem Stadtteil) – darunter erscheint automatisch eine kleine Karte mit allen verlinkten Orten.</>}
+          </InfoDot>
         </div>
-        <p className="text-xs text-[#9A8FAA]">
-          Atmosphäre, was dich überrascht hat, was andere übersehen. Nutze{' '}
-          <strong>Fett</strong>, <em>Kursiv</em> oder <u>Unterstrichen</u> für Betonung.
-        </p>
         <MiniRichText
           value={state.long}
           onChange={v => set('long', v)}
@@ -1843,43 +1842,44 @@ function StepStory({
           linkPlaces={linkPlaces}
           placeholder="Ich war spät nachmittags dort, als die Sonne schon tief stand und das Wasser in einem unwirklichen Blaugrün leuchtete…"
         />
-        {linkPlaces.length > 0 && (
-          <p className="text-xs text-[#9A8FAA]">
-            <i className="fa-solid fa-location-dot text-[10px] text-[#F99039] mr-1" />
-            Tipp: Verlinke andere Geheimtrips im Text (z.B. Spots in einem Stadtteil) – darunter erscheint automatisch eine kleine Karte mit allen verlinkten Orten.
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs flex items-center gap-1.5" style={{ color: longOk ? '#2D8A4E' : '#C96442' }}>
+            <i className={`fa-solid ${longOk ? 'fa-circle-check' : 'fa-circle-info'} text-[10px]`} />
+            {longOk ? 'Super – das reicht!' : `Noch mind. ${200 - longLen} Zeichen (${longLen}/200).`}
           </p>
-        )}
-        <p className="text-xs flex items-center gap-1.5" style={{ color: longOk ? '#2D8A4E' : '#C96442' }}>
-          <i className={`fa-solid ${longOk ? 'fa-circle-check' : 'fa-circle-info'} text-[10px]`} />
-          {longOk
-            ? 'Super – das reicht für eine schöne Beschreibung!'
-            : `Noch mind. ${200 - longLen} Zeichen (aktuell ${longLen} / 200).`}
-        </p>
-
-        {/* KI-Hilfe: Stichpunkte ausformulieren, aus Fotos beschreiben, Rechtschreibung prüfen. */}
-        {aiOn && (
-          <div className="rounded-2xl border p-3 space-y-2" style={{ borderColor: '#E9E1F3', background: '#FBF7FF' }}>
-            <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: '#7C3AED' }}>
-              <i className="fa-solid fa-wand-magic-sparkles" /> Brauchst du Hilfe bei deinem Text?
-            </p>
-            <p className="text-[11px] leading-snug text-[#9A8FAA]">
-              Schreib ein paar Stichpunkte ins Feld – die KI macht daraus einen lebendigen Text. Oder lass
-              die KI deine Fotos beschreiben. Alles bleibt frei anpassbar.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <AiButton onClick={genFromNotes} loading={descLoading} disabled={longLen < 10}
-                label="Aus meinen Stichpunkten" />
-              <AiButton onClick={genRecommend} loading={recLoading} disabled={!hasPhotos}
-                label="Aus meinen Fotos" />
-              <AiButton onClick={runProofread} loading={proofLoading} disabled={longLen < 3}
-                label="Rechtschreibung prüfen" />
-            </div>
-            {!hasPhotos && <p className="text-[11px] text-[#B0A3BC]">Für „Aus meinen Fotos" lade zuerst ein Foto hoch.</p>}
-            {proofDone && <p className="text-[11px] font-semibold" style={{ color: '#2D8A4E' }}><i className="fa-solid fa-circle-check mr-1" />Rechtschreibung und Grammatik geprüft.</p>}
-          </div>
-        )}
+          {aiOn && <AiButton onClick={() => setHelpOpen(true)} loading={false} label="Hilf mir beim Schreiben" />}
+        </div>
         {descErr && <p className="text-xs text-[#C96442]">{descErr}</p>}
       </div>
+
+      {/* „Hilf mir beim Schreiben" — Stichpunkte (+ Fotos, falls vorhanden) → Text von der KI. */}
+      {helpOpen && (
+        <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center p-0 md:p-4"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
+          onClick={e => { if (e.target === e.currentTarget && !helpLoading) setHelpOpen(false); }}>
+          <div className="w-full md:max-w-md rounded-t-3xl md:rounded-3xl p-6" style={{ background: '#FBF9FC' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#E9E1F3', color: '#7C3AED' }}>
+                <i className="fa-solid fa-wand-magic-sparkles" />
+              </div>
+              <h3 className="font-display font-bold text-[var(--color-aubergine)] text-lg">Hilf mir beim Schreiben</h3>
+            </div>
+            <p className="text-xs text-[#9A8FAA] mb-3">
+              Schreib ein paar Stichpunkte – die KI macht daraus einen lebendigen Text{hasPhotos ? ' und bezieht deine Fotos ein' : ''}. Du kannst alles danach frei anpassen.
+            </p>
+            <textarea rows={4} value={helpNotes} onChange={e => setHelpNotes(e.target.value)} autoFocus
+              placeholder={'z.B.\n– versteckter Felssee, 20 Min Fußweg\n– glasklares Wasser, kaum Leute\n– am schönsten im Abendlicht'}
+              className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none border-[#E4DCF0] focus:border-[#7C3AED] bg-white text-[#34254C] placeholder-[#B0A3BC] resize-none" />
+            {descErr && <p className="text-xs text-[#C96442] mt-1.5">{descErr}</p>}
+            <button onClick={runHelp} disabled={helpLoading || (helpNotes.trim().length < 3 && !hasPhotos)}
+              className="w-full mt-3 py-3 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+              style={{ background: '#7C3AED' }}>
+              {helpLoading ? <><i className="fa-solid fa-circle-notch fa-spin" /> KI schreibt…</> : <><i className="fa-solid fa-wand-magic-sparkles" /> Text erstellen</>}
+            </button>
+            <button onClick={() => !helpLoading && setHelpOpen(false)} className="w-full mt-2 py-2 text-sm font-semibold text-[var(--color-lavender)]">Abbrechen</button>
+          </div>
+        </div>
+      )}
 
       {/* 2) Der Ort in zwei Sätzen — von Gemini aus dem Fließtext, erscheint auf der Swipe-Karte */}
       <div className="space-y-1.5">

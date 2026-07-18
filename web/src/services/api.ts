@@ -157,7 +157,7 @@ export const aiApi = {
   placeSummary:    (ctx: AiPlaceCtx)   => post<{ summary: string }>('/ai/place-summary', ctx),
   placeDescription:(ctx: AiPlaceCtx)   => post<{ description: string }>('/ai/place-description', ctx),
   placeTips:       (ctx: AiPlaceCtx & { count?: number }) => post<{ tips: string[] }>('/ai/place-tips', ctx),
-  placeRecommend:  (ctx: { name?: string; location?: string; imageUrls?: string[] }) =>
+  placeRecommend:  (ctx: { name?: string; location?: string; imageUrls?: string[]; notes?: string }) =>
                      post<{ description: string }>('/ai/place-recommend', ctx),
   proofread:       (text: string)      => post<{ text: string }>('/ai/proofread', { text }),
   matchTerms:      (body: { q: string; kind: 'merkmale' | 'vibes'; candidates: { slug: string; label: string }[] }) =>

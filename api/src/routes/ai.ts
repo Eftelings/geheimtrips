@@ -58,6 +58,7 @@ router.post('/place-recommend', zValidator('json', z.object({
   name:      z.string().max(200).optional().default(''),
   location:  z.string().max(300).optional().default(''),
   imageUrls: z.array(z.string()).max(5).optional().default([]),
+  notes:     z.string().max(2000).optional().default(''),
 })), async (c) => {
   if (!geminiConfigured) return c.json({ error: 'KI ist nicht konfiguriert (GEMINI_API_KEY fehlt).' }, 503);
   try {
