@@ -1673,6 +1673,12 @@ function StepDetails({
 
       {hasHighlights(state.tags) && <HighlightsEditor state={state} setState={setState} />}
 
+      {/* Trivia — von der Beschreibungsseite hierher verschoben (dort nur Beschreibung/2-Sätze/Tipps).
+          trivia_text erscheint per showIf nur, wenn ein Trivia-Typ gewählt ist. */}
+      {[UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_type'), UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_text')]
+        .filter((q): q is SubmitQuestion => !!q)
+        .map(renderQ)}
+
       <div className="flex items-center gap-3 pt-1">
         <div className="flex-1 h-px bg-[#E4DCF0]" />
         <span className="text-xs font-bold uppercase tracking-widest text-[#B0A3BC]">Allgemeines</span>
@@ -1714,11 +1720,6 @@ function StepStory({
   const linkPlaces = allPlaces
     .filter(p => p.id !== excludeId)
     .map(p => ({ id: p.id, name: p.name }));
-  const setAnswer    = (id: string, v: unknown) => set('answers', { ...state.answers, [id]: v });
-  const triviaTypeQ  = UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_type');
-  const triviaTextQ  = UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_text');
-  const triviaTypeVal = state.answers['trivia_type'];
-  const triviaActive  = typeof triviaTypeVal === 'string' && triviaTypeVal !== '';
 
   // ── KI-Unterstützung (Gemini) ────────────────────────────────────────────
   const [aiOn, setAiOn]           = useState(false);
@@ -1878,27 +1879,8 @@ function StepStory({
         {sumErr && <p className="text-xs text-[#C96442]">{sumErr}</p>}
       </div>
 
-      {/* 3) Trivia — optional */}
-      {triviaTypeQ && (
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-            {triviaTypeQ.label}
-          </label>
-          {triviaTypeQ.hint && <p className="text-xs text-[#9A8FAA]">{triviaTypeQ.hint}</p>}
-          <QuestionField q={triviaTypeQ} value={triviaTypeVal} onChange={v => setAnswer('trivia_type', v)} />
-          {triviaTextQ && triviaActive && (
-            <div className="space-y-2 pt-1">
-              <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-                {triviaTextQ.label}
-              </label>
-              {triviaTextQ.hint && <p className="text-xs text-[#9A8FAA]">{triviaTextQ.hint}</p>}
-              <QuestionField q={triviaTextQ} value={state.answers['trivia_text']} onChange={v => setAnswer('trivia_text', v)} />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 4) Tipps */}
+      {/* 3) Tipps — Trivia ist zu den Highlights (Details-Schritt) gewandert, damit hier nur
+             Beschreibung → 2 Sätze → Tipps steht (keine Zwischenfragen). */}
       <div className="space-y-1.5">
         <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
           Praktische Tipps
