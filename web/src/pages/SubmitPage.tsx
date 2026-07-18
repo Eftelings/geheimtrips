@@ -1753,6 +1753,20 @@ function StepStory({
     setRecLoad(false);
   }
 
+  // „Der Ort in zwei Sätzen" — von Gemini aus dem Fließtext verfasst (ersetzt das alte „Besonderheit").
+  const [sumLoading, setSumLoad]  = useState(false);
+  const [sumErr, setSumErr]       = useState('');
+  async function genSummary() {
+    setSumErr(''); setSumLoad(true);
+    try {
+      const { summary } = await aiApi.placeSummary({
+        name: state.name, long: state.long, location: state.locationText, category: state.tags[0] ?? '',
+      });
+      set('short', summary);
+    } catch (e) { setSumErr((e as Error).message || 'Konnte keine Zusammenfassung erstellen.'); }
+    setSumLoad(false);
+  }
+
   // Reiner Rechtschreib-/Grammatik-Pass — ändert nur Fehler, nicht den Inhalt.
   async function runProofread() {
     setDescErr(''); setProofDone(false); setProofLoad(true);
@@ -1832,26 +1846,36 @@ function StepStory({
         {descErr && <p className="text-xs text-[#C96442]">{descErr}</p>}
       </div>
 
-      {/* 2) Besonderheit — ein Satz, erscheint auf der Swipe-Karte */}
+      {/* 2) Der Ort in zwei Sätzen — von Gemini aus dem Fließtext, erscheint auf der Swipe-Karte */}
       <div className="space-y-1.5">
-        <div className="flex items-start justify-between gap-2">
-          <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-            In einem Satz: Was ist das Besondere an diesem Ort?
-          </label>
-        </div>
+        <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
+          Der Ort in zwei Sätzen
+        </label>
         <p className="text-xs text-[#9A8FAA]">
-          Dieser Satz erscheint auf der Swipe-Karte im Entdecken-Modus. Schreib ihn in deinen eigenen Worten.
+          Kurz-Teaser für die Swipe-Karte. {aiOn ? 'Lass ihn dir von Gemini aus deinem Text erstellen – und passe ihn frei an.' : 'Bring das Besondere in zwei Sätzen auf den Punkt.'}
         </p>
+        {aiOn && (
+          <AiButton onClick={genSummary} loading={sumLoading} disabled={longLen < 30}
+            label={state.short.trim() ? 'Neu vorschlagen' : 'Von Gemini erstellen lassen'} />
+        )}
+        {aiOn && longLen < 30 && <p className="text-[11px] text-[#B0A3BC]">Schreib zuerst etwas Beschreibung – daraus macht Gemini den Teaser.</p>}
         <textarea
-          rows={2} spellCheck maxLength={200}
-          placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
+          rows={3} spellCheck maxLength={300}
+          placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch. Wer den schmalen Pfad findet, hat ihn oft ganz für sich allein."
           value={state.short}
           onChange={e => set('short', e.target.value)}
           className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none"
         />
-        <span className="text-xs" style={{ color: state.short.length > 180 ? '#C96442' : '#A89BB5' }}>
-          {state.short.length} / 200
-        </span>
+        <div className="flex items-center justify-between gap-2">
+          {/* „Passt das?" — der Text ist frei editierbar, Bestätigung ist also implizit. */}
+          {aiOn && state.short.trim()
+            ? <span className="text-[11px] text-[#9A8FAA]"><i className="fa-solid fa-circle-info mr-1" />Beschreibt das den Ort gut? Pass ihn gern an.</span>
+            : <span />}
+          <span className="text-xs" style={{ color: state.short.length > 280 ? '#C96442' : '#A89BB5' }}>
+            {state.short.length} / 300
+          </span>
+        </div>
+        {sumErr && <p className="text-xs text-[#C96442]">{sumErr}</p>}
       </div>
 
       {/* 3) Trivia — optional */}
