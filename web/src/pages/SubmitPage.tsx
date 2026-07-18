@@ -142,6 +142,7 @@ function MiniRichText({
 }) {
   const ref           = useRef<HTMLDivElement>(null);
   const lastValid     = useRef(value);        // last HTML that was within limit
+  const emitted       = useRef(value);        // zuletzt SELBST erzeugter Wert (Tippen) — Abgrenzung zu externen Änderungen
   const savedRange    = useRef<Range | null>(null);
   const [count, setCount] = useState(0);
   const [empty, setEmpty] = useState(!value);
@@ -190,18 +191,21 @@ function MiniRichText({
     sync();
   }
 
-  // Set initial content only on mount
+  // Externe Wertänderungen (KI-Vorschlag, Reset, Laden zum Bearbeiten) ins Feld spiegeln — beim
+  // Mounten UND danach. Ohne das erschien z.B. der KI-Beschreibungstext nie und das Zeichenlimit
+  // wurde umgangen (es greift nur beim Tippen). `emitted` grenzt eigene Tipp-Änderungen ab, damit
+  // wir nicht während des Schreibens den Cursor zerstören.
   useEffect(() => {
-    if (ref.current && value) {
-      ref.current.innerHTML = value;
-      lastValid.current = value;
-      const len = ref.current.textContent?.length ?? 0;
-      setCount(len);
-      setImgCount(ref.current.querySelectorAll('img').length);
-      setEmpty(len === 0 && ref.current.querySelectorAll('img').length === 0);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const el = ref.current;
+    if (!el || value === emitted.current) return;
+    el.innerHTML = value || '';
+    emitted.current = value;
+    lastValid.current = value;
+    const len = el.textContent?.length ?? 0;
+    setCount(len);
+    setImgCount(el.querySelectorAll('img').length);
+    setEmpty(len === 0 && el.querySelectorAll('img').length === 0);
+  }, [value]);
 
   function exec(cmd: string) {
     // Tag-basierte Formatierung (<b>/<i>/<u>) statt style-Spans erzwingen,
@@ -243,6 +247,7 @@ function MiniRichText({
     setCount(text.length);
     setEmpty(empty);
     setImgCount(el.querySelectorAll('img').length);
+    emitted.current = empty ? '' : html;   // merken, dass DIESER Wert von uns kommt → nicht neu spiegeln
     onChange(empty ? '' : html);
   }
 
