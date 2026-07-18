@@ -185,8 +185,8 @@ export function MobileEntdecken() {
     if (facets.merkmale.length) base = base.filter(p => hasAny(attrArr(p, 'merkmale'), facets.merkmale));
     if (facets.vibes.length)    base = base.filter(p => hasAny(attrArr(p, 'vibes'), facets.vibes));
     if (facets.audience.length) base = base.filter(p => hasAny(audienceArr(p), facets.audience));
-    if (facets.minRating)       base = base.filter(p => (p.rating ?? 0) >= facets.minRating);
-    if (facets.maxCost)         base = base.filter(p => (p.cost ?? 99) <= facets.maxCost);
+    if (facets.minRating)         base = base.filter(p => (p.rating ?? 0) >= facets.minRating);
+    if (facets.maxCost !== null)  base = base.filter(p => (p.cost ?? 99) <= facets.maxCost!);
     if (reachCenter) {
       const within = (p: Place) =>
         reach.travelMode === 'radius' ? distanceKm(reachCenter, { lat: p.lat!, lng: p.lng! }) <= radiusKm
@@ -299,6 +299,16 @@ export function MobileEntdecken() {
     setSheetSnap(2);
   };
   const openPlaceId = (id: string) => { const p = places.find(x => x.id === id); if (p) openPlace(p); };
+  /**
+   * Pin-Klick auf der Karte: NICHT direkt öffnen. Den Ort in der Liste markieren, dorthin scrollen
+   * und die Karte auf ihn zentrieren — man entscheidet dann selbst, ob man ihn anschaut.
+   */
+  const focusPlace = (p: Place) => {
+    setListFocus(p);           // Karte fliegt ihn an, Pin wird lila
+    setSelectedId(p.id);       // Listeneintrag markiert
+    setSheetSnap(s => (s === 0 ? 1 : s));   // Liste sichtbar machen, falls nur Peek
+    setTimeout(() => listRef.current?.querySelector(`[data-place-id="${p.id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120);
+  };
   const [sheetDragY, setSheetDragY] = useState(0);
   const [sheetDragging, setSheetDragging] = useState(false);
   const sheetDrag = useRef<{ startY: number; startOffset: number; moved: number } | null>(null);
@@ -532,6 +542,8 @@ export function MobileEntdecken() {
 
   // Der Ort, auf den die Karte fliegt: im Swipe die aktuelle Karte, sonst der, von dem man
   // zurückkommt. Beim Laden bewusst null — sonst kämen sich Flug und FitReach in die Quere.
+  // Nur ein bewusst fokussierter/gewählter Ort wird auf der Karte hervorgehoben — beim Start ist
+  // NICHTS lila. (Früher fiel es auf `preview` = erster Listeneintrag zurück → immer ein Pin lila.)
   const mapFocus = swipeMode ? swipeFocus : listFocus;
   // Pixel-Versatz, damit der Ort im sichtbaren Streifen landet statt hinter dem Overlay.
   // Hängt an der RAST, nicht am laufenden Zug — sonst flöge die Karte in jedem Frame neu.
@@ -543,7 +555,7 @@ export function MobileEntdecken() {
 
   // Der Ort, den man gerade ansieht, ist immer der hervorgehobene — sonst bekäme beim Zurück aus
   // „Meine Orte" der erste Listeneintrag den lila Pin, weil `preview` ihn nicht findet.
-  const highlightId = mapFocus?.id ?? preview?.id;
+  const highlightId = swipeMode ? swipeFocus?.id : (listFocus?.id ?? selectedId ?? null);
   /**
    * Der angesehene Ort gehört IMMER auf die Karte — auch außerhalb der Reichweite. Aus „Meine Orte"
    * geöffnet kann er 200 km weg liegen, während hier 10 km eingestellt sind: `shownPlaces` filtert
@@ -564,7 +576,7 @@ export function MobileEntdecken() {
       <Marker key={p.id} position={[p.lat!, p.lng!]}
         icon={catMarker(tagInfoFrom(vocab, p.tagSlug)?.icon ?? 'fa-location-dot', active)}
         zIndexOffset={active ? 1000 : 0}
-        eventHandlers={{ click: () => openPlace(p) }} />
+        eventHandlers={{ click: () => focusPlace(p) }} />
     );
   }), [markerPlaces, highlightId, vocab]); // eslint-disable-line
 
@@ -609,7 +621,7 @@ export function MobileEntdecken() {
           transition: sheetDragging ? 'none' : 'transform .34s cubic-bezier(.32,.72,0,1), opacity .34s cubic-bezier(.32,.72,0,1)',
         }}>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => setPanel(panel === 'cat' ? null : 'cat')} className={toolBtn}
+          <button onClick={() => { const opening = panel !== 'cat'; setPanel(opening ? 'cat' : null); if (opening) setSheetSnap(0); }} className={toolBtn}
             style={{ ...toolShadow, color: anyFilter ? '#F99039' : '#34254c' }} aria-label="Filter">
             <i className="fa-solid fa-filter" />
           </button>

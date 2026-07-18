@@ -9,21 +9,22 @@ export interface Facets {
   merkmale: string[];   // LABELS (Orte speichern Merkmale als Label, nicht Slug)
   vibes:    string[];   // LABELS
   minRating: number;    // 0 = egal
-  maxCost:   number;    // 0 = egal, sonst 1|2|3 (Obergrenze)
+  maxCost:   number | null;  // null = egal; 0 = nur kostenlos; 1|2|3 = höchstens dieses Niveau
   audience:  string[];  // Labels (Antwort-Strings), z.B. „Paare"
 }
-export const EMPTY_FACETS: Facets = { merkmale: [], vibes: [], minRating: 0, maxCost: 0, audience: [] };
+export const EMPTY_FACETS: Facets = { merkmale: [], vibes: [], minRating: 0, maxCost: null, audience: [] };
 
 // Universelle Zielgruppen (Basis-Set der `audience`-Frage beim Anlegen).
 const AUDIENCES = ['Familien mit Kindern', 'Paare', 'Solo-Reisende', 'Gruppen & Freunde', 'Senioren', 'Fotografen'];
 const RATINGS = [3, 4, 4.5];
-const COSTS: { v: number; label: string }[] = [{ v: 1, label: '€' }, { v: 2, label: '€€' }, { v: 3, label: '€€€' }];
+const COSTS: { v: number; label: string }[] = [{ v: 0, label: 'Kostenlos' }, { v: 1, label: '€' }, { v: 2, label: '€€' }, { v: 3, label: '€€€' }];
+const LILA = '#7c3aed';   // einheitliche KI-/Auswahl-Lila
 
 type FacetId = 'orte' | 'merkmale' | 'vibe' | 'rating' | 'budget' | 'audience';
 
 export function facetsActive(sel: TagSelection, f: Facets): boolean {
   return !!(sel.group || sel.tag) || f.merkmale.length > 0 || f.vibes.length > 0
-    || f.minRating > 0 || f.maxCost > 0 || f.audience.length > 0;
+    || f.minRating > 0 || f.maxCost !== null || f.audience.length > 0;
 }
 
 const toggle = (arr: string[], v: string) => arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v];
@@ -45,13 +46,13 @@ export function PlaceFilters({ vocab, sel, onSel, facets, onFacets }: {
     merkmale: facets.merkmale.length,
     vibe: facets.vibes.length,
     rating: facets.minRating ? 1 : 0,
-    budget: facets.maxCost ? 1 : 0,
+    budget: facets.maxCost !== null ? 1 : 0,
     audience: facets.audience.length,
   };
 
   const FACETS: { id: FacetId; label: string; icon: string }[] = [
-    { id: 'orte',     label: 'Orte',       icon: 'fa-compass' },
-    { id: 'merkmale', label: 'Was gibt’s', icon: 'fa-list-check' },
+    { id: 'orte',     label: 'Orte',                icon: 'fa-compass' },
+    { id: 'merkmale', label: 'Themen & Highlights', icon: 'fa-list-check' },
     { id: 'vibe',     label: 'Vibe',       icon: 'fa-wand-magic-sparkles' },
     { id: 'rating',   label: 'Bewertung',  icon: 'fa-star' },
     { id: 'budget',   label: 'Budget',     icon: 'fa-euro-sign' },
@@ -131,15 +132,15 @@ export function PlaceFilters({ vocab, sel, onSel, facets, onFacets }: {
             {COSTS.map(c => {
               const on = facets.maxCost === c.v;
               return (
-                <button key={c.v} type="button" onClick={() => set({ maxCost: on ? 0 : c.v })}
-                  className="flex-1 py-1.5 rounded-full text-xs font-bold border transition-all active:scale-95"
-                  style={on ? { background: 'var(--color-success)', color: 'white', borderColor: 'var(--color-success)' } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
+                <button key={c.v} type="button" onClick={() => set({ maxCost: on ? null : c.v })}
+                  className="flex-1 py-1.5 rounded-full text-[11px] font-bold border transition-all active:scale-95"
+                  style={on ? { background: LILA, color: 'white', borderColor: LILA } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
                   {c.label}
                 </button>
               );
             })}
           </div>
-          <p className="text-[10px] text-[#B0A3BC] px-1">Höchstens dieses Preisniveau.</p>
+          <p className="text-[10px] text-[#B0A3BC] px-1">„Kostenlos" zeigt nur gratis Orte, sonst höchstens dieses Preisniveau.</p>
         </div>
       )}
 
