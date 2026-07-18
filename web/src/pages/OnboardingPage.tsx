@@ -84,8 +84,11 @@ export function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col" style={{ background: 'var(--color-bg)' }}>
-      <div className="max-w-md mx-auto w-full px-5 pt-8 pb-10 flex-1 flex flex-col">
+    // Feste Höhe + interner Scroll: der Inhalt scrollt, die Aktionsleiste bleibt unten stehen —
+    // so ist „Weiter" auf jeder Seite an derselben Stelle (kein Seiten-Scrollen mehr).
+    <div className="h-dvh flex flex-col" style={{ background: 'var(--color-bg)' }}>
+      <div className="max-w-md mx-auto w-full flex-1 flex flex-col min-h-0">
+      <div className="flex-1 overflow-y-auto px-5 pt-8 pb-4">
 
         {/* Kopf */}
         <div className="flex items-center gap-3 mb-6">
@@ -229,9 +232,13 @@ export function OnboardingPage() {
             </div>
           )}
         </div>
+      </div>{/* Ende Scroll-Bereich */}
 
+      {/* Feste Aktionsleiste unten — „Weiter" steht auf jeder Seite an derselben Stelle. */}
+      <div className="flex-shrink-0 px-5 pt-3 border-t border-[var(--color-bg-soft)] bg-[var(--color-bg)]"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 14px)' }}>
         {/* Navigation */}
-        <div className="flex gap-3 mt-8">
+        <div className="flex gap-3">
           {step > 0 && (
             <button onClick={() => setStep(s => s - 1)}
               className="px-5 py-3.5 rounded-2xl text-sm font-semibold text-[var(--color-lavender)] bg-white border border-[var(--color-bg-soft)]">
@@ -252,10 +259,11 @@ export function OnboardingPage() {
           // Überspringen betrifft nur DIESE Seite — nicht den ganzen Prozess. Auf der letzten Seite
           // (optionale Angaben) schließt es ab und führt zur Kalibrierung, statt alles wegzuwerfen.
           <button onClick={() => step < steps.length - 1 ? setStep(s => s + 1) : finish()}
-            className="text-center text-xs text-[var(--color-lavender-lt)] mt-4">
+            className="block w-full text-center text-xs text-[var(--color-lavender-lt)] mt-3">
             Diese Frage überspringen
           </button>
         )}
+      </div>{/* Ende Aktionsleiste */}
       </div>
     </div>
   );
