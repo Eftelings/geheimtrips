@@ -16,6 +16,7 @@ import type { TaxonomyValue } from '../components/ui/TaxonomyPicker.js';
 import { geocodeSuggestions, reverseGeocode, requestGpsPosition, distanceKm } from '../services/geoService.js';
 import exifr from 'exifr';
 import type { GeoLocation } from '../services/geoService.js';
+import { MAP_LAYERS, TILE_URL, HYBRID_ROADS, HYBRID_LABELS, type MapLayer } from '../utils/mapTiles.js';
 
 // ─── Brand tokens ─────────────────────────────────────────────────────────────
 const C = { amber: '#F99039', aubergine: '#34254C', lavender: '#71587A' };
@@ -612,15 +613,21 @@ function LocationPickerMap({ lat, lng, onPick }: {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<any>(null);
   const markerRef    = useRef<any>(null);
+  const baseRef      = useRef<any>(null);
+  const roadRef      = useRef<any>(null);
+  const labelRef     = useRef<any>(null);
   const onPickRef    = useRef(onPick);
   onPickRef.current  = onPick;
+  const [layer, setLayer] = useState<MapLayer>('standard');
 
+  // Kreis-Pin, MITTIG verankert — sitzt exakt auf der Koordinate (der alte rotierte Tropfen
+  // wirkte verschoben, weil seine Spitze nicht unter dem Ankerpunkt lag).
   const PIN_HTML = `<div style="
-    width:30px;height:36px;display:flex;align-items:center;justify-content:center;
-    background:#F99039;color:white;font-size:14px;
-    border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-    box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid white;cursor:grab;
-  "><span style="transform:rotate(45deg);display:block"><i class="fa-solid fa-location-dot"></i></span></div>`;
+    width:26px;height:26px;border-radius:50%;background:#F99039;color:white;font-size:12px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);border:3px solid white;cursor:grab;
+  "><i class="fa-solid fa-location-dot"></i></div>`;
+  const makeIcon = (L: any) => L.divIcon({ html: PIN_HTML, iconSize: [26, 26], iconAnchor: [13, 13], className: '' });
 
   // Karte einmalig aufbauen
   useEffect(() => {
@@ -633,12 +640,9 @@ function LocationPickerMap({ lat, lng, onPick }: {
     mapRef.current = map;
     map.setView(hasCoords ? [lat, lng] : [51.1657, 10.4515], hasCoords ? 14 : 6);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://carto.com">CARTO</a> &copy; <a href="https://openstreetmap.org">OSM</a>',
-      subdomains: 'abcd', maxZoom: 19,
-    }).addTo(map);
+    baseRef.current = L.tileLayer(TILE_URL.standard, { subdomains: 'abcd', maxZoom: 19 }).addTo(map);
 
-    const icon = L.divIcon({ html: PIN_HTML, iconSize: [30, 36], iconAnchor: [15, 36], className: '' });
+    const icon = makeIcon(L);
 
     function placeMarker(la: number, ln: number) {
       if (markerRef.current) {
@@ -669,8 +673,7 @@ function LocationPickerMap({ lat, lng, onPick }: {
     if (markerRef.current) {
       markerRef.current.setLatLng([lat, lng]);
     } else {
-      const icon = L.divIcon({ html: PIN_HTML, iconSize: [30, 36], iconAnchor: [15, 36], className: '' });
-      const m = L.marker([lat, lng], { icon, draggable: true });
+      const m = L.marker([lat, lng], { icon: makeIcon(L), draggable: true });
       m.on('dragend', () => { const ll = m.getLatLng(); onPickRef.current(ll.lat, ll.lng); });
       m.addTo(map);
       markerRef.current = m;
@@ -679,9 +682,34 @@ function LocationPickerMap({ lat, lng, onPick }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng]);
 
+  // Karten-Ebene: Standard → Satellit → Hybrid (Basis-Tile tauschen + Hybrid-Overlays togglen)
+  useEffect(() => {
+    const L = (window as any).L;
+    const map = mapRef.current;
+    if (!map || !L || !baseRef.current) return;
+    baseRef.current.setUrl(TILE_URL[layer]);
+    const wantHybrid = layer === 'hybrid';
+    if (wantHybrid && !roadRef.current) {
+      roadRef.current  = L.tileLayer(HYBRID_ROADS,  { maxZoom: 19 }).addTo(map);
+      labelRef.current = L.tileLayer(HYBRID_LABELS, { maxZoom: 19 }).addTo(map);
+    } else if (!wantHybrid && roadRef.current) {
+      map.removeLayer(roadRef.current); map.removeLayer(labelRef.current);
+      roadRef.current = null; labelRef.current = null;
+    }
+  }, [layer]);
+
   return (
     <div className="rounded-2xl overflow-hidden border-2 border-[#E4DCF0]">
-      <div ref={containerRef} className="w-full" style={{ height: 260 }} />
+      <div className="relative">
+        <div ref={containerRef} className="w-full" style={{ height: 260 }} />
+        {/* Ebene durchtippen (Standard/Satellit/Hybrid) */}
+        <button type="button" onClick={() => { const i = MAP_LAYERS.findIndex(l => l.id === layer); setLayer(MAP_LAYERS[(i + 1) % MAP_LAYERS.length].id); }}
+          className="absolute top-2 right-2 z-[400] w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-md"
+          style={{ color: layer === 'standard' ? '#34254c' : '#F99039' }}
+          title={MAP_LAYERS.find(l => l.id === layer)?.label}>
+          <i className="fa-solid fa-layer-group" />
+        </button>
+      </div>
       <div className="flex items-center gap-2 px-3 py-2 bg-[#FAF7FD] text-[11px] text-[#9A8FAA]">
         <i className="fa-solid fa-hand-pointer" />
         Tippe auf die Karte oder ziehe den Marker, um den Standort genau zu setzen.
@@ -1495,7 +1523,6 @@ function StepCategory({ state, setState }: {
     <div className="space-y-7">
       <div>
         <StepHeading>Was ist das für ein Ort?</StepHeading>
-        <StepSub>Wähle den Typ und beschreibe kurz, was es dort gibt und wie es sich anfühlt.</StepSub>
       </div>
 
       <TaxonomyPicker value={value} onChange={onChange} text={`${state.name} ${state.long.replace(/<[^>]*>/g, ' ')}`} />
@@ -1690,16 +1717,17 @@ function StepDetails({
   );
 }
 
-// ─── KI-Knopf (Gemini) ──────────────────────────────────────────────────────────
+// ─── KI-Knopf ────────────────────────────────────────────────────────────────────
+// Einheitliches Marken-Lila (#7C3AED), kein Verlauf. „KI" statt „Gemini" (User-Wunsch).
 function AiButton({ onClick, loading, disabled, label }: {
   onClick: () => void; loading: boolean; disabled?: boolean; label: string;
 }) {
   return (
     <button type="button" onClick={onClick} disabled={loading || disabled}
       className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-opacity disabled:opacity-40"
-      style={{ background: 'linear-gradient(135deg, #7C3AED, #C026D3)', color: 'white' }}>
+      style={{ background: '#7C3AED', color: 'white' }}>
       <i className={`fa-solid ${loading ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles'} text-[11px]`} />
-      {loading ? 'Gemini denkt…' : label}
+      {loading ? 'KI denkt…' : label}
     </button>
   );
 }
@@ -1784,8 +1812,9 @@ function StepStory({
       <div>
         <StepHeading>Beschreib deinen Geheimtrip</StepHeading>
         <StepSub>
-          Erzähl zuerst die ganze Geschichte, dann bring das Besondere in einem Satz auf den Punkt.
-          Trivia und Tipps kannst du darunter ergänzen{aiOn ? ' – oder dir von Gemini helfen lassen ✨' : ''}.
+          Danke für deinen Geheimtrip! Jetzt bist du dran: Mach diese Seite zu deinem eigenen kleinen
+          Reiseblog. Beschreibe den Ort aus deiner Sicht, lade deine Bilder hoch und verlinke andere
+          spannende Spots. Gestalte alles genau so, wie es dir gefällt.
         </StepSub>
       </div>
 
@@ -1829,7 +1858,7 @@ function StepStory({
               <i className="fa-solid fa-wand-magic-sparkles" /> Brauchst du Hilfe bei deinem Text?
             </p>
             <p className="text-[11px] leading-snug text-[#9A8FAA]">
-              Schreib ein paar Stichpunkte ins Feld – Gemini macht daraus einen lebendigen Text. Oder lass
+              Schreib ein paar Stichpunkte ins Feld – die KI macht daraus einen lebendigen Text. Oder lass
               die KI deine Fotos beschreiben. Alles bleibt frei anpassbar.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -1853,13 +1882,13 @@ function StepStory({
           Der Ort in zwei Sätzen
         </label>
         <p className="text-xs text-[#9A8FAA]">
-          Kurz-Teaser für die Swipe-Karte. {aiOn ? 'Lass ihn dir von Gemini aus deinem Text erstellen – und passe ihn frei an.' : 'Bring das Besondere in zwei Sätzen auf den Punkt.'}
+          Kurz-Teaser für die Swipe-Karte. {aiOn ? 'Lass ihn dir von der KI aus deinem Text erstellen – und passe ihn frei an.' : 'Bring das Besondere in zwei Sätzen auf den Punkt.'}
         </p>
         {aiOn && (
           <AiButton onClick={genSummary} loading={sumLoading} disabled={longLen < 30}
-            label={state.short.trim() ? 'Neu vorschlagen' : 'Von Gemini erstellen lassen'} />
+            label={state.short.trim() ? 'Neu vorschlagen' : 'Von der KI erstellen lassen'} />
         )}
-        {aiOn && longLen < 30 && <p className="text-[11px] text-[#B0A3BC]">Schreib zuerst etwas Beschreibung – daraus macht Gemini den Teaser.</p>}
+        {aiOn && longLen < 30 && <p className="text-[11px] text-[#B0A3BC]">Schreib zuerst etwas Beschreibung – daraus macht die KI den Teaser.</p>}
         <textarea
           rows={3} spellCheck maxLength={300}
           placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch. Wer den schmalen Pfad findet, hat ihn oft ganz für sich allein."

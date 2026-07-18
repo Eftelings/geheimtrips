@@ -108,9 +108,8 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
 
   return (
     <div className="flex flex-col gap-6">
-      {/* ── TAGS (bis zu 3) ── */}
+      {/* ── TAGS (bis zu 3) ── — Überschrift kommt schon vom Schritt-Kopf, hier nur der kurze Hinweis */}
       <div>
-        <p className="text-sm font-bold text-[var(--color-aubergine)] mb-0.5">Was ist das für ein Ort?</p>
         <p className="text-xs text-[var(--color-lavender)] mb-3">Wähle bis zu {MAX_TAGS} Typen — z.B. Restaurant <em>und</em> Café.</p>
 
         {/* C: Vorschläge aus dem Beschreibungstext */}
@@ -176,7 +175,8 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
         ) : (
           <div className="grid grid-cols-2 gap-2 mt-3">
             {vocab.groups.map(g => {
-              const examples = groupTags(g.slug).slice(0, 4).map(t => t.label).join(' · ');
+              // Nur zwei Beispiele je Hauptkategorie — nicht mit Text überladen.
+              const examples = groupTags(g.slug).slice(0, 2).map(t => t.label).join(' · ');
               return (
                 <button key={g.slug} type="button" onClick={() => setOpenGroup(g.slug)}
                   className="text-left rounded-2xl border-2 p-3 transition-all active:scale-[0.98]" style={{ borderColor: '#EFEAF5', background: 'white' }}>
@@ -184,7 +184,7 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
                     <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs flex-shrink-0" style={{ background: g.color }}><i className={`fa-solid ${g.icon}`} /></span>
                     <span className="text-xs font-bold" style={{ color: g.color }}>{shortGroup(g.label)}</span>
                   </div>
-                  <p className="text-[10px] text-[var(--color-lavender)] leading-tight line-clamp-2">{examples} …</p>
+                  <p className="text-[10px] text-[var(--color-lavender)] leading-tight line-clamp-1">{examples}</p>
                 </button>
               );
             })}
