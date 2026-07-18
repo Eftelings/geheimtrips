@@ -1722,19 +1722,46 @@ function StepStory({
 
   // ── KI-Unterstützung (Gemini) ────────────────────────────────────────────
   const [aiOn, setAiOn]           = useState(false);
-  const [descLoading, setDescLoad]= useState(false);
+  const [descLoading, setDescLoad]= useState(false);   // Stichpunkte → Text
+  const [recLoading, setRecLoad]  = useState(false);   // Fotos → Text
+  const [proofLoading, setProofLoad] = useState(false);// Rechtschreib-Pass
+  const [proofDone, setProofDone] = useState(false);
   const [descErr, setDescErr]     = useState('');
   useEffect(() => { aiApi.status().then(s => setAiOn(s.configured)).catch(() => {}); }, []);
+  const hasPhotos = state.media.filter(m => m.type === 'image' && m.serverUrl).length > 0;
 
-  // B: Text-Empfehlung aus den hochgeladenen Fotos + Name + Standort (kein Umschreiben deiner Notizen)
+  // Aus den getippten Stichpunkten/Notizen einen ausformulierten Text machen.
+  async function genFromNotes() {
+    setDescErr(''); setProofDone(false); setDescLoad(true);
+    try {
+      const { description } = await aiApi.placeDescription({
+        name: state.name, long: state.long, location: state.locationText, category: state.tags[0] ?? '',
+      });
+      set('long', description);
+    } catch (e) { setDescErr((e as Error).message || 'Konnte keinen Text erzeugen.'); }
+    setDescLoad(false);
+  }
+
+  // Text-Empfehlung aus den hochgeladenen Fotos + Name + Standort.
   async function genRecommend() {
-    setDescErr(''); setDescLoad(true);
+    setDescErr(''); setProofDone(false); setRecLoad(true);
     try {
       const imageUrls = state.media.filter(m => m.type === 'image' && m.serverUrl).map(m => m.serverUrl!);
       const { description } = await aiApi.placeRecommend({ name: state.name, location: state.locationText, imageUrls });
       set('long', description);
     } catch (e) { setDescErr((e as Error).message || 'Empfehlung fehlgeschlagen.'); }
-    setDescLoad(false);
+    setRecLoad(false);
+  }
+
+  // Reiner Rechtschreib-/Grammatik-Pass — ändert nur Fehler, nicht den Inhalt.
+  async function runProofread() {
+    setDescErr(''); setProofDone(false); setProofLoad(true);
+    try {
+      const { text } = await aiApi.proofread(state.long);
+      set('long', text);
+      setProofDone(true);
+    } catch (e) { setDescErr((e as Error).message || 'Prüfung fehlgeschlagen.'); }
+    setProofLoad(false);
   }
 
   return (
@@ -1773,24 +1800,34 @@ function StepStory({
             Tipp: Verlinke andere Geheimtrips im Text (z.B. Spots in einem Stadtteil) – darunter erscheint automatisch eine kleine Karte mit allen verlinkten Orten.
           </p>
         )}
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs flex items-center gap-1.5" style={{ color: longOk ? '#2D8A4E' : '#C96442' }}>
-            <i className={`fa-solid ${longOk ? 'fa-circle-check' : 'fa-circle-info'} text-[10px]`} />
-            {longOk
-              ? 'Super – das reicht für eine schöne Beschreibung!'
-              : `Noch mind. ${200 - longLen} Zeichen (aktuell ${longLen} / 200).`}
-          </p>
-          {aiOn && (
-            <AiButton onClick={genRecommend} loading={descLoading}
-              disabled={state.media.filter(m => m.type === 'image' && m.serverUrl).length === 0}
-              label="Beispieltext für diesen Ort" />
-          )}
-        </div>
+        <p className="text-xs flex items-center gap-1.5" style={{ color: longOk ? '#2D8A4E' : '#C96442' }}>
+          <i className={`fa-solid ${longOk ? 'fa-circle-check' : 'fa-circle-info'} text-[10px]`} />
+          {longOk
+            ? 'Super – das reicht für eine schöne Beschreibung!'
+            : `Noch mind. ${200 - longLen} Zeichen (aktuell ${longLen} / 200).`}
+        </p>
+
+        {/* KI-Hilfe: Stichpunkte ausformulieren, aus Fotos beschreiben, Rechtschreibung prüfen. */}
         {aiOn && (
-          <p className="text-[11px] text-[#B0A3BC]">
-            Die KI schaut sich deine Fotos, den Namen und den Standort an und schlägt dir einen Text vor –
-            den du frei anpassen kannst. {state.media.filter(m => m.type === 'image' && m.serverUrl).length === 0 ? 'Lade dafür zuerst ein Foto hoch.' : ''}
-          </p>
+          <div className="rounded-2xl border p-3 space-y-2" style={{ borderColor: '#E9E1F3', background: '#FBF7FF' }}>
+            <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: '#7C3AED' }}>
+              <i className="fa-solid fa-wand-magic-sparkles" /> Brauchst du Hilfe bei deinem Text?
+            </p>
+            <p className="text-[11px] leading-snug text-[#9A8FAA]">
+              Schreib ein paar Stichpunkte ins Feld – Gemini macht daraus einen lebendigen Text. Oder lass
+              die KI deine Fotos beschreiben. Alles bleibt frei anpassbar.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <AiButton onClick={genFromNotes} loading={descLoading} disabled={longLen < 10}
+                label="Aus meinen Stichpunkten" />
+              <AiButton onClick={genRecommend} loading={recLoading} disabled={!hasPhotos}
+                label="Aus meinen Fotos" />
+              <AiButton onClick={runProofread} loading={proofLoading} disabled={longLen < 3}
+                label="Rechtschreibung prüfen" />
+            </div>
+            {!hasPhotos && <p className="text-[11px] text-[#B0A3BC]">Für „Aus meinen Fotos" lade zuerst ein Foto hoch.</p>}
+            {proofDone && <p className="text-[11px] font-semibold" style={{ color: '#2D8A4E' }}><i className="fa-solid fa-circle-check mr-1" />Rechtschreibung und Grammatik geprüft.</p>}
+          </div>
         )}
         {descErr && <p className="text-xs text-[#C96442]">{descErr}</p>}
       </div>
