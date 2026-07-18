@@ -6,8 +6,8 @@ import { EMPTY_TAG_SEL, shortGroupLabel } from './TagFilter.js';
 
 /** Facetten neben den Orten (Hauptkategorien via tagSel). */
 export interface Facets {
-  merkmale: string[];   // Slugs aus vocab.merkmale
-  vibes:    string[];   // Slugs aus vocab.vibes
+  merkmale: string[];   // LABELS (Orte speichern Merkmale als Label, nicht Slug)
+  vibes:    string[];   // LABELS
   minRating: number;    // 0 = egal
   maxCost:   number;    // 0 = egal, sonst 1|2|3 (Obergrenze)
   audience:  string[];  // Labels (Antwort-Strings), z.B. „Paare"
@@ -213,9 +213,10 @@ function TermFacet({ title, terms, kind, selected, onToggle }: {
   }
 
   const chip = (t: TaxTerm, ai = false) => {
-    const on = selected.includes(t.slug);
+    // Orte speichern Merkmale/Vibes als LABEL (nicht Slug) — deshalb ist das Label der Schlüssel.
+    const on = selected.includes(t.label);
     return (
-      <button key={t.slug} type="button" onClick={() => onToggle(t.slug)}
+      <button key={t.slug} type="button" onClick={() => onToggle(t.label)}
         className="px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all active:scale-95"
         style={on
           ? { background: '#34254c', color: 'white', borderColor: '#34254c' }
