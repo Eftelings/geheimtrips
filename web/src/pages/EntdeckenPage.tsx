@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { useIsMobile } from '../hooks/useIsMobile.js';
+import { Loader } from '../components/ui/Loader.js';
 
 // Mobil und Desktop getrennt laden → mobil kommt nur die Karte, nicht der Desktop-Feed (und umgekehrt)
 const MobileEntdecken = lazy(() => import('./MobileEntdecken.js').then(m => ({ default: m.MobileEntdecken })));
@@ -7,7 +8,7 @@ const DiscoverPage    = lazy(() => import('./DiscoverPage.js').then(m => ({ defa
 
 const Fallback = (
   <div className="min-h-dvh flex items-center justify-center bg-[var(--color-bg)]">
-    <i className="fa-solid fa-compass fa-spin text-3xl text-[var(--color-amber)]" />
+    <Loader size={84} />
   </div>
 );
 
