@@ -5,7 +5,7 @@ import { suggestTagsFromText } from '../../data/taxVocab.js';
 
 export interface TaxonomyValue { tags: string[]; merkmale: string[]; vibes: string[] }
 
-const MAX_TAGS = 3;
+const MAX_TAGS = 5;
 const VIBE_HINTS = ['z.B. gemütlich', 'z.B. aufregend', 'z.B. romantisch', 'z.B. mystisch', 'z.B. entspannt', 'z.B. lebhaft'];
 const shortGroup = (label: string) => label.split(/[,&]/)[0].trim();
 

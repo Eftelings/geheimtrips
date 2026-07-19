@@ -24,6 +24,16 @@ const MAX_MEDIA = 5;
 const MAX_TIPS  = 5;
 const TOTAL_STEPS = 9;
 
+// Diese Fragen sind Pflicht, WO sie gestellt werden: drinnen/draußen, Preisniveau, für wen, Zeit.
+// (audience/duration sind universell; indoor_outdoor/price_level je Typ — im Admin zugeordnet.)
+const REQUIRED_Q_IDS = new Set(['indoor_outdoor', 'price_level', 'audience', 'duration']);
+const isQuestionRequired = (q: SubmitQuestion) => !!q.required || REQUIRED_Q_IDS.has(q.id);
+// „Beantwortet?" — Text/Select nicht leer, Multicheck mind. eine Auswahl.
+function isAnswered(v: unknown): boolean {
+  if (Array.isArray(v)) return v.length > 0;
+  return v != null && String(v).trim() !== '';
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface MediaItem {
   id:           string;
@@ -1681,7 +1691,7 @@ function StepDetails({
     return (
       <div key={q.id} className="space-y-2">
         <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-          {q.label}{q.required && <span className="ml-1 text-[#C96442]">*</span>}
+          {q.label}{isQuestionRequired(q) && <span className="ml-1 text-[#C96442]">*</span>}
         </label>
         {q.hint && <p className="text-xs text-[#9A8FAA]">{q.hint}</p>}
         <QuestionField q={q} value={state.answers[q.id]} onChange={v => setAnswer(q.id, v)} />
@@ -2298,6 +2308,18 @@ export function SubmitPage() {
     const badHl = hlDone.find(h => !h.title || h.photos.length === 0);
     if (badHl) {
       setError('Jedes Highlight braucht einen Titel und mindestens ein Foto (oder lösche das leere Highlight).');
+      return;
+    }
+
+    // Pflichtfragen (drinnen/draußen, Preisniveau, für wen, Zeit) — nur die, die für diesen Ort auch
+    // gestellt UND aktiv sind. Der Detail-Schritt ist der letzte; hier fangen wir Lücken ab.
+    const missing = [...detailQuestions(state.tags), ...UNIVERSAL_DETAIL_QUESTIONS]
+      .filter(q => isQuestionRequired(q))
+      .filter(q => !q.showIf || q.showIf(state.answers))
+      .filter(q => enabledForPlace(state.tags, q.id, qConfig))
+      .filter(q => !isAnswered(state.answers[q.id]));
+    if (missing.length) {
+      setError(`Bitte beantworte noch: ${missing.map(q => q.label).join(', ')}`);
       return;
     }
 
