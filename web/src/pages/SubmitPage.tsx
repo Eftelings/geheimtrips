@@ -167,6 +167,8 @@ function MiniRichText({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [linkOpen, setLinkOpen]     = useState(false);
   const [linkQuery, setLinkQuery]   = useState('');
+  const [selFig, setSelFig]         = useState<HTMLElement | null>(null);   // im Text angetipptes Bild (figure)
+  const [capDraft, setCapDraft]     = useState('');                          // Bildunterschrift-Entwurf
 
   // Aktuelle Auswahl im Editor merken (für das Einfügen nach Klick auf eine Miniatur)
   function saveSelection() {
@@ -177,7 +179,7 @@ function MiniRichText({
   }
   function insertImage(url: string) {
     const el = ref.current; if (!el) return;
-    if (el.querySelectorAll('img').length >= maxImages) return;
+    if (el.querySelectorAll('img.gt-embed').length >= maxImages) return;
     el.focus();
     const sel = window.getSelection();
     if (savedRange.current && el.contains(savedRange.current.startContainer)) {
@@ -186,9 +188,40 @@ function MiniRichText({
       const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
       sel?.removeAllRanges(); sel?.addRange(r);
     }
-    document.execCommand('insertHTML', false, `<img src="${url}" class="gt-embed" alt="" /><br>`);
+    // Bild als figure → Format (quer/hoch) per Klasse, Bildunterschrift als figcaption.
+    document.execCommand('insertHTML', false,
+      `<figure class="gt-fig gt-landscape"><img src="${url}" class="gt-embed" alt="" /></figure><p><br></p>`);
     savedRange.current = null;
     setPickerOpen(false);
+    sync();
+  }
+  // Bild im Text antippen → auswählen (Format ändern / Bildunterschrift / entfernen)
+  function selectFigure(fig: HTMLElement | null) {
+    setSelFig(fig);
+    setCapDraft(fig?.querySelector('figcaption')?.textContent ?? '');
+  }
+  function setImgFormat(fmt: 'landscape' | 'portrait') {
+    if (!selFig) return;
+    selFig.classList.remove('gt-landscape', 'gt-portrait');
+    selFig.classList.add(fmt === 'portrait' ? 'gt-portrait' : 'gt-landscape');
+    sync();
+  }
+  function setImgCaption(v: string) {
+    if (!selFig) return;
+    let cap = selFig.querySelector('figcaption');
+    if (v.trim()) {
+      if (!cap) { cap = document.createElement('figcaption'); cap.className = 'gt-cap'; selFig.appendChild(cap); }
+      cap.textContent = v;
+    } else if (cap) {
+      cap.remove();
+    }
+    setCapDraft(v);
+    sync();
+  }
+  function removeSelFig() {
+    if (!selFig) return;
+    selFig.remove();
+    setSelFig(null);
     sync();
   }
   function insertPlaceLink(p: { id: string; name: string }) {
@@ -216,6 +249,7 @@ function MiniRichText({
     const el = ref.current;
     if (!el || value === emitted.current) return;
     el.innerHTML = value || '';
+    setSelFig(null);   // DOM neu geschrieben → alte figure-Referenz verwerfen
     emitted.current = value;
     lastValid.current = value;
     const len = el.textContent?.length ?? 0;
@@ -342,6 +376,34 @@ function MiniRichText({
           ))}
         </div>
       )}
+      {/* Bild im Text angetippt → Format (quer/hoch), Bildunterschrift, entfernen */}
+      {selFig && (
+        <div className="px-2 py-2 border-b border-[#F0EBF7] bg-[#FAF7FD] flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <img src={selFig.querySelector('img')?.getAttribute('src') ?? ''} alt="" className="w-9 h-9 rounded object-cover flex-shrink-0" />
+            <span className="text-xs font-semibold text-[#71587A]">Bild im Text</span>
+            <div className="ml-auto flex items-center gap-1">
+              {(['landscape', 'portrait'] as const).map(fmt => {
+                const active = selFig.classList.contains(fmt === 'portrait' ? 'gt-portrait' : 'gt-landscape');
+                return (
+                  <button key={fmt} type="button" onMouseDown={e => { e.preventDefault(); setImgFormat(fmt); }}
+                    className={`h-7 px-2.5 rounded-md text-xs font-semibold transition-colors ${active ? 'bg-[#34254C] text-white' : 'text-[#71587A] hover:bg-[#E4DCF0]'}`}>
+                    {fmt === 'landscape' ? 'Quer' : 'Hoch'}
+                  </button>
+                );
+              })}
+              <button type="button" onMouseDown={e => { e.preventDefault(); removeSelFig(); }} title="Bild entfernen"
+                className="h-7 px-2 rounded-md text-xs font-semibold text-[#C96442] hover:bg-[#FBE9E4] transition-colors">
+                <i className="fa-solid fa-xmark mr-1" />Entfernen
+              </button>
+            </div>
+          </div>
+          <input value={capDraft} onChange={e => setImgCaption(e.target.value)} maxLength={160}
+            placeholder="Bildunterschrift (optional)"
+            className="w-full rounded-lg border border-[#E4DCF0] px-3 py-1.5 text-sm outline-none focus:border-[#F99039]" />
+          <button type="button" onClick={() => setSelFig(null)} className="self-end text-[11px] text-[#B0A3BC] hover:text-[#71587A]">Fertig</button>
+        </div>
+      )}
       {/* Editable area */}
       <div className="relative">
         {empty && placeholder && (
@@ -359,8 +421,12 @@ function MiniRichText({
           onKeyUp={saveSelection}
           onMouseUp={saveSelection}
           onBlur={saveSelection}
+          onClick={e => {
+            const img = (e.target as HTMLElement).closest?.('img.gt-embed') as HTMLElement | null;
+            selectFigure((img?.closest('figure') as HTMLElement) ?? null);
+          }}
           style={{ minHeight, overflowWrap: 'anywhere' }}
-          className="px-4 py-3 text-sm text-[#34254C] outline-none leading-relaxed break-words [&_img.gt-embed]:rounded-xl [&_img.gt-embed]:my-2 [&_img.gt-embed]:max-h-60 [&_img.gt-embed]:w-auto [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline"
+          className="px-4 py-3 text-sm text-[#34254C] outline-none leading-relaxed break-words [&_img.gt-embed]:rounded-xl [&_img.gt-embed]:my-2 [&_img.gt-embed]:max-h-60 [&_img.gt-embed]:w-auto [&_figure.gt-fig]:my-2 [&_figure.gt-portrait_img.gt-embed]:max-h-72 [&_figcaption.gt-cap]:text-[11px] [&_figcaption.gt-cap]:text-[#9A8FAA] [&_figcaption.gt-cap]:mt-0.5 [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline"
         />
       </div>
       {/* Char counter */}

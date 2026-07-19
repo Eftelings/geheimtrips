@@ -45,6 +45,13 @@
   ::-webkit-scrollbar-thumb { background: var(--color-lavender-lt); border-radius: 999px; }
 }
 
+/* ── Eingebettete Bilder im Fließtext (figure) — Format quer/hoch + Bildunterschrift ── */
+/* Bewusst ungelayert → schlägt die Tailwind-[&_img]-Utilities im Editor & auf der Ortsseite. */
+.gt-fig { margin: 0.75rem 0; }
+.gt-fig img.gt-embed { display: block; width: 100%; height: auto; border-radius: 1rem; }
+.gt-fig.gt-portrait img.gt-embed { max-width: 300px; margin-inline: auto; }
+.gt-fig figcaption { margin-top: 0.35rem; font-size: 12px; line-height: 1.4; color: var(--color-lavender); text-align: center; }
+
 /* ── Animations ─────────────────────────────────────────────── */
 @keyframes gtSlideUp {
   from { transform: translateY(100%); opacity: 0; }
