@@ -266,6 +266,9 @@ export function MobileEntdecken() {
   const [feedNonce, setFeedNonce] = useState(0);
   const [swipeLocOpen, setSwipeLocOpen] = useState(false);   // Ortssuche auf der leeren Swipe-Seite
   const [backTo, setBackTo] = useState<string | null>(null);  // Herkunft (z.B. „Meine Orte") für den Zurückpfeil
+  // Stapel der Orte, von denen aus man einem Link IM Artikel gefolgt ist. „Zurück" führt
+  // dann Schritt für Schritt zum Ausgangsartikel zurück, statt gleich in die Liste zu schließen.
+  const [placeStack, setPlaceStack] = useState<Place[]>([]);
   const recaptureFeed = () => setFeedNonce(n => n + 1);
   // „Nochmal zeigen" = die Ansicht „Alle" — dieselbe Wirkung, nur als Knopf. Der Chip oben springt
   // sichtbar mit, damit klar ist, warum plötzlich alles kommt (und man mit einem Tipp zurückkann).
@@ -278,6 +281,7 @@ export function MobileEntdecken() {
   const closeSwipeToList = (to: SheetSnap = 1) => {
     const focus = swipeFocus;
     const focusId = focus?.id ?? null;
+    setPlaceStack([]);   // Artikel-Kette endet hier — Zurück-Stapel verwerfen
     setSheetSnap(to);
     setListFocus(focus);   // Karte zeigt ihn danach im sichtbaren Streifen (lila, mittig)
     if (focusId) {
@@ -290,7 +294,8 @@ export function MobileEntdecken() {
    * schon getroffen — also direkt der Artikel, ohne den Umweg über den Swipe-Bildschirm und ohne
    * eine Entscheidungsfrage, die niemand gestellt hat. Runterziehen führt zurück in die Liste.
    */
-  const openPlace = (p: Place) => {
+  // Einen Ort als Artikel zeigen — ohne den Zurück-Stapel anzufassen (nutzen alle Öffner intern).
+  const showPlace = (p: Place) => {
     setPanel(null);         // sonst schwebt der offene Filter über dem Artikel
     setSwipeFeed([p]);      // Einzel-Feed: es geht um GENAU diesen Ort
     setSwipeFocus(p);       // direkt setzen — sonst rendert der Artikel einen Frame lang den alten Ort
@@ -298,7 +303,15 @@ export function MobileEntdecken() {
     setSwipeArticle(true);
     setSheetSnap(2);
   };
-  const openPlaceId = (id: string) => { const p = places.find(x => x.id === id); if (p) openPlace(p); };
+  // Gezielt geöffnet (Liste, Pin, „Meine Orte"): frische Sitzung → Zurück-Stapel leeren.
+  const openPlace = (p: Place) => { setPlaceStack([]); showPlace(p); };
+  // Ort→Ort-Link IM Artikel: den aktuellen Ort merken, damit „Zurück" wieder zu ihm führt.
+  const openPlaceId = (id: string) => {
+    const p = places.find(x => x.id === id);
+    if (!p) return;
+    setPlaceStack(prev => (swipeFocus ? [...prev, swipeFocus] : prev));
+    showPlace(p);
+  };
   /**
    * Pin-Klick auf der Karte: NICHT direkt öffnen. Den Ort in der Liste markieren, dorthin scrollen
    * und die Karte auf ihn zentrieren — man entscheidet dann selbst, ob man ihn anschaut.
@@ -410,7 +423,7 @@ export function MobileEntdecken() {
   }
   // „Swipen" zieht nur das Overlay auf die oberste Rast — dort IST der Swipe. Nur HIER endet eine
   // gezielte Ort-Sitzung: wer bewusst swipen geht, will keinen Zurückpfeil nach „Meine Orte" mehr.
-  function goSwipe() { setPanel(null); setArticleOnly(false); setBackTo(null); setSheetSnap(2); }
+  function goSwipe() { setPanel(null); setArticleOnly(false); setBackTo(null); setPlaceStack([]); setSheetSnap(2); }
   // Ankommen auf Rast 2 (egal ob per Button oder mit der Hand hochgezogen): Feed einfrieren.
   // Snapshot, sonst indiziert der Feed beim Weglegen neu → Index springt.
   useEffect(() => {
@@ -742,7 +755,11 @@ export function MobileEntdecken() {
               // Bei fremder Herkunft echtes History-Zurück statt navigate(pfad) — das schöbe einen
               // neuen Eintrag drauf und die Scroll-Position der Merkliste wäre sicher verloren.
               onBack={() => {
-                if (backTo) navigate(-1);
+                if (placeStack.length) {                          // einem Link IM Artikel gefolgt
+                  const prev = placeStack[placeStack.length - 1];  // → Schritt zurück zum Ausgangsort
+                  setPlaceStack(s => s.slice(0, -1));
+                  showPlace(prev);
+                } else if (backTo) navigate(-1);
                 else if (articleOnly) closeSwipeToList();
                 else setSwipeArticle(false);
               }}

@@ -69,7 +69,7 @@ export function AdminSubmissions() {
                     className="flex-1 bg-white/5 text-white/70 font-semibold py-2 rounded-xl text-xs hover:bg-white/10 transition-colors">
                     <i className="fa-solid fa-eye mr-1" /> Ansehen
                   </button>
-                  <button onClick={() => navigate(`/submit?edit=${p.id}`)}
+                  <button onClick={() => navigate(`/submit?edit=${p.id}&admin=1`)}
                     className="flex-1 bg-white/5 text-white/70 font-semibold py-2 rounded-xl text-xs hover:bg-white/10 transition-colors">
                     <i className="fa-solid fa-pen mr-1" /> Bearbeiten
                   </button>

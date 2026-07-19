@@ -11,6 +11,7 @@ import type { QuestionConfig } from '../data/questionCatalog.js';
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place } from '../types/index.js';
 import { placesApi, mediaApi, aiApi, taxonomyApi } from '../services/api.js';
+import { adminApi } from '../services/adminApi.js';
 import { TaxonomyPicker } from '../components/ui/TaxonomyPicker.js';
 import type { TaxonomyValue } from '../components/ui/TaxonomyPicker.js';
 import { geocodeSuggestions, reverseGeocode, requestGpsPosition, distanceKm } from '../services/geoService.js';
@@ -1997,7 +1998,7 @@ function StepMedia({
 }
 
 // Zusammenfassung + Hinweis am Ende (Abschicken passiert über die untere Leiste)
-function ReviewSubmit({ state, isEdit }: { state: WizardState; isEdit: boolean }) {
+function ReviewSubmit({ state, isEdit, fromAdmin }: { state: WizardState; isEdit: boolean; fromAdmin: boolean }) {
   const pendingUploads = state.media.filter(m => m.uploading).length;
   const vocab = useTaxVocab();
   return (
@@ -2034,7 +2035,13 @@ function ReviewSubmit({ state, isEdit }: { state: WizardState; isEdit: boolean }
 
       <div className="rounded-2xl border border-dashed px-5 py-4 text-xs"
         style={{ borderColor: '#C4AED0', background: '#FAF7FD', color: C.lavender }}>
-        {isEdit ? (
+        {fromAdmin ? (
+          <>
+            <p className="font-semibold mb-1" style={{ color: C.aubergine }}>Veröffentlichen oder später?</p>
+            „Jetzt veröffentlichen" schaltet den Ort sofort frei. „Ohne Freigabe speichern" übernimmt
+            deine Änderungen, lässt ihn aber ungeprüft — du kommst zurück zu den Einreichungen.
+          </>
+        ) : isEdit ? (
           <>
             <p className="font-semibold mb-1" style={{ color: C.aubergine }}>Änderungen speichern</p>
             Deine Anpassungen werden sofort übernommen.
@@ -2151,6 +2158,9 @@ export function SubmitPage() {
   const [searchParams]    = useSearchParams();
   const editId            = searchParams.get('edit');
   const isEdit            = !!editId;
+  // Aus dem Admin-Board bearbeitet? Dann am Ende: veröffentlichen ODER ohne Freigabe
+  // speichern (zurück zu den Einreichungen). Ohne Flag ist es normales Bearbeiten.
+  const fromAdmin         = searchParams.get('admin') === '1';
   const invalidatePlaces  = useAppStore(s => s.invalidatePlaces);
   const markVisited       = useAppStore(s => s.markVisited);
   const [step, setStep]       = useState(1);
@@ -2292,7 +2302,7 @@ export function SubmitPage() {
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────
-  async function handleSubmit() {
+  async function handleSubmit(publish = false) {
     const pendingUploads = state.media.filter(m => m.uploading).length
       + state.highlights.reduce((n, h) => n + h.photos.filter(p => p.uploading).length, 0);
     if (pendingUploads > 0) {
@@ -2368,6 +2378,13 @@ export function SubmitPage() {
       state.media.forEach(m => { if (m.localUrl.startsWith('blob:')) URL.revokeObjectURL(m.localUrl); });
       // Force places list to re-fetch so the change appears on the map/discover page
       invalidatePlaces();
+      // Admin-Bearbeitung: entweder direkt freischalten oder ungeprüft lassen — danach zurück
+      // in die Einreichungs-Liste (freigeschaltete Orte verschwinden dort automatisch).
+      if (fromAdmin && editId) {
+        if (publish) { await adminApi.approveSubmission(editId); invalidatePlaces(); }
+        navigate('/admin/submissions');
+        return;
+      }
       // Nur beim Ersteinreichen: Ersteller:in als „war hier" markieren (Backend tat es schon)
       if (!editId) markVisited(res.id).catch(() => {});
       setSuccess(res.id);
@@ -2477,7 +2494,7 @@ export function SubmitPage() {
         {step === 9 && (
           <>
             <StepDetails state={state} set={set} setState={setState} qConfig={qConfig} />
-            <ReviewSubmit state={state} isEdit={isEdit} />
+            <ReviewSubmit state={state} isEdit={isEdit} fromAdmin={fromAdmin} />
           </>
         )}
 
@@ -2494,6 +2511,36 @@ export function SubmitPage() {
           className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#E4DCF0]"
           style={{ background: 'rgba(251,249,252,0.97)', backdropFilter: 'blur(12px)', paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
+          {step === TOTAL_STEPS && fromAdmin ? (
+            /* Admin-Bearbeitung: veröffentlichen oder ohne Freigabe zurück in die Warteschlange */
+            <div className="max-w-xl mx-auto px-5 py-4 flex flex-col gap-2">
+              <div className="flex gap-3">
+                <button
+                  type="button" onClick={back}
+                  className="py-3 px-6 rounded-2xl font-semibold text-sm border-2 border-[#E4DCF0] flex items-center gap-2 transition-colors hover:border-[#C4AED0]"
+                  style={{ color: C.lavender }}
+                >
+                  <i className="fa-solid fa-arrow-left text-xs" /> Zurück
+                </button>
+                <button
+                  type="button" onClick={() => handleSubmit(true)}
+                  disabled={submitting || state.media.some(m => m.uploading)}
+                  className="flex-1 py-3 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
+                  style={{ background: `linear-gradient(135deg, ${C.aubergine}, ${C.lavender})` }}
+                >
+                  <i className={`fa-solid ${submitting ? 'fa-circle-notch fa-spin' : 'fa-check'}`} /> Jetzt veröffentlichen
+                </button>
+              </div>
+              <button
+                type="button" onClick={() => handleSubmit(false)}
+                disabled={submitting || state.media.some(m => m.uploading)}
+                className="w-full py-3 rounded-2xl font-bold text-sm border-2 border-[#C4AED0] flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
+                style={{ color: C.aubergine }}
+              >
+                <i className={`fa-solid ${submitting ? 'fa-circle-notch fa-spin' : 'fa-floppy-disk'}`} /> Ohne Freigabe speichern
+              </button>
+            </div>
+          ) : (
           <div className="max-w-xl mx-auto px-5 py-4 flex gap-3">
             {step > 1 && (
               <button
@@ -2516,7 +2563,7 @@ export function SubmitPage() {
               </button>
             ) : (
               <button
-                type="button" onClick={handleSubmit}
+                type="button" onClick={() => handleSubmit()}
                 disabled={submitting || state.media.some(m => m.uploading)}
                 className="flex-1 py-3 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
                 style={{ background: `linear-gradient(135deg, ${C.aubergine}, ${C.lavender})` }}
@@ -2527,6 +2574,7 @@ export function SubmitPage() {
               </button>
             )}
           </div>
+          )}
         </div>
       </div>
     </AppShell>
