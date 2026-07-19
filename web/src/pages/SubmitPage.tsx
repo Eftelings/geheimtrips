@@ -74,6 +74,7 @@ interface WizardState {
   answers:      Record<string, unknown>;
   long:         string;     // HTML from rich-text editor
   tips:         string[];
+  showLinkedMap: boolean;   // Karte mit den im Text verlinkten Orten im Beitrag zeigen?
   highlights:   HighlightDraft[];  // Must-sees (nur bei Erlebnis-Orten)
   media:        MediaItem[];
   heroIndex:    number;     // index of selected cover image
@@ -84,7 +85,7 @@ const EMPTY: WizardState = {
   name: '', short: '', locationText: '', lat: null, lng: null,
   l1: null, l2: null, l3: null, l4Features: [],
   tags: [], merkmale: [], vibes: [],
-  answers: {}, long: '', tips: [''], highlights: [], media: [], heroIndex: 0,
+  answers: {}, long: '', tips: [''], showLinkedMap: true, highlights: [], media: [], heroIndex: 0,
   exifSuggestion: null,
 };
 
@@ -130,6 +131,7 @@ function placeToWizardState(place: Place): WizardState {
     answers:      (attrs.answers as Record<string, unknown>) ?? {},
     long:         place.long ?? '',
     tips:         place.tips?.length ? place.tips : [''],
+    showLinkedMap: attrs.showLinkedMap !== false,   // Default an; nur explizit false schaltet aus
     highlights:   (place.highlights ?? []).map((h, i) => ({
       id: `h${i}-${Math.random().toString(36).slice(2, 7)}`,
       title: h.title ?? '', description: h.description ?? '',
@@ -1886,7 +1888,7 @@ function StepStory({
             Atmosphäre, was dich überrascht hat, was andere übersehen. Nutze <strong>Fett</strong>,{' '}
             <em>Kursiv</em> oder <u>Unterstrichen</u> für Betonung.
             {linkPlaces.length > 0 && <> Du kannst auch andere Geheimtrips im Text verlinken (z.B. Spots
-            in einem Stadtteil) – darunter erscheint automatisch eine kleine Karte mit allen verlinkten Orten.</>}
+            in einem Stadtteil) – darunter kannst du dann eine kleine Karte mit allen verlinkten Orten anzeigen lassen.</>}
           </InfoDot>
         </div>
         <MiniRichText
@@ -1906,6 +1908,19 @@ function StepStory({
           {aiOn && <AiButton onClick={() => setHelpOpen(true)} loading={false} label="Hilf mir beim Schreiben" />}
         </div>
         {descErr && <p className="text-xs text-[#C96442]">{descErr}</p>}
+
+        {/* Nur wenn Orte im Text verlinkt sind: Karte optional (Opt-out) */}
+        {/data-place-id/.test(state.long) && (
+          <label className="flex items-start gap-2.5 mt-1 cursor-pointer rounded-xl border border-[#E4DCF0] p-3">
+            <input type="checkbox" checked={state.showLinkedMap}
+              onChange={e => set('showLinkedMap', e.target.checked)}
+              className="mt-0.5 accent-[#F99039] w-4 h-4 flex-shrink-0" />
+            <span className="text-xs leading-relaxed" style={{ color: C.lavender }}>
+              <span className="block font-semibold" style={{ color: C.aubergine }}>Karte der verlinkten Orte anzeigen</span>
+              Unter deinem Text erscheint eine kleine Karte mit allen Orten, die du verlinkt hast – abwählen, wenn du sie nicht möchtest.
+            </span>
+          </label>
+        )}
       </div>
 
       {/* „Hilf mir beim Schreiben" — Stichpunkte (+ Fotos, falls vorhanden) → Text von der KI. */}
@@ -2661,6 +2676,7 @@ export function SubmitPage() {
         answers:      state.answers,
         // Filter tips: strip HTML tags to check if actually empty
         tips:         state.tips.filter(t => t.replace(/<[^>]*>/g, '').trim()),
+        showLinkedMap: state.showLinkedMap,
         highlights:   hlDone,
         heroCropX:    heroItem?.cropX ?? 0.5,
         heroCropY:    heroItem?.cropY ?? 0.5,

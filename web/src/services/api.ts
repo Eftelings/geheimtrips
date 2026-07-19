@@ -95,6 +95,7 @@ export interface SubmitPlacePayload {
   vibes?:        string[];
   answers?:      Record<string, unknown>;
   tips?:         string[];
+  showLinkedMap?: boolean;
   highlights?:   { title: string; description: string; photos: string[] }[];
   mediaItems?:   { url: string; caption: string; type: string; cropX: number; cropY: number }[];
   heroCropX?:    number;

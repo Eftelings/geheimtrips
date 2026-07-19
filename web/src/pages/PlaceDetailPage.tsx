@@ -2463,8 +2463,8 @@ async function handleVerifyToggle() {
                     <i className={`fa-solid fa-chevron-${storyExpanded ? 'up' : 'down'} text-xs`} />
                   </button>
                 )}
-                {/* Karte mit den im Text verlinkten Orten (z.B. Stadtteil mit mehreren Spots) */}
-                {linkedInStory.length > 0 && (
+                {/* Karte mit den im Text verlinkten Orten — nur wenn die Autor:in sie aktiviert hat */}
+                {linkedInStory.length > 0 && attrs.showLinkedMap !== false && (
                   <div className="mt-4">
                     <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-2">
                       Orte in diesem Text
