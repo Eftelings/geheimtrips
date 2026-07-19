@@ -16,7 +16,6 @@ export const T2_GROUPS: T2Group[] = [
   { slug: 'kultur',    label: 'Kultur, Geschichte & Architektur', icon: 'fa-landmark',        color: '#8A6FB3' },
   { slug: 'natur',     label: 'Natur, Outdoor & Landschaft',      icon: 'fa-leaf',            color: '#5B8F6E' },
   { slug: 'freizeit',  label: 'Freizeit, Action & Entertainment', icon: 'fa-ticket',          color: '#F99039' },
-  { slug: 'urbanes',   label: 'Urbanes, Architektur & Lifestyle', icon: 'fa-city',            color: '#4A7FB5' },
   { slug: 'kulinarik', label: 'Kulinarik & Übernachten',          icon: 'fa-mug-hot',         color: '#D97757' },
 ];
 
@@ -56,11 +55,11 @@ export const T2_TAGS: T2Tag[] = [
   { label: 'Planetarium', groups: ['kultur'], sub: 'Wissenschaft & Astronomie' },
   { label: 'Science Center', groups: ['kultur'], sub: 'Wissenschaft & Astronomie' },
 
-  // ── Urbanes, Architektur & Lifestyle ──
+  // ── Städte & Orte (früher eigene Gruppe „Urbanes"; jetzt unter Kultur & Architektur) ──
   // „Historische Altstadt / Viertel" ist zu „Stadt" zusammengeführt — die Ausprägung
   // (Altstadt, Szeneviertel, Platz …) ist jetzt ein Merkmal, kein eigener Tag.
-  { label: 'Stadt', groups: ['urbanes'], sub: 'Städte & Orte' },
-  { label: 'Dorf',  groups: ['urbanes'], sub: 'Städte & Orte' },
+  { label: 'Stadt', groups: ['kultur'], sub: 'Städte & Orte' },
+  { label: 'Dorf',  groups: ['kultur'], sub: 'Städte & Orte' },
 
   // ── Natur, Outdoor & Landschaft ──
   { label: 'See', groups: ['natur'], sub: 'Gewässer & Küsten' },

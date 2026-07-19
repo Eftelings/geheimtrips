@@ -126,6 +126,19 @@ async function seedTaxonomy() {
       VALUES (${OLD}, ${NEW}, 'tag')`).catch(() => {});
     console.log('Taxonomie: „Historische Altstadt / Viertel" → „Stadt" zusammengeführt.');
   }
+
+  // Gruppe „Urbanes" entfernt: ihre Tags (Stadt, Dorf) wandern nach „Kultur, Geschichte &
+  // Architektur". Idempotent: läuft nur, solange die Gruppe noch existiert. Die Tags selbst
+  // (und damit alle so getaggten Orte) bleiben unangetastet — nur die Gruppen-Zuordnung wechselt.
+  const urbanesExists = await db.all(sql`SELECT slug FROM tax_groups WHERE slug = 'urbanes'`).catch(() => []);
+  if (urbanesExists.length) {
+    // Falls ein Tag schon in „kultur" hängt, würde das UPDATE eine Dublette erzeugen → vorher weg.
+    await db.run(sql`DELETE FROM tax_tag_group WHERE group_slug = 'urbanes'
+      AND tag_slug IN (SELECT tag_slug FROM tax_tag_group WHERE group_slug = 'kultur')`).catch(() => {});
+    await db.run(sql`UPDATE tax_tag_group SET group_slug = 'kultur' WHERE group_slug = 'urbanes'`).catch(() => {});
+    await db.run(sql`DELETE FROM tax_groups WHERE slug = 'urbanes'`).catch(() => {});
+    console.log('Taxonomie: Gruppe „Urbanes" entfernt — Stadt & Dorf → „Kultur".');
+  }
 }
 
 (async () => {
