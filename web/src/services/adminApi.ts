@@ -163,7 +163,8 @@ export const adminApi = {
   // Users
   users:       ()           => get<AdminUser[]>('/users'),
   updateUser:  (id: number, d: object) => patch<{ ok: boolean }>(`/users/${id}`, d),
-  deleteUser:  (id: number) => del<{ ok: boolean }>(`/users/${id}`),
+  deleteUser:  (id: number, transferTo?: number | null) =>
+    del<{ ok: boolean }>(`/users/${id}${transferTo != null ? `?transferTo=${transferTo}` : ''}`),
   // Submissions
   submissions: ()            => get<AdminPlace[]>('/submissions'),
   approveSubmission: (id: string) => patch<{ ok: boolean }>(`/submissions/${id}/approve`),

@@ -556,10 +556,25 @@ router.delete('/users/:id', async (c) => {
   const self = c.get('user');
   if (id === self.id) return c.json({ error: 'Du kannst dein eigenes Konto nicht löschen.' }, 400);
 
+  // Optional: alle Artikel (+ Foto-Bezug) dieser Person an jemand anderen übertragen, statt sie
+  // zu anonymisieren. ?transferTo=<userId>
+  const transferRaw = c.req.query('transferTo');
+  const transferTo  = transferRaw != null && transferRaw !== '' ? Number(transferRaw) : null;
+  if (transferTo != null) {
+    if (!Number.isInteger(transferTo) || transferTo === id) return c.json({ error: 'Ungültiges Übertragungsziel.' }, 400);
+    const target = await db.select({ id: users.id }).from(users).where(eq(users.id, transferTo)).get();
+    if (!target) return c.json({ error: 'Zielperson nicht gefunden.' }, 404);
+  }
+
   // Verknüpfte Daten aufräumen — sonst blockieren Fremdschlüssel die Löschung.
-  // Beigetragene Inhalte bleiben erhalten, nur der persönliche Bezug wird entfernt:
-  await db.run(sql`UPDATE places       SET submitted_by = NULL WHERE submitted_by = ${id}`).catch(() => {});
-  await db.run(sql`UPDATE place_media  SET user_id      = NULL WHERE user_id = ${id}`).catch(() => {});
+  // Beigetragene Inhalte bleiben erhalten: entweder übertragen ODER nur den persönlichen Bezug lösen.
+  if (transferTo != null) {
+    await db.run(sql`UPDATE places      SET submitted_by = ${transferTo} WHERE submitted_by = ${id}`).catch(() => {});
+    await db.run(sql`UPDATE place_media SET user_id      = ${transferTo} WHERE user_id = ${id}`).catch(() => {});
+  } else {
+    await db.run(sql`UPDATE places      SET submitted_by = NULL WHERE submitted_by = ${id}`).catch(() => {});
+    await db.run(sql`UPDATE place_media SET user_id      = NULL WHERE user_id = ${id}`).catch(() => {});
+  }
   await db.run(sql`UPDATE quiz_games   SET user_id      = NULL WHERE user_id = ${id}`).catch(() => {});
 
   // Persönliche & relationale Daten entfernen:
