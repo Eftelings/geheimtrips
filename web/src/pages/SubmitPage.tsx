@@ -1998,11 +1998,196 @@ function StepMedia({
 }
 
 // Zusammenfassung + Hinweis am Ende (Abschicken passiert über die untere Leiste)
-function ReviewSubmit({ state, isEdit, fromAdmin }: { state: WizardState; isEdit: boolean; fromAdmin: boolean }) {
+// ─── Draft-Vorschau ───────────────────────────────────────────────────────────
+// Zeigt den aktuellen Entwurf im NEUEN Orts-Design (Vollbild-Overlay) — ohne zu
+// speichern. Bewusst eine schlanke, rein darstellende Nachbildung der Sektionen aus
+// PlaceDetailPage (Hero · Das Besondere · Story · Highlights · Tipps · Merkmale/Vibes);
+// die echte Seite lädt einen gespeicherten Ort samt Bewertungen/Q&A und taugt nicht
+// für einen unveröffentlichten Entwurf.
+function DraftPreview({ state, onClose }: { state: WizardState; onClose: () => void }) {
+  const vocab = useTaxVocab();
+  const url = (m: { serverUrl?: string; localUrl: string }) => m.serverUrl ?? m.localUrl;
+  const usable    = state.media.filter(m => !m.error);
+  const hero      = usable[state.heroIndex] ?? usable[0] ?? null;
+  const rest      = usable.filter(m => m !== hero);
+  const typeLabels = state.tags.map(s => tagInfoFrom(vocab, s)?.label ?? s);
+  const tips       = state.tips.filter(t => t.replace(/<[^>]*>/g, '').trim());
+  const highlights = state.highlights.filter(h => h.title.trim() && h.photos.some(p => !p.error));
+  const hasStory   = state.long.replace(/<[^>]*>/g, '').trim().length > 0;
+
+  // Hintergrund-Scroll sperren, solange die Vorschau offen ist
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain" style={{ background: '#FBF9FC' }}>
+      {/* Kopfzeile */}
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-[#E4DCF0]"
+        style={{ background: 'rgba(251,249,252,0.95)', backdropFilter: 'blur(10px)' }}>
+        <span className="text-xs font-bold uppercase tracking-widest" style={{ color: C.lavender }}>
+          <i className="fa-solid fa-eye mr-1.5" />Vorschau
+        </span>
+        <button type="button" onClick={onClose} aria-label="Vorschau schließen"
+          className="w-9 h-9 rounded-full flex items-center justify-center border-2 border-[#E4DCF0] transition-colors hover:border-[#C4AED0]"
+          style={{ color: C.aubergine }}>
+          <i className="fa-solid fa-xmark" />
+        </button>
+      </div>
+
+      <div className="max-w-xl mx-auto px-4 pt-4 pb-20 flex flex-col gap-5">
+        {/* Hero */}
+        <div className="rounded-3xl overflow-hidden relative aspect-[4/5]" style={{ background: '#E2DCEC' }}>
+          {hero ? (
+            hero.type === 'video'
+              ? <video src={url(hero)} muted autoPlay loop playsInline className="w-full h-full object-cover"
+                  style={{ objectPosition: `${hero.cropX * 100}% ${hero.cropY * 100}%` }} />
+              : <img src={url(hero)} alt={state.name} className="w-full h-full object-cover"
+                  style={{ objectPosition: `${hero.cropX * 100}% ${hero.cropY * 100}%` }} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center" style={{ color: '#B0A3BC' }}>
+              <i className="fa-solid fa-image text-4xl" />
+            </div>
+          )}
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 45%)' }} />
+          <div className="absolute bottom-0 left-0 right-0 p-4">
+            <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+              {typeLabels.map((l, i) => (
+                <span key={i} className="text-[9px] font-bold px-2 py-0.5 rounded-full text-white"
+                  style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)' }}>{l}</span>
+              ))}
+              <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-white flex items-center gap-1"
+                style={{ background: 'rgba(249,144,57,0.92)' }}>
+                <i className="fa-solid fa-clock" /> Vorschau
+              </span>
+            </div>
+            <h1 className="font-display font-bold text-white leading-tight"
+              style={{ fontSize: 'clamp(1.25rem, 2.8vw, 1.9rem)', letterSpacing: '-0.02em', textShadow: '0 2px 12px rgba(0,0,0,0.45)' }}>
+              {state.name || 'Unbenannter Ort'}
+            </h1>
+            {state.locationText && (
+              <span className="text-white/75 text-xs flex items-center gap-1 mt-1">
+                <i className="fa-solid fa-location-dot text-[10px]" /> {state.locationText}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Weitere Medien */}
+        {rest.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            {rest.map((m, i) => (
+              m.type === 'video'
+                ? <video key={i} src={url(m)} muted className="h-24 w-32 flex-shrink-0 object-cover rounded-xl" />
+                : <img key={i} src={url(m)} alt="" className="h-24 w-32 flex-shrink-0 object-cover rounded-xl"
+                    style={{ objectPosition: `${m.cropX * 100}% ${m.cropY * 100}%` }} />
+            ))}
+          </div>
+        )}
+
+        {/* Das Besondere (Ein-Satz) */}
+        {state.short.trim() && (
+          <section className="rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, #FFF4EB, #FFEAD6)' }}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-amber)] mb-1">Das Besondere</p>
+            <p className="text-[15px] leading-snug font-medium" style={{ color: C.aubergine }}>{state.short}</p>
+          </section>
+        )}
+
+        {/* Story */}
+        {hasStory && (
+          <section>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">Über diesen Ort</p>
+            <div className="text-[15px] text-[var(--color-body)] leading-relaxed prose prose-sm max-w-none [&_img]:rounded-2xl [&_img]:w-full [&_img]:my-4 [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline"
+              onClick={e => { const a = (e.target as HTMLElement).closest?.('a.gt-place'); if (a) e.preventDefault(); }}
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{ __html: state.long }} />
+          </section>
+        )}
+
+        {/* Highlights */}
+        {highlights.length > 0 && (
+          <section>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">
+              <i className="fa-solid fa-star mr-1.5" />Das solltest du sehen
+            </p>
+            <div className="flex flex-col gap-4">
+              {highlights.map((h, i) => {
+                const photos = h.photos.map(p => p.serverUrl ?? p.localUrl).filter(Boolean);
+                return (
+                  <div key={h.id} className="rounded-2xl overflow-hidden border border-[#E4DCF0] bg-white">
+                    {photos.length > 0 && (
+                      photos.length === 1
+                        ? <img src={photos[0]} alt={h.title} className="w-full aspect-[16/10] object-cover" />
+                        : <div className="flex overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                            {photos.map((src, j) => <img key={j} src={src} alt="" className="h-44 w-auto flex-shrink-0 object-cover" />)}
+                          </div>
+                    )}
+                    <div className="p-3.5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
+                          style={{ background: 'var(--color-amber)' }}>{i + 1}</span>
+                        <h3 className="font-display font-bold" style={{ color: C.aubergine }}>{h.title}</h3>
+                      </div>
+                      {h.description && <p className="text-[14px] text-[var(--color-body)] leading-relaxed">{h.description}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Tipps */}
+        {tips.length > 0 && (
+          <section>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">Tipps</p>
+            <ul className="flex flex-col gap-2.5">
+              {tips.map((tip, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'var(--color-amber)' }}>
+                    <i className="fa-solid fa-check text-white" style={{ fontSize: 9 }} />
+                  </span>
+                  {/* eslint-disable-next-line react/no-danger */}
+                  <span className="text-[15px] text-[var(--color-body)] leading-relaxed" dangerouslySetInnerHTML={{ __html: tip }} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Merkmale / Vibes */}
+        {(state.merkmale.length > 0 || state.vibes.length > 0) && (
+          <section className="flex flex-wrap gap-1.5">
+            {state.merkmale.map((m, i) => (
+              <span key={`m${i}`} className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: '#F1ECF4', color: C.aubergine }}>{m}</span>
+            ))}
+            {state.vibes.map((v, i) => (
+              <span key={`v${i}`} className="text-xs font-semibold px-2.5 py-1 rounded-full text-white" style={{ background: C.aubergine }}>{v}</span>
+            ))}
+          </section>
+        )}
+
+        <p className="text-center text-xs pt-2" style={{ color: C.lavender }}>
+          <i className="fa-solid fa-circle-info mr-1" />So etwa sieht dein Beitrag später aus.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ReviewSubmit({ state, isEdit, fromAdmin, onPreview }: { state: WizardState; isEdit: boolean; fromAdmin: boolean; onPreview: () => void }) {
   const pendingUploads = state.media.filter(m => m.uploading).length;
   const vocab = useTaxVocab();
   return (
     <div className="space-y-5 mt-8 pt-6 border-t border-[#E4DCF0]">
+      {/* Vorschau im neuen Orts-Design (ohne zu speichern) */}
+      <button type="button" onClick={onPreview}
+        className="w-full py-3 rounded-2xl font-bold text-sm border-2 border-[#C4AED0] flex items-center justify-center gap-2 transition-colors hover:border-[var(--color-amber)]"
+        style={{ color: C.aubergine }}>
+        <i className="fa-solid fa-eye" /> Vorschau ansehen
+      </button>
       <div className="rounded-2xl border border-[#E4DCF0] bg-white overflow-hidden">
         <div className="px-5 py-4 border-b border-[#F0EBF7]">
           <p className="text-xs font-bold uppercase tracking-widest mb-1 text-[#B0A3BC]">Zusammenfassung</p>
@@ -2168,6 +2353,7 @@ export function SubmitPage() {
   const [error, setError]     = useState('');
   const [submitting, setSub]  = useState(false);
   const [success, setSuccess] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);   // Vollbild-Vorschau des Entwurfs
   // Im Bearbeiten-Modus erst rendern, wenn die Daten geladen sind — sonst
   // mounten die Rich-Text-Editoren mit leerem Inhalt.
   const [ready, setReady]     = useState(!editId);
@@ -2494,7 +2680,7 @@ export function SubmitPage() {
         {step === 9 && (
           <>
             <StepDetails state={state} set={set} setState={setState} qConfig={qConfig} />
-            <ReviewSubmit state={state} isEdit={isEdit} fromAdmin={fromAdmin} />
+            <ReviewSubmit state={state} isEdit={isEdit} fromAdmin={fromAdmin} onPreview={() => setPreviewOpen(true)} />
           </>
         )}
 
@@ -2577,6 +2763,8 @@ export function SubmitPage() {
           )}
         </div>
       </div>
+
+      {previewOpen && <DraftPreview state={state} onClose={() => setPreviewOpen(false)} />}
     </AppShell>
   );
 }
