@@ -81,7 +81,7 @@ async function callGeminiParts(parts: Part[], maxOutputTokens = 300): Promise<st
   throw new Error(lastErr);
 }
 
-/** Genau ZWEI kurze, einladende Sätze für die Swipe-Karte — aus der Beschreibung & den Feldern. */
+/** EIN kurzer, einladender Satz für die Swipe-Karte — aus der Beschreibung & den Feldern. */
 export async function generateSummary(input: {
   name?: string; long?: string; highlight?: string; category?: string; location?: string;
 }): Promise<string> {
@@ -91,18 +91,18 @@ export async function generateSummary(input: {
   }
   const prompt =
 `Du schreibst für eine App mit Geheimtipps für Ausflugsorte in Deutschland.
-Fasse den Ort in GENAU ZWEI lebendigen deutschen Sätzen zusammen (zusammen ca. 25–40 Wörter), die so
-neugierig machen, dass man sofort hin möchte. Konkret und sinnlich, nenne das Besondere – kein
-Werbe-Blabla, keine Floskeln, keine Aufzählung, keine Anführungszeichen.
-Der Text erscheint als Teaser auf einer Swipe-Karte. Gib NUR die zwei Sätze aus.
+Fasse den Ort in EINEM einzigen lebendigen deutschen Satz zusammen (ca. 12–22 Wörter), der so neugierig
+macht, dass man sofort hin möchte. Konkret und sinnlich, nenne das Besondere – kein Werbe-Blabla, keine
+Floskeln, keine Aufzählung, keine Anführungszeichen.
+Der Satz erscheint als Teaser auf einer Swipe-Karte. Gib NUR den einen Satz aus.
 
 Name: ${input.name || '—'}
 Kategorie: ${input.category || '—'}
 Standort: ${input.location || '—'}
 Besonderheit: ${stripHtml(input.highlight ?? '') || '—'}
 Beschreibung: ${long || '—'}`;
-  const out = await callGemini(prompt, 260);
-  return out.replace(/^["„»]+|["“«]+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 320);
+  const out = await callGemini(prompt, 160);
+  return out.replace(/^["„»]+|["“«]+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 220);
 }
 
 /** Liefert konkrete, zum Ort passende Praxis-Tipps (je ein Satz). */

@@ -4,7 +4,7 @@ import { AppShell } from '../components/layout/AppShell.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { TAXONOMY, UNIVERSAL_QUESTIONS } from '../data/taxonomy.js';
 import type { TaxonomyL1, TaxonomyL2, TaxonomyL3, SubmitQuestion } from '../data/taxonomy.js';
-import { detailQuestions, HOUR_DAYS, hasHighlights } from '../data/detailQuestions.js';
+import { detailQuestions, HOUR_DAYS } from '../data/detailQuestions.js';
 import type { WeekHours } from '../data/detailQuestions.js';
 import { UNIVERSAL_DETAIL_QUESTIONS, enabledForPlace } from '../data/questionCatalog.js';
 import type { QuestionConfig } from '../data/questionCatalog.js';
@@ -22,7 +22,7 @@ import { MAP_LAYERS, TILE_URL, HYBRID_ROADS, HYBRID_LABELS, type MapLayer } from
 const C = { amber: '#F99039', aubergine: '#34254C', lavender: '#71587A' };
 const MAX_MEDIA = 5;
 const MAX_TIPS  = 5;
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 9;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface MediaItem {
@@ -1527,7 +1527,8 @@ function StepCategory({ state, setState }: {
   return (
     <div className="space-y-7">
       <div>
-        <StepHeading>Was ist das für ein Ort?</StepHeading>
+        <StepHeading>Gleich geschafft!</StepHeading>
+        <StepSub>Sag uns noch kurz, was das für ein Ort ist.</StepSub>
       </div>
 
       <TaxonomyPicker value={value} onChange={onChange} text={`${state.name} ${state.long.replace(/<[^>]*>/g, ' ')}`} />
@@ -1703,10 +1704,9 @@ function StepDetails({
 
       {detailQs.map(renderQ)}
 
-      {hasHighlights(state.tags) && <HighlightsEditor state={state} setState={setState} />}
+      {/* Highlights sind jetzt ein eigener Schritt (vor der Kategorie). */}
 
-      {/* Trivia — von der Beschreibungsseite hierher verschoben (dort nur Beschreibung/2-Sätze/Tipps).
-          trivia_text erscheint per showIf nur, wenn ein Trivia-Typ gewählt ist. */}
+      {/* Trivia — trivia_text erscheint per showIf nur, wenn ein Trivia-Typ gewählt ist. */}
       {[UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_type'), UNIVERSAL_QUESTIONS.find(q => q.id === 'trivia_text')]
         .filter((q): q is SubmitQuestion => !!q)
         .map(renderQ)}
@@ -1795,20 +1795,6 @@ function StepStory({
     setHelpLoad(false);
   }
 
-  // „Der Ort in zwei Sätzen" — von der KI aus dem Fließtext verfasst (ersetzt das alte „Besonderheit").
-  const [sumLoading, setSumLoad]  = useState(false);
-  const [sumErr, setSumErr]       = useState('');
-  async function genSummary() {
-    setSumErr(''); setSumLoad(true);
-    try {
-      const { summary } = await aiApi.placeSummary({
-        name: state.name, long: state.long, location: state.locationText, category: state.tags[0] ?? '',
-      });
-      set('short', summary);
-    } catch (e) { setSumErr((e as Error).message || 'Konnte keine Zusammenfassung erstellen.'); }
-    setSumLoad(false);
-  }
-
   return (
     <div className="space-y-7">
       <div>
@@ -1881,50 +1867,96 @@ function StepStory({
         </div>
       )}
 
-      {/* 2) Der Ort in zwei Sätzen — von Gemini aus dem Fließtext, erscheint auf der Swipe-Karte */}
-      <div className="space-y-1.5">
-        <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-          Der Ort in zwei Sätzen
-        </label>
-        <p className="text-xs text-[#9A8FAA]">
-          Kurz-Teaser für die Swipe-Karte. {aiOn ? 'Lass ihn dir von der KI aus deinem Text erstellen – und passe ihn frei an.' : 'Bring das Besondere in zwei Sätzen auf den Punkt.'}
-        </p>
-        {aiOn && (
-          <AiButton onClick={genSummary} loading={sumLoading} disabled={longLen < 30}
-            label={state.short.trim() ? 'Neu vorschlagen' : 'Von der KI erstellen lassen'} />
-        )}
-        {aiOn && longLen < 30 && <p className="text-[11px] text-[#B0A3BC]">Schreib zuerst etwas Beschreibung – daraus macht die KI den Teaser.</p>}
-        <textarea
-          rows={3} spellCheck maxLength={300}
-          placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch. Wer den schmalen Pfad findet, hat ihn oft ganz für sich allein."
-          value={state.short}
-          onChange={e => set('short', e.target.value)}
-          className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none"
-        />
-        <div className="flex items-center justify-between gap-2">
-          {/* „Passt das?" — der Text ist frei editierbar, Bestätigung ist also implizit. */}
-          {aiOn && state.short.trim()
-            ? <span className="text-[11px] text-[#9A8FAA]"><i className="fa-solid fa-circle-info mr-1" />Beschreibt das den Ort gut? Pass ihn gern an.</span>
-            : <span />}
-          <span className="text-xs" style={{ color: state.short.length > 280 ? '#C96442' : '#A89BB5' }}>
-            {state.short.length} / 300
-          </span>
-        </div>
-        {sumErr && <p className="text-xs text-[#C96442]">{sumErr}</p>}
-      </div>
+      {/* 1-Satz-Teaser, Tipps und Highlights sind jetzt eigene Schritte (danach). */}
+    </div>
+  );
+}
 
-      {/* 3) Tipps — Trivia ist zu den Highlights (Details-Schritt) gewandert, damit hier nur
-             Beschreibung → 2 Sätze → Tipps steht (keine Zwischenfragen). */}
-      <div className="space-y-1.5">
-        <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
-          Praktische Tipps
-        </label>
-        <p className="text-xs text-[#9A8FAA]">
-          Jeder Tipp bekommt ein eigenes Feld. Drücke <kbd className="px-1 py-0.5 rounded bg-[#F0EBF7] text-[#71587A] text-[10px] font-mono">Enter</kbd> für den nächsten.
-          Max. {MAX_TIPS} Tipps.
-        </p>
-        <TipFields tips={state.tips} onChange={v => set('tips', v)} />
+// ─── Schritt: Der Ort in einem Satz (KI-Vorschlag vorausgefüllt) ────────────────
+function StepOneLiner({ state, set }: {
+  state: WizardState; set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
+}) {
+  const [aiOn, setAiOn]    = useState(false);
+  const [loading, setLoad] = useState(false);
+  const [err, setErr]      = useState('');
+  const longLen = state.long.replace(/<[^>]*>/g, '').trim().length;
+  const suggested = useRef(false);
+
+  async function suggest() {
+    setErr(''); setLoad(true);
+    try {
+      const { summary } = await aiApi.placeSummary({
+        name: state.name, long: state.long, location: state.locationText, category: state.tags[0] ?? '',
+      });
+      set('short', summary);
+    } catch (e) { setErr((e as Error).message || 'Konnte keinen Vorschlag erstellen.'); }
+    setLoad(false);
+  }
+
+  // Beim Betreten einmal automatisch einen Vorschlag holen — sofern genug Beschreibung da ist
+  // und noch kein Satz steht. Der/die Autor:in hakt ihn nur ab oder schreibt einen neuen.
+  useEffect(() => {
+    aiApi.status().then(s => {
+      setAiOn(s.configured);
+      if (s.configured && !suggested.current && !state.short.trim() && longLen >= 30) {
+        suggested.current = true; suggest();
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <StepHeading>Lässt sich dein Geheimtrip so mit einem Satz beschreiben:</StepHeading>
+        <StepSub>Dieser Satz erscheint als Teaser auf der Swipe-Karte. Nimm den Vorschlag oder schreib deinen eigenen.</StepSub>
       </div>
+      <div className="space-y-2">
+        <textarea rows={3} spellCheck maxLength={220}
+          placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
+          value={state.short} onChange={e => set('short', e.target.value)}
+          className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none" />
+        <div className="flex items-center justify-between gap-2">
+          {aiOn ? <AiButton onClick={suggest} loading={loading} disabled={longLen < 30}
+            label={state.short.trim() ? 'Neuen Vorschlag' : 'Vorschlag von der KI'} /> : <span />}
+          <span className="text-xs" style={{ color: state.short.length > 200 ? '#C96442' : '#A89BB5' }}>{state.short.length} / 220</span>
+        </div>
+        {aiOn && longLen < 30 && <p className="text-[11px] text-[#B0A3BC]">Für einen KI-Vorschlag brauchst du zuerst etwas mehr Beschreibung.</p>}
+        {err && <p className="text-xs text-[#C96442]">{err}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Schritt: Praktische Tipps (als Frage) ──────────────────────────────────────
+function StepTips({ state, set }: {
+  state: WizardState; set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <StepHeading>Hast du besondere Tipps für {state.name || 'diesen Ort'}?</StepHeading>
+        <InfoDot>
+          Jeder Tipp bekommt ein eigenes Feld. Drücke <strong>Enter</strong> für den nächsten. Max. {MAX_TIPS} Tipps.
+          Optional – wenn dir gerade nichts einfällt, einfach leer lassen.
+        </InfoDot>
+      </div>
+      <TipFields tips={state.tips} onChange={v => set('tips', v)} />
+    </div>
+  );
+}
+
+// ─── Schritt: Highlights (Das musst du sehen) — für alle Orte, optional ─────────
+function StepHighlights({ state, setState }: {
+  state: WizardState; setState: React.Dispatch<React.SetStateAction<WizardState>>;
+}) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <StepHeading>Das musst du sehen</StepHeading>
+        <StepSub>Gibt es an diesem Ort ein, zwei Dinge, die man auf keinen Fall verpassen sollte? Optional – sonst einfach leer lassen.</StepSub>
+      </div>
+      <HighlightsEditor state={state} setState={setState} />
     </div>
   );
 }
@@ -2226,14 +2258,16 @@ export function SubmitPage() {
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────
+  // Reihenfolge: 1 Fotos · 2 Standort · 3 Name · 4 Beschreibung · 5 Ein Satz ·
+  //              6 Tipps · 7 Highlights · 8 Kategorie · 9 Details + Abschicken
   function canNext(): boolean {
     if (step === 1) return true;                                          // Fotos (optional)
     if (step === 2) return state.lat !== null && state.lng !== null;      // Standort
     if (step === 3) return state.name.trim().length >= 2;                 // Name
-    // Beschreibung: mind. 200 Zeichen Klartext (Kurz-Zusammenfassung optional)
-    if (step === 4) return state.long.replace(/<[^>]*>/g, '').trim().length >= 200;
-    if (step === 5) return state.tags.length > 0;                         // mind. ein Typ-Tag
-    return true;
+    if (step === 4) return state.long.replace(/<[^>]*>/g, '').trim().length >= 200;  // Beschreibung
+    if (step === 5) return state.short.trim().length >= 10;              // Ein-Satz-Teaser
+    if (step === 8) return state.tags.length > 0;                         // mind. ein Typ-Tag
+    return true;   // 6 Tipps, 7 Highlights = optional
   }
 
   function scrollTop() {
@@ -2263,12 +2297,10 @@ export function SubmitPage() {
     }
 
     // Highlights validieren: jedes angefangene braucht Titel UND mind. 1 (hochgeladenes) Foto.
-    // Nur bei Erlebnis-Orten relevant → sonst leeren (räumt ggf. veraltete Highlights nach Typ-Wechsel auf).
-    const hlDone = hasHighlights(state.tags)
-      ? state.highlights
-          .map(h => ({ title: h.title.trim(), description: h.description.trim(), photos: h.photos.filter(p => p.serverUrl && !p.error).map(p => p.serverUrl!) }))
-          .filter(h => h.title || h.photos.length)   // komplett leere Entwürfe ignorieren
-      : [];
+    // Highlights gibt es jetzt für ALLE Orte (eigener optionaler Schritt).
+    const hlDone = state.highlights
+      .map(h => ({ title: h.title.trim(), description: h.description.trim(), photos: h.photos.filter(p => p.serverUrl && !p.error).map(p => p.serverUrl!) }))
+      .filter(h => h.title || h.photos.length);   // komplett leere Entwürfe ignorieren
     const badHl = hlDone.find(h => !h.title || h.photos.length === 0);
     if (badHl) {
       setError('Jedes Highlight braucht einen Titel und mindestens ein Foto (oder lösche das leere Highlight).');
@@ -2399,8 +2431,8 @@ export function SubmitPage() {
   }
 
   const STEP_TITLES = [
-    'Fotos & Videos', 'Standort', 'Name',
-    'Beschreibung', 'Kategorie wählen', 'Details & Abschicken',
+    'Fotos & Videos', 'Standort', 'Name', 'Beschreibung', 'Ein Satz',
+    'Tipps', 'Highlights', 'Kategorie', 'Details & Abschicken',
   ];
 
   return (
@@ -2408,7 +2440,8 @@ export function SubmitPage() {
       <div ref={topRef} className="max-w-xl mx-auto px-5 py-8 pb-32">
         <ProgressBar step={step} />
 
-        {/* Reihenfolge: 1 Fotos · 2 Standort · 3 Name · 4 Beschreibung · 5 Kategorie · 6 Details + Abschicken */}
+        {/* Reihenfolge: 1 Fotos · 2 Standort · 3 Name · 4 Beschreibung · 5 Ein Satz ·
+            6 Tipps · 7 Highlights · 8 Kategorie · 9 Details + Abschicken */}
         {step === 1 && (
           <StepMedia
             state={state}
@@ -2421,8 +2454,11 @@ export function SubmitPage() {
         {step === 2 && <Step2 state={state} setLocation={setLocation} />}
         {step === 3 && <Step1 state={state} set={set} />}
         {step === 4 && <StepStory state={state} set={set} excludeId={editId} />}
-        {step === 5 && <StepCategory state={state} setState={setState} />}
-        {step === 6 && (
+        {step === 5 && <StepOneLiner state={state} set={set} />}
+        {step === 6 && <StepTips state={state} set={set} />}
+        {step === 7 && <StepHighlights state={state} setState={setState} />}
+        {step === 8 && <StepCategory state={state} setState={setState} />}
+        {step === 9 && (
           <>
             <StepDetails state={state} set={set} setState={setState} qConfig={qConfig} />
             <ReviewSubmit state={state} isEdit={isEdit} />
@@ -2452,7 +2488,7 @@ export function SubmitPage() {
                 <i className="fa-solid fa-arrow-left text-xs" /> Zurück
               </button>
             )}
-            {step < 6 ? (
+            {step < TOTAL_STEPS ? (
               <button
                 type="button" onClick={next}
                 disabled={!canNext()}
