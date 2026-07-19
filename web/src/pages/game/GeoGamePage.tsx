@@ -6,7 +6,6 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   MapContainer, TileLayer, Marker, Polyline,
   useMapEvents, useMap,
@@ -89,7 +88,6 @@ function FitBounds({ pts }: { pts: [number, number][] }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function GeoGamePage() {
-  const navigate  = useNavigate();
   const { toggleSave, savedIds } = useAppStore();
   const { user }  = useAuthStore();
 
@@ -437,11 +435,6 @@ export function GeoGamePage() {
               style={{ background: C.amber }}>
               <i className="fa-solid fa-rotate-right mr-2" />Nochmal spielen
             </button>
-            <button onClick={() => navigate('/')}
-              className="w-full py-3 rounded-2xl text-sm font-semibold transition-colors"
-              style={{ background: C.bgSoft, color: C.lavender }}>
-              Zurück zur App
-            </button>
           </div>
         </div>
       </AppShell>
@@ -646,11 +639,11 @@ export function GeoGamePage() {
 
           {/* ── Results card (revealed only) ───────────────────────────── */}
           {revealed && revealPlace && (
-            <div className="flex-1 min-h-0 bg-white rounded-3xl p-5 overflow-auto"
+            <div className="flex-1 min-h-0 bg-white rounded-3xl p-3.5 lg:p-5 overflow-auto"
               style={{ boxShadow: '0 10px 40px rgba(52,37,76,0.08)', border: `1px solid ${C.lavender}1A` }}>
 
               {/* Winner banner */}
-              <div className="flex items-center justify-between rounded-xl py-2.5 px-4 mb-4"
+              <div className="flex items-center justify-between rounded-xl py-2 px-4 mb-2.5 lg:mb-4"
                 style={{ background: `${C.aubergine}0D`, border: `1px solid ${C.aubergine}1A` }}>
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-full text-white flex items-center justify-center flex-shrink-0"
@@ -669,13 +662,13 @@ export function GeoGamePage() {
               </div>
 
               {/* Distance stats */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-2 gap-2.5 mb-2 lg:gap-3 lg:mb-4">
                 {[myRes, oppRes].filter(Boolean).map(r => {
                   const isMe   = r!.playerId === myId;
                   const isWin  = r!.playerId === revealWinnerId;
                   return (
                     <div key={r!.playerId}
-                      className="rounded-2xl p-3.5 flex flex-col items-center border-2"
+                      className="rounded-2xl p-2.5 lg:p-3.5 flex flex-col items-center border-2"
                       style={{
                         background:   isWin ? `${C.aubergine}08` : C.bg,
                         borderColor:  isWin ? `${C.aubergine}33` : 'transparent',
@@ -686,7 +679,7 @@ export function GeoGamePage() {
                           {isMe ? 'Du' : players.find(p => p.id === r!.playerId)?.name ?? 'Gegner'}
                         </span>
                       </div>
-                      <span className="font-display text-2xl font-bold" style={{ color: C.aubergine }}>
+                      <span className="font-display text-lg lg:text-2xl font-bold" style={{ color: C.aubergine }}>
                         {r!.dist != null ? `${r!.dist.toLocaleString('de')} km` : '—'}
                       </span>
                     </div>

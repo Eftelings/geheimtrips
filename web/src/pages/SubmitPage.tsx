@@ -153,7 +153,10 @@ function MiniRichText({
 }) {
   const ref           = useRef<HTMLDivElement>(null);
   const lastValid     = useRef(value);        // last HTML that was within limit
-  const emitted       = useRef(value);        // zuletzt SELBST erzeugter Wert (Tippen) — Abgrenzung zu externen Änderungen
+  // Sentinel ≠ jeder echte Wert: so schreibt der Spiegel-Effekt beim ERSTEN Lauf immer in die DOM.
+  // Im Bearbeiten-Modus mountet das Feld bereits mit geladenem Wert — ohne das bliebe die
+  // Beschreibung leer (value === emitted → Effekt übersprang das Setzen von innerHTML).
+  const emitted       = useRef(' __uninit__');   // zuletzt SELBST erzeugter Wert (Tippen) — Abgrenzung zu externen Änderungen
   const savedRange    = useRef<Range | null>(null);
   const [count, setCount] = useState(0);
   const [empty, setEmpty] = useState(!value);

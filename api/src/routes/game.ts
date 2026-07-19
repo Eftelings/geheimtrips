@@ -110,7 +110,12 @@ async function loadGamePlaces(): Promise<PlaceForGame[]> {
   }
   return valid.slice(0, 5).map(p => {
     let gallery: string[] = [];
-    try { gallery = JSON.parse(p.galleryJson ?? '[]') as string[]; } catch { /* skip */ }
+    try {
+      // galleryJson enthält heute Objekte ({ url, cropX, … }), früher reine Strings — beides zu URLs.
+      gallery = (JSON.parse(p.galleryJson ?? '[]') as unknown[])
+        .map(g => (typeof g === 'string' ? g : (g as { url?: string } | null)?.url))
+        .filter((u): u is string => typeof u === 'string' && u.length > 0);
+    } catch { /* skip */ }
     const photos = [p.hero, ...gallery].filter(Boolean);
     return {
       id: p.id, name: p.name, region: p.region,
