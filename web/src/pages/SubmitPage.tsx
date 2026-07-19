@@ -372,13 +372,38 @@ function MiniRichText({
 }
 
 // ─── TipFields ────────────────────────────────────────────────────────────────
-function TipFields({ tips, onChange }: { tips: string[]; onChange: (t: string[]) => void }) {
+function TipFields({ tips, onChange, linkPlaces = [] }: {
+  tips: string[]; onChange: (t: string[]) => void;
+  linkPlaces?: { id: string; name: string }[];
+}) {
   const tipRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const savedRanges = useRef<(Range | null)[]>([]);   // Cursor je Feld merken (für das Einfügen des Links)
+  const [linkFor, setLinkFor]     = useState<number | null>(null);   // Feld, dessen Verlinken-Auswahl offen ist
+  const [linkQuery, setLinkQuery] = useState('');
 
   // Keep refs array in sync with tips length
   useEffect(() => {
     tipRefs.current = tipRefs.current.slice(0, tips.length);
   }, [tips.length]);
+
+  function saveSelection(i: number) {
+    const sel = window.getSelection();
+    const el = tipRefs.current[i];
+    if (sel && sel.rangeCount && el?.contains(sel.anchorNode)) savedRanges.current[i] = sel.getRangeAt(0).cloneRange();
+  }
+  function insertPlaceLink(i: number, p: { id: string; name: string }) {
+    const el = tipRefs.current[i]; if (!el) return;
+    el.focus();
+    const sel = window.getSelection();
+    const saved = savedRanges.current[i];
+    if (saved && el.contains(saved.startContainer)) { sel?.removeAllRanges(); sel?.addRange(saved); }
+    else { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); sel?.removeAllRanges(); sel?.addRange(r); }
+    const safe = p.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    document.execCommand('insertHTML', false, `<a href="/ort/${p.id}" class="gt-place" data-place-id="${p.id}">${safe}</a>&nbsp;`);
+    savedRanges.current[i] = null;
+    setLinkFor(null); setLinkQuery('');
+    update(i);
+  }
 
   function getTextContent(i: number) {
     return tipRefs.current[i]?.textContent ?? '';
@@ -453,7 +478,8 @@ function TipFields({ tips, onChange }: { tips: string[]; onChange: (t: string[])
             {i + 1}
           </span>
           {/* Mini rich-text tip field */}
-          <div className="flex-1 rounded-xl border border-[#E4DCF0] focus-within:border-[#F99039] bg-white overflow-hidden transition-colors">
+          <div className="flex-1 relative">
+          <div className="rounded-xl border border-[#E4DCF0] focus-within:border-[#F99039] bg-white overflow-hidden transition-colors">
             {/* Toolbar */}
             <div className="flex items-center gap-0.5 px-1.5 pt-1 pb-0.5 border-b border-[#F0EBF7] bg-[#FAF7FD]">
               {([
@@ -466,6 +492,13 @@ function TipFields({ tips, onChange }: { tips: string[]; onChange: (t: string[])
                   className={`w-6 h-6 rounded text-xs ${cls} text-[#71587A] hover:bg-[#E4DCF0] hover:text-[#34254C] transition-colors`}
                 >{label}</button>
               ))}
+              {linkPlaces.length > 0 && (
+                <button type="button" title="Ort verlinken"
+                  onMouseDown={e => { e.preventDefault(); saveSelection(i); setLinkQuery(''); setLinkFor(prev => prev === i ? null : i); }}
+                  className={`w-6 h-6 rounded text-xs text-[#71587A] hover:bg-[#E4DCF0] hover:text-[#34254C] transition-colors ${linkFor === i ? 'bg-[#E4DCF0] text-[#34254C]' : ''}`}>
+                  <i className="fa-solid fa-link text-[10px]" />
+                </button>
+              )}
             </div>
             {/* Editable */}
             <div
@@ -476,9 +509,32 @@ function TipFields({ tips, onChange }: { tips: string[]; onChange: (t: string[])
               onInput={() => update(i)}
               onPaste={e => handlePaste(i, e)}
               onKeyDown={e => handleKey(i, e)}
+              onKeyUp={() => saveSelection(i)}
+              onMouseUp={() => saveSelection(i)}
+              onBlur={() => saveSelection(i)}
               data-placeholder={`Tipp ${i + 1} – z.B. Am frühen Morgen besuchen`}
-              className="px-3 py-2.5 text-sm text-[#34254C] outline-none leading-relaxed min-h-[40px] [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-[#A89BB5] [&:empty]:before:pointer-events-none"
+              className="px-3 py-2.5 text-sm text-[#34254C] outline-none leading-relaxed min-h-[40px] [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-[#A89BB5] [&:empty]:before:pointer-events-none"
             />
+          </div>
+            {/* Ort-Verlinken-Auswahl */}
+            {linkFor === i && linkPlaces.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white rounded-xl border border-[#E4DCF0] shadow-lg overflow-hidden">
+                <input autoFocus value={linkQuery} onChange={e => setLinkQuery(e.target.value)}
+                  placeholder="Ort suchen…"
+                  className="w-full px-3 py-2 text-sm outline-none border-b border-[#F0EBF7] text-[#34254C]" />
+                <div className="max-h-44 overflow-auto">
+                  {linkPlaces.filter(p => p.name.toLowerCase().includes(linkQuery.trim().toLowerCase())).slice(0, 20).map(p => (
+                    <button key={p.id} type="button" onMouseDown={e => { e.preventDefault(); insertPlaceLink(i, p); }}
+                      className="w-full text-left px-3 py-2 text-sm text-[#34254C] hover:bg-[#FAF7FD] transition-colors">
+                      <i className="fa-solid fa-location-dot text-[#C4AED0] text-xs mr-2" />{p.name}
+                    </button>
+                  ))}
+                  {linkPlaces.filter(p => p.name.toLowerCase().includes(linkQuery.trim().toLowerCase())).length === 0 && (
+                    <p className="px-3 py-2 text-xs text-[#9A8FAA]">Kein Ort gefunden.</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           <button
             type="button" onClick={() => remove(i)}
@@ -1944,19 +2000,26 @@ function StepOneLiner({ state, set }: {
 }
 
 // ─── Schritt: Praktische Tipps (als Frage) ──────────────────────────────────────
-function StepTips({ state, set }: {
+function StepTips({ state, set, excludeId = null }: {
   state: WizardState; set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
+  excludeId?: string | null;
 }) {
+  // Andere Orte, die in einem Tipp verlinkt werden können (wie in der Beschreibung)
+  const allPlaces  = useAppStore(s => s.places);
+  const loadPlaces = useAppStore(s => s.loadPlaces);
+  useEffect(() => { loadPlaces(); }, [loadPlaces]);
+  const linkPlaces = allPlaces.filter(p => p.id !== excludeId).map(p => ({ id: p.id, name: p.name }));
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <StepHeading>Hast du besondere Tipps für {state.name || 'diesen Ort'}?</StepHeading>
         <InfoDot>
-          Jeder Tipp bekommt ein eigenes Feld. Drücke <strong>Enter</strong> für den nächsten. Max. {MAX_TIPS} Tipps.
+          Jeder Tipp bekommt ein eigenes Feld. Drücke <strong>Enter</strong> für den nächsten. Über das
+          Verlinken-Symbol kannst du andere Orte verlinken. Max. {MAX_TIPS} Tipps.
         </InfoDot>
       </div>
       <p className="text-xs text-[#9A8FAA]">Optional – wenn dir gerade nichts einfällt, einfach leer lassen.</p>
-      <TipFields tips={state.tips} onChange={v => set('tips', v)} />
+      <TipFields tips={state.tips} onChange={v => set('tips', v)} linkPlaces={linkPlaces} />
     </div>
   );
 }
@@ -2744,7 +2807,7 @@ export function SubmitPage() {
         {step === 3 && <Step1 state={state} set={set} />}
         {step === 4 && <StepStory state={state} set={set} excludeId={editId} />}
         {step === 5 && <StepOneLiner state={state} set={set} />}
-        {step === 6 && <StepTips state={state} set={set} />}
+        {step === 6 && <StepTips state={state} set={set} excludeId={editId} />}
         {step === 7 && <StepHighlights state={state} setState={setState} />}
         {step === 8 && <StepCategory state={state} setState={setState} />}
         {step === 9 && (

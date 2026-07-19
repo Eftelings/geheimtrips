@@ -68,6 +68,8 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
     if (value.tags.includes(slug)) set({ tags: value.tags.filter(t => t !== slug) });
     else if (!atMax) { set({ tags: [...value.tags, slug] }); setTagSearch(''); }
   };
+  // Haupttag = erster Eintrag in tags[] (das Backend nimmt tagSlugs[0] als Icon des Orts).
+  const makePrimary = (slug: string) => set({ tags: [slug, ...value.tags.filter(t => t !== slug)] });
 
   const groupTags = (gSlug: string) => (vocab?.tags ?? []).filter(t => t.groups.includes(gSlug)).sort((a, b) => a.label.localeCompare(b.label, 'de'));
   // Typen einer Gruppe nach Unterkategorie (sub) bündeln — in Seed-Reihenfolge (nicht alphabetisch),
@@ -125,19 +127,35 @@ export function TaxonomyPicker({ value, onChange, text }: { value: TaxonomyValue
           </div>
         )}
 
-        {/* Ausgewählte Tags */}
+        {/* Ausgewählte Tags — der erste ist der Haupttag (Icon des Orts) */}
         {value.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {value.tags.map(slug => {
-              const t = tagBySlug(slug);
-              return (
-                <span key={slug} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: groupColor(t?.groups[0]), color: 'white' }}>
-                  {t?.label ?? slug}
-                  <button type="button" onClick={() => toggleTag(slug)} aria-label="Entfernen"><i className="fa-solid fa-xmark text-[10px]" /></button>
-                </span>
-              );
-            })}
-          </div>
+          <>
+            {value.tags.length > 1 && (
+              <p className="text-[11px] text-[var(--color-lavender)] mb-1.5">
+                <i className="fa-solid fa-star mr-1" style={{ color: '#F99039' }} />Der markierte Typ ist der <strong>Haupttag</strong> und liefert das Icon des Orts. Tippe auf den Stern, um zu wechseln.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {value.tags.map((slug, i) => {
+                const t = tagBySlug(slug);
+                const isPrimary = i === 0;
+                return (
+                  <span key={slug} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+                    style={{ background: groupColor(t?.groups[0]), color: 'white', boxShadow: isPrimary ? '0 0 0 2px #F99039' : undefined }}>
+                    {value.tags.length > 1 && (
+                      <button type="button" onClick={() => makePrimary(slug)}
+                        aria-label={isPrimary ? 'Haupttag' : 'Zum Haupttag machen'} title={isPrimary ? 'Haupttag' : 'Zum Haupttag machen'}
+                        disabled={isPrimary}>
+                        <i className={`fa-${isPrimary ? 'solid' : 'regular'} fa-star text-[10px]`} style={{ color: isPrimary ? '#FFE7B0' : 'rgba(255,255,255,0.85)' }} />
+                      </button>
+                    )}
+                    {t?.label ?? slug}
+                    <button type="button" onClick={() => toggleTag(slug)} aria-label="Entfernen"><i className="fa-solid fa-xmark text-[10px]" /></button>
+                  </span>
+                );
+              })}
+            </div>
+          </>
         )}
         {atMax && <p className="text-[11px] text-[var(--color-lavender)] mb-2">Maximal {MAX_TAGS} Typen — entferne einen, um zu wechseln.</p>}
 

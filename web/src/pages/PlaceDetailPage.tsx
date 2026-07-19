@@ -2534,8 +2534,12 @@ async function handleVerifyToggle() {
                         style={{ background: 'var(--color-amber)' }}>
                         <i className="fa-solid fa-check text-white" style={{ fontSize: 9 }} />
                       </span>
-                      {/* Tips may contain HTML formatting from the rich-text editor */}
-                      <span className="text-[15px] text-[var(--color-body)] leading-relaxed"
+                      {/* Tips may contain HTML formatting + verlinkte Orte (a.gt-place) aus dem Editor */}
+                      <span className="text-[15px] text-[var(--color-body)] leading-relaxed [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline [&_a.gt-place]:cursor-pointer"
+                        onClick={e => {
+                          const a = (e.target as HTMLElement).closest?.('a.gt-place') as HTMLElement | null;
+                          if (a) { e.preventDefault(); const pid = a.getAttribute('data-place-id'); if (pid) openPlace(pid); }
+                        }}
                         // eslint-disable-next-line react/no-danger
                         dangerouslySetInnerHTML={{ __html: tip }} />
                     </li>
