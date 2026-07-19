@@ -15,6 +15,9 @@ export const users = sqliteTable('users', {
   instagram: text('instagram'),
   tiktok: text('tiktok'),
   website: text('website'),
+  // E-Mail-Bestätigung (Double-Opt-in) + Zustimmung zum E-Mail-Empfang
+  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
+  emailOptIn: integer('email_opt_in', { mode: 'boolean' }).notNull().default(false),
   // admin
   isAdmin: integer('is_admin', { mode: 'boolean' }).default(false),
   isBanned: integer('is_banned', { mode: 'boolean' }).default(false),

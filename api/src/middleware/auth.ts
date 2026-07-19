@@ -32,3 +32,13 @@ export const requireAuth = createMiddleware(async (c, next) => {
     return c.json({ error: 'Ungültiger Token.' }, 401);
   }
 });
+
+// Nach requireAuth einsetzen: sperrt eigene Beiträge (Einreichen/Bewerten), bis die E-Mail
+// bestätigt ist. Admins sind ausgenommen. `code` erlaubt dem Frontend eine gezielte Meldung.
+export const requireVerified = createMiddleware(async (c, next) => {
+  const user = c.get('user');
+  if (user && !user.emailVerified && !user.isAdmin) {
+    return c.json({ error: 'Bitte bestätige zuerst deine E-Mail-Adresse.', code: 'email_unverified' }, 403);
+  }
+  await next();
+});

@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 import { places, savedPlaces, visitedPlaces, ratings, placeMedia, authors, businessClaims, placeContributions, users, photoLikes, favoritePlaces } from '../db/schema.js';
 import { isUserLocalHero, W_REVIEW } from '../lib/ranking.js';
 import { eq, and, inArray, sql, count, asc } from 'drizzle-orm';
-import { requireAuth, JWT_SECRET } from '../middleware/auth.js';
+import { requireAuth, requireVerified, JWT_SECRET } from '../middleware/auth.js';
 import { jwtVerify } from 'jose';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
@@ -261,7 +261,7 @@ router.get('/showcase', async (c) => {
 });
 
 // POST /places/submit — user submits a new place (auth required, stored as pending)
-router.post('/submit', requireAuth,
+router.post('/submit', requireAuth, requireVerified,
   zValidator('json', z.object({
     name:         z.string().min(2).max(120),
     region:       z.string().min(2).max(100).optional().default(''),
@@ -600,7 +600,7 @@ router.post('/:id/visit', requireAuth, async (c) => {
 });
 
 // POST /places/:id/rate — submit a rating
-router.post('/:id/rate', requireAuth,
+router.post('/:id/rate', requireAuth, requireVerified,
   zValidator('json', z.object({
     stars: z.number().int().min(1).max(5),
     mood: z.number().int().min(1).max(5).optional(),
@@ -992,7 +992,7 @@ router.get('/:id/review-status', requireAuth, async (c) => {
 });
 
 // POST /places/:id/review — Review abschließen → Punkte
-router.post('/:id/review', requireAuth, async (c) => {
+router.post('/:id/review', requireAuth, requireVerified, async (c) => {
   const user = c.get('user');
   const placeId = c.req.param('id');
   const place = await db.select({ submittedBy: places.submittedBy }).from(places).where(eq(places.id, placeId)).get();

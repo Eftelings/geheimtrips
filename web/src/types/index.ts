@@ -11,6 +11,8 @@ export interface User {
   instagram: string | null;
   tiktok: string | null;
   website: string | null;
+  emailVerified: boolean;
+  emailOptIn: boolean;
   isAdmin: boolean;
   isBanned: boolean;
   profileVisible: boolean;

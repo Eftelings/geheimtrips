@@ -10,8 +10,9 @@ import { UNIVERSAL_DETAIL_QUESTIONS, enabledForPlace } from '../data/questionCat
 import type { QuestionConfig } from '../data/questionCatalog.js';
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place } from '../types/index.js';
-import { placesApi, mediaApi, aiApi, taxonomyApi } from '../services/api.js';
+import { placesApi, mediaApi, aiApi, taxonomyApi, authApi } from '../services/api.js';
 import { adminApi } from '../services/adminApi.js';
+import { useAuthStore } from '../store/useAuthStore.js';
 import { TaxonomyPicker } from '../components/ui/TaxonomyPicker.js';
 import type { TaxonomyValue } from '../components/ui/TaxonomyPicker.js';
 import { geocodeSuggestions, reverseGeocode, requestGpsPosition, distanceKm } from '../services/geoService.js';
@@ -156,7 +157,7 @@ function MiniRichText({
   // Sentinel ≠ jeder echte Wert: so schreibt der Spiegel-Effekt beim ERSTEN Lauf immer in die DOM.
   // Im Bearbeiten-Modus mountet das Feld bereits mit geladenem Wert — ohne das bliebe die
   // Beschreibung leer (value === emitted → Effekt übersprang das Setzen von innerHTML).
-  const emitted       = useRef(' __uninit__');   // zuletzt SELBST erzeugter Wert (Tippen) — Abgrenzung zu externen Änderungen
+  const emitted       = useRef('__uninit__');   // zuletzt SELBST erzeugter Wert (Tippen) — Abgrenzung zu externen Änderungen
   const savedRange    = useRef<Range | null>(null);
   const [count, setCount] = useState(0);
   const [empty, setEmpty] = useState(!value);
@@ -2343,6 +2344,52 @@ function ProgressBar({ step }: { step: number }) {
   );
 }
 
+// ─── E-Mail-Bestätigung nötig (Beiträge gesperrt) ─────────────────────────────
+function VerifyGate({ email }: { email: string }) {
+  const hydrate = useAuthStore(s => s.hydrate);
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [err, setErr]   = useState('');
+  async function resend() {
+    setBusy(true); setErr('');
+    try {
+      const r = await authApi.resendVerification();
+      if (r.autoVerified || r.alreadyVerified) await hydrate().catch(() => {});  // Sperre fällt sofort
+      else setSent(true);
+    } catch (e) {
+      setErr((e as Error).message || 'Konnte nicht senden.');
+    }
+    setBusy(false);
+  }
+  return (
+    <AppShell title="E-Mail bestätigen" showBack noBottomNav>
+      <div className="max-w-md mx-auto px-5 py-16 text-center space-y-5">
+        <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center" style={{ background: '#FFF4EB' }}>
+          <i className="fa-solid fa-envelope-circle-check text-2xl" style={{ color: C.amber }} />
+        </div>
+        <h1 className="text-xl font-bold" style={{ color: C.aubergine }}>Bitte bestätige deine E-Mail</h1>
+        <p className="text-sm leading-relaxed" style={{ color: C.lavender }}>
+          Um eigene Geheimtrips einzureichen, bestätige zuerst deine Anmeldung über den Link, den wir an{' '}
+          <span className="font-semibold" style={{ color: C.aubergine }}>{email}</span> geschickt haben.
+          Schau auch im Spam-Ordner nach.
+        </p>
+        {sent ? (
+          <p className="text-sm font-semibold" style={{ color: '#2E7D32' }}>
+            <i className="fa-solid fa-check mr-1" />Neue Bestätigungs-Mail ist unterwegs.
+          </p>
+        ) : (
+          <button type="button" onClick={resend} disabled={busy}
+            className="py-3 px-6 rounded-2xl font-bold text-white text-sm transition-opacity disabled:opacity-60"
+            style={{ background: `linear-gradient(135deg, ${C.aubergine}, ${C.lavender})` }}>
+            {busy ? <><i className="fa-solid fa-circle-notch fa-spin mr-1" />Senden…</> : 'Bestätigungs-Mail erneut senden'}
+          </button>
+        )}
+        {err && <p className="text-sm" style={{ color: '#C96442' }}>{err}</p>}
+      </div>
+    </AppShell>
+  );
+}
+
 // ─── Main wizard component ────────────────────────────────────────────────────
 export function SubmitPage() {
   const navigate          = useNavigate();
@@ -2354,6 +2401,7 @@ export function SubmitPage() {
   const fromAdmin         = searchParams.get('admin') === '1';
   const invalidatePlaces  = useAppStore(s => s.invalidatePlaces);
   const markVisited       = useAppStore(s => s.markVisited);
+  const user              = useAuthStore(s => s.user);
   const [step, setStep]       = useState(1);
   const [state, setState]     = useState<WizardState>(EMPTY);
   const [error, setError]     = useState('');
@@ -2585,6 +2633,12 @@ export function SubmitPage() {
       setError((e as Error).message ?? (editId ? 'Fehler beim Speichern.' : 'Fehler beim Einreichen.'));
     }
     setSub(false);
+  }
+
+  // ── E-Mail-Bestätigung nötig ───────────────────────────────────────────────
+  // Beiträge sind gesperrt, bis die E-Mail bestätigt ist (Admins ausgenommen).
+  if (user && !user.emailVerified && !user.isAdmin) {
+    return <VerifyGate email={user.email} />;
   }
 
   // ── Success screen ───────────────────────────────────────────────────────

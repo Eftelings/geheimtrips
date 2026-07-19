@@ -12,6 +12,7 @@ export function GatePage() {
   const [name, setName]         = useState('');
   const [handle, setHandle]     = useState('');
   const [termsAccepted, setTerms] = useState(false);
+  const [emailOptIn, setEmailOptIn] = useState(false);
   const [forgot, setForgot]     = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotBusy, setForgotBusy] = useState(false);
@@ -35,7 +36,7 @@ export function GatePage() {
         await login(email, password);
         navigate('/', { replace: true });
       } else {
-        await register(email, password, name, handle);
+        await register(email, password, name, handle, emailOptIn);
         navigate('/onboarding', { replace: true });
       }
     } catch { /* error shown via store */ }
@@ -230,6 +231,20 @@ export function GatePage() {
                     Nutzungsbedingungen
                   </Link>{' '}
                   gelesen und stimme diesen zu. Ich nehme insbesondere zur Kenntnis, dass das Aufsuchen beschriebener Orte auf eigene Gefahr geschieht und es sich um ein Betaprojekt ohne Verfügbarkeitsgarantie handelt.
+                </span>
+              </label>
+            )}
+
+            {tab === 'register' && (
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={emailOptIn}
+                  onChange={e => setEmailOptIn(e.target.checked)}
+                  className="mt-0.5 flex-shrink-0 accent-[#F99039] w-4 h-4"
+                />
+                <span className="text-white/70 text-xs leading-relaxed">
+                  Ja, ich möchte gelegentlich E-Mails mit Neuigkeiten und Tipps von Geheimtrips erhalten (optional, jederzeit abbestellbar).
                 </span>
               </label>
             )}

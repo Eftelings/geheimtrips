@@ -47,6 +47,7 @@ const NotificationInboxPage = lz(() => import('./pages/NotificationInboxPage.js'
 const MeetPeoplePage     = lz(() => import('./pages/MeetPeoplePage.js'), 'MeetPeoplePage');
 const LegalPage          = lz(() => import('./pages/LegalPage.js'), 'LegalPage');
 const ResetPasswordPage  = lz(() => import('./pages/ResetPasswordPage.js'), 'ResetPasswordPage');
+const EmailVerifyPage    = lz(() => import('./pages/EmailVerifyPage.js'), 'EmailVerifyPage');
 const SubmitPage         = lz(() => import('./pages/SubmitPage.js'), 'SubmitPage');
 const GeoGamePage        = lz(() => import('./pages/game/GeoGamePage.js'), 'GeoGamePage');
 
@@ -125,6 +126,7 @@ export function App() {
         <Route path="/gate"     element={<RedirectTo to="/anmelden" />} />
         <Route path="/legal"   element={<LegalPage />} />
         <Route path="/reset"   element={<ResetPasswordPage />} />
+        <Route path="/e-mail-bestaetigen" element={<EmailVerifyPage />} />
         <Route path="/" element={<EntdeckenPage />} />
         <Route path="/ort/:id"   element={<PlaceDetailPage />} />
         <Route path="/place/:id" element={<PlaceRedirect />} />

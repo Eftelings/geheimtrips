@@ -8,7 +8,7 @@ import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { JWT_SECRET, requireAuth } from '../middleware/auth.js';
-import { sendMail } from '../lib/mailer.js';
+import { sendMail, mailConfigured } from '../lib/mailer.js';
 import { checkUserNaming, containsBannedWord } from '../lib/moderation.js';
 
 // E-Mail: Format inkl. gültiger Domain-Endung (Zod .email() lässt „a@b" ohne TLD zu)
@@ -58,6 +58,20 @@ await db.run(sql`CREATE TABLE IF NOT EXISTS password_reset_tokens (
   created_at TEXT DEFAULT (datetime('now'))
 )`).catch(() => {});
 
+// E-Mail-Bestätigung (Double-Opt-in): Spalten + Token-Tabelle zur Laufzeit anlegen.
+// email_verified DEFAULT 1 → BESTEHENDE Nutzer gelten als bestätigt (nie nachträglich aussperren);
+// neue Konten setzt /register explizit (0, wenn Mailversand aktiv ist).
+await db.run(sql`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN email_opt_in   INTEGER NOT NULL DEFAULT 0`).catch(() => {});
+await db.run(sql`CREATE TABLE IF NOT EXISTS email_verification_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  token_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+)`).catch(() => {});
+
 // Alter-Spalte nachrüsten (für Phase C / Profil)
 await db.run(sql`ALTER TABLE users ADD COLUMN age INTEGER`).catch(() => {});
 // Standort-Spalten nachrüsten (Phase C / „Neue Leute in der Nähe")
@@ -75,6 +89,21 @@ async function makeToken(userId: number): Promise<string> {
     .sign(JWT_SECRET);
 }
 
+// Bestätigungs-Mail mit Einmal-Token (gehasht gespeichert, 3 Tage gültig) verschicken.
+async function sendVerificationEmail(user: { id: number; email: string; name: string }): Promise<void> {
+  const raw = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(); // 3 Tage
+  await db.run(sql`INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+    VALUES (${user.id}, ${sha256(raw)}, ${expiresAt})`).catch(() => {});
+  const link = `${APP_URL}/e-mail-bestaetigen?token=${raw}`;
+  await sendMail({
+    to: user.email,
+    subject: 'Bestätige deine Anmeldung · Geheimtrips.de',
+    text: `Hallo ${user.name},\n\nschön, dass du dabei bist! Bitte bestätige deine Anmeldung über diesen Link (3 Tage gültig):\n${link}\n\nErst danach kannst du eigene Geheimtrips einreichen und bewerten.\n\nLiebe Grüße\nDavid & Lea`,
+    html: `<p>Hallo ${user.name},</p><p>schön, dass du dabei bist! Bitte bestätige deine Anmeldung über diesen Link (3&nbsp;Tage gültig):</p><p><a href="${link}">${link}</a></p><p>Erst danach kannst du eigene Geheimtrips einreichen und bewerten.</p><p>Liebe Grüße<br>David &amp; Lea</p>`,
+  }).catch(e => console.error('Bestätigungs-Mail fehlgeschlagen:', (e as Error).message));
+}
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
@@ -86,6 +115,8 @@ const registerSchema = z.object({
   name: z.string().min(1).max(60),
   // Optional: leer/fehlend → wird serverseitig aus dem Namen erzeugt. Nur Format prüfen, wenn da.
   handle: z.string().max(30).regex(/^[a-z0-9_]*$/, 'Der Handle darf nur Kleinbuchstaben, Zahlen und _ enthalten.').optional(),
+  // Zustimmung zum E-Mail-Empfang (Newsletter/Hinweise) — die Doppel-Bestätigung erfolgt über den Link.
+  emailOptIn: z.boolean().optional().default(false),
 });
 
 router.post('/login', jsonBody(loginSchema), async (c) => {
@@ -100,7 +131,7 @@ router.post('/login', jsonBody(loginSchema), async (c) => {
 });
 
 router.post('/register', jsonBody(registerSchema), async (c) => {
-  const { email, password, name } = c.req.valid('json');
+  const { email, password, name, emailOptIn } = c.req.valid('json');
   // Handle optional: getippten übernehmen (mind. 2 Zeichen), sonst aus dem Namen erzeugen.
   let handle = (c.req.valid('json').handle ?? '').trim().toLowerCase();
   if (!/^[a-z0-9_]{2,30}$/.test(handle)) handle = await uniqueHandle(name || email.split('@')[0]);
@@ -112,10 +143,44 @@ router.post('/register', jsonBody(registerSchema), async (c) => {
   const handleTaken = await db.select().from(users).where(eq(users.handle, handle)).get();
   if (handleTaken) return c.json({ error: 'Dieser Handle ist bereits vergeben. Wähle einen anderen.' }, 409);
   const passwordHash = await bcrypt.hash(password, 10);
-  const [user] = await db.insert(users).values({ email, passwordHash, name, handle }).returning();
+  // Ohne konfigurierten Mailversand niemanden aussperren → dann direkt als bestätigt anlegen.
+  const emailVerified = !mailConfigured;
+  const [user] = await db.insert(users)
+    .values({ email, passwordHash, name, handle, emailVerified, emailOptIn })
+    .returning();
+  if (!emailVerified) await sendVerificationEmail(user);
   const token = await makeToken(user.id);
   const { passwordHash: _, ...safeUser } = user;
   return c.json({ token, user: safeUser }, 201);
+});
+
+// POST /auth/verify-email — Anmeldung per Token bestätigen (Link aus der Mail)
+router.post('/verify-email',
+  zValidator('json', z.object({ token: z.string().min(10) })),
+  async (c) => {
+    const { token } = c.req.valid('json');
+    const rows = await db.all(sql`SELECT id, user_id FROM email_verification_tokens
+      WHERE token_hash = ${sha256(token)} AND used = 0 AND expires_at > ${new Date().toISOString()}
+      ORDER BY id DESC LIMIT 1`) as { id: number; user_id: number }[];
+    const row = rows[0];
+    if (!row) return c.json({ error: 'Link ungültig oder abgelaufen. Fordere in deinem Profil einen neuen an.' }, 400);
+    await db.update(users).set({ emailVerified: true }).where(eq(users.id, row.user_id));
+    await db.run(sql`UPDATE email_verification_tokens SET used = 1 WHERE user_id = ${row.user_id}`).catch(() => {});
+    return c.json({ ok: true });
+  }
+);
+
+// POST /auth/resend-verification — neue Bestätigungs-Mail anfordern (eingeloggt)
+router.post('/resend-verification', requireAuth, async (c) => {
+  const user = c.get('user');
+  if (user.emailVerified) return c.json({ ok: true, alreadyVerified: true });
+  // Kein Mailversand konfiguriert → sofort bestätigen, statt eine Mail zu versprechen, die nie kommt.
+  if (!mailConfigured) {
+    await db.update(users).set({ emailVerified: true }).where(eq(users.id, user.id));
+    return c.json({ ok: true, autoVerified: true });
+  }
+  await sendVerificationEmail(user);
+  return c.json({ ok: true });
 });
 
 router.get('/me', requireAuth, (c) => {
