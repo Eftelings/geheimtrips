@@ -18,7 +18,7 @@ export const EMPTY_FACETS: Facets = { merkmale: [], vibes: [], minRating: 0, max
 const AUDIENCES = ['Familien mit Kindern', 'Paare', 'Solo-Reisende', 'Gruppen & Freunde', 'Senioren', 'Fotografen'];
 const RATINGS = [3, 4, 4.5];
 const COSTS: { v: number; label: string }[] = [{ v: 0, label: 'Kostenlos' }, { v: 1, label: '€' }, { v: 2, label: '€€' }, { v: 3, label: '€€€' }];
-const LILA = '#7c3aed';   // einheitliche KI-/Auswahl-Lila
+const SEL = '#34254c';   // einheitliche Auswahl-Farbe (wie bei Vibe/Merkmalen)
 
 type FacetId = 'orte' | 'merkmale' | 'vibe' | 'rating' | 'budget' | 'audience';
 
@@ -118,7 +118,7 @@ export function PlaceFilters({ vocab, sel, onSel, facets, onFacets }: {
             return (
               <button key={r} type="button" onClick={() => set({ minRating: on ? 0 : r })}
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all active:scale-95"
-                style={on ? { background: 'var(--color-amber)', color: 'white', borderColor: 'var(--color-amber)' } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
+                style={on ? { background: SEL, color: 'white', borderColor: SEL } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
                 <i className="fa-solid fa-star text-[10px]" />ab {r.toString().replace('.', ',')}
               </button>
             );
@@ -134,7 +134,7 @@ export function PlaceFilters({ vocab, sel, onSel, facets, onFacets }: {
               return (
                 <button key={c.v} type="button" onClick={() => set({ maxCost: on ? null : c.v })}
                   className="flex-1 py-1.5 rounded-full text-[11px] font-bold border transition-all active:scale-95"
-                  style={on ? { background: LILA, color: 'white', borderColor: LILA } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
+                  style={on ? { background: SEL, color: 'white', borderColor: SEL } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
                   {c.label}
                 </button>
               );
@@ -151,7 +151,7 @@ export function PlaceFilters({ vocab, sel, onSel, facets, onFacets }: {
             return (
               <button key={a} type="button" onClick={() => set({ audience: toggle(facets.audience, a) })}
                 className="px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all active:scale-95"
-                style={on ? { background: '#7c3aed', color: 'white', borderColor: '#7c3aed' } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
+                style={on ? { background: SEL, color: 'white', borderColor: SEL } : { background: 'white', color: '#71587a', borderColor: '#E4DCF0' }}>
                 {a}
               </button>
             );
