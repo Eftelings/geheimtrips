@@ -30,8 +30,8 @@ export function looksLikeAdjective(raw: string): boolean {
   // typische Nomen-Endungen → ablehnen (inkl. Komposita wie „Kaffeehaus", „Freizeitpark")
   // „bar"/„club" bewusst NICHT hier — sonst fiele das Adjektiv „wunderbar" durchs Nomen-Raster.
   if (/(ung|heit|keit|schaft|tion|taet|tät|ismus|nis|tum|ling|haus|platz|garten|halle|park|welt|zimmer|raum|weg|berg|see|bau|stadt|dorf|hof|markt|museum|bad|cafe|café|kaffee|musik|sonne)$/.test(lower)) return false;
-  // typische Adjektiv-Endungen → ok
-  if (/(ig|lich|isch|sam|bar|haft|los|voll|iv|oes|ös|os|ern|ell|al|ant|ent)$/.test(lower)) return true;
+  // typische Adjektiv-Endungen → ok. „end" deckt Partizipien ab (entspannend, aufregend, einladend).
+  if (/(ig|lich|isch|sam|bar|haft|los|voll|iv|oes|ös|os|ern|ell|al|ant|ent|end)$/.test(lower)) return true;
   // Alles andere (Nomen ohne typische Endung, „Kaffee", „Musik" …) → lieber Hinweis geben.
   return false;
 }
@@ -260,7 +260,8 @@ function TermSection({ title, hint, selected, suggestions, query, setQuery, comb
         <input value={query} onChange={e => { setQuery(e.target.value); if (warn) setWarn(''); }} placeholder={placeholder}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitQuery(); } }}
           className="w-full rounded-xl px-3 py-2 text-sm outline-none bg-white" style={{ border: `1px solid ${warn ? '#E5484D' : '#E4DCF0'}`, color: '#34254C' }} />
-        {combo.length > 0 && (
+        {/* Dropdown ausblenden, sobald ein Hinweis (z.B. „kein Adjektiv") steht — sonst verdeckt es ihn. */}
+        {combo.length > 0 && !warn && (
           <div className="absolute z-10 left-0 right-0 mt-1 rounded-xl overflow-hidden bg-white" style={{ border: '1px solid #E4DCF0', boxShadow: '0 8px 24px rgba(52,37,76,0.15)' }}>
             {combo.map((r, i) => (
               <button key={i} type="button" onClick={() => add(r.label, r.isNew)}

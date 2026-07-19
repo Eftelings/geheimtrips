@@ -1579,16 +1579,10 @@ function HighlightsEditor({ state, setState }: {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-[#E4DCF0]" />
-        <span className="text-xs font-bold uppercase tracking-widest text-[#B0A3BC]">
-          <i className="fa-solid fa-star mr-1.5 text-[var(--color-amber)]" />Das musst du sehen
-        </span>
-        <div className="flex-1 h-px bg-[#E4DCF0]" />
-      </div>
-      <p className="text-xs text-[#9A8FAA] -mt-1">
-        Bei größeren Orten lohnt sich eine Liste der echten Must-sees – z.&nbsp;B. einzelne Achterbahnen, Gemälde oder Aussichtspunkte.
-        Jedes Highlight braucht einen Titel und <strong>mindestens 1 Foto</strong>. (Optional – wenn es hier nichts Herausragendes gibt, einfach leer lassen.)
+      {/* Zwischenüberschrift/Erklärung kommt jetzt vom Schritt-Kopf (StepHighlights). Hier nur der
+          knappe Foto-Hinweis. */}
+      <p className="text-xs text-[#9A8FAA]">
+        Jedes Highlight braucht einen Titel und <strong>mindestens 1 Foto</strong>.
       </p>
 
       {state.highlights.map((h, idx) => (
@@ -1737,22 +1731,18 @@ function AiButton({ onClick, loading, disabled, label }: {
   );
 }
 
-// Kleines „i" neben einer Überschrift — Klick zeigt die Erklärung in einem Popover (weniger Text im Formular).
+// Kleines „i" neben einer Überschrift — Klick klappt die Erklärung INLINE darunter aus (kein
+// schwebendes Overlay, das über die Seite hinausragt). Muss in einer `flex flex-wrap`-Zeile stehen:
+// die Erklärung nimmt per `basis-full` eine eigene Zeile ein und schiebt den Inhalt nach unten.
 function InfoDot({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
-    <span className="relative inline-block align-middle">
-      <button type="button" onClick={() => setOpen(o => !o)} aria-label="Mehr Infos"
-        className="w-4 h-4 rounded-full text-[10px] font-bold inline-flex items-center justify-center"
-        style={{ background: '#E9E1F3', color: '#7C3AED' }}>i</button>
-      {open && (
-        <>
-          <span className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <span className="absolute left-0 top-6 z-30 block w-64 rounded-xl bg-white p-3 text-[11px] leading-snug text-[#71587a] shadow-[0_8px_24px_rgba(52,37,76,0.18)]"
-            style={{ border: '1px solid #EFEAF5' }}>{children}</span>
-        </>
-      )}
-    </span>
+    <>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-label="Mehr Infos" aria-expanded={open}
+        className="w-4 h-4 rounded-full text-[10px] font-bold inline-flex items-center justify-center flex-shrink-0"
+        style={{ background: open ? '#7C3AED' : '#E9E1F3', color: open ? 'white' : '#7C3AED' }}>i</button>
+      {open && <p className="basis-full text-[11px] leading-snug text-[#71587a] mt-1">{children}</p>}
+    </>
   );
 }
 
@@ -1808,7 +1798,7 @@ function StepStory({
 
       {/* 1) Ausführliche Beschreibung — Pflicht, mind. 200 Zeichen. Erklärungen hinter dem „i". */}
       <div className="space-y-1.5">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="block text-sm font-semibold" style={{ color: C.aubergine }}>
             Ausführliche Beschreibung <span className="text-[#C96442]">*</span>
           </label>
@@ -1912,10 +1902,11 @@ function StepOneLiner({ state, set }: {
         <StepSub>Dieser Satz erscheint als Teaser auf der Swipe-Karte. Nimm den Vorschlag oder schreib deinen eigenen.</StepSub>
       </div>
       <div className="space-y-2">
-        <textarea rows={3} spellCheck maxLength={220}
+        <textarea rows={4} spellCheck maxLength={220}
           placeholder="Ein versteckter Felssee hoch über dem Tal – kaum bekannt, aber absolut magisch."
           value={state.short} onChange={e => set('short', e.target.value)}
-          className="w-full border rounded-xl px-4 py-3 text-sm outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none" />
+          style={{ minHeight: 96 }}
+          className="w-full border rounded-xl px-4 py-3 text-sm leading-relaxed outline-none transition-colors border-[#E4DCF0] focus:border-[#F99039] bg-white text-[#34254C] placeholder-[#A89BB5] resize-none" />
         <div className="flex items-center justify-between gap-2">
           {aiOn ? <AiButton onClick={suggest} loading={loading} disabled={longLen < 30}
             label={state.short.trim() ? 'Neuen Vorschlag' : 'Vorschlag von der KI'} /> : <span />}
@@ -1934,13 +1925,13 @@ function StepTips({ state, set }: {
 }) {
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <StepHeading>Hast du besondere Tipps für {state.name || 'diesen Ort'}?</StepHeading>
         <InfoDot>
           Jeder Tipp bekommt ein eigenes Feld. Drücke <strong>Enter</strong> für den nächsten. Max. {MAX_TIPS} Tipps.
-          Optional – wenn dir gerade nichts einfällt, einfach leer lassen.
         </InfoDot>
       </div>
+      <p className="text-xs text-[#9A8FAA]">Optional – wenn dir gerade nichts einfällt, einfach leer lassen.</p>
       <TipFields tips={state.tips} onChange={v => set('tips', v)} />
     </div>
   );
@@ -1952,9 +1943,12 @@ function StepHighlights({ state, setState }: {
 }) {
   return (
     <div className="space-y-5">
-      <div>
-        <StepHeading>Das musst du sehen</StepHeading>
-        <StepSub>Gibt es an diesem Ort ein, zwei Dinge, die man auf keinen Fall verpassen sollte? Optional – sonst einfach leer lassen.</StepSub>
+      <div className="flex flex-wrap items-center gap-2">
+        <StepHeading>Hat der Ort Must-Sees?</StepHeading>
+        <InfoDot>
+          Erstelle eine Liste von Dingen, die man unbedingt sehen oder gemacht haben muss – z.B. ein
+          Gemälde, ein Aussichtspunkt, ein Fahrgeschäft oder ein Gebäude. Optional, sonst leer lassen.
+        </InfoDot>
       </div>
       <HighlightsEditor state={state} setState={setState} />
     </div>
