@@ -341,7 +341,9 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
   const menuUrl = str(answers.menu_url), rsvUrl = str(answers.reservation_url), ticketUrl = str(answers.ticket_url);
   const rawWeb = str(answers.website);
   const website = rawWeb ? (/^https?:\/\//.test(rawWeb) ? rawWeb : `https://${rawWeb}`) : '';
-  const tp = answers.ticket_prices && typeof answers.ticket_prices === 'object' ? answers.ticket_prices as Record<string, string> : null;
+  // Kostenloser Ort → keine Ticketpreise/-Links (auch wenn Altdaten noch welche tragen)
+  const free = str(answers.budget) === 'Kostenlos';
+  const tp = !free && answers.ticket_prices && typeof answers.ticket_prices === 'object' ? answers.ticket_prices as Record<string, string> : null;
   const priceRows = tp ? ([['adult', 'Erwachsene'], ['child', 'Kinder'], ['reduced', 'Ermäßigte'], ['senior', 'Senioren']] as const)
     .filter(([k]) => str(tp[k])).map(([k, label]) => ({ label, amount: str(tp[k]) })) : [];
   const daysWithHours = hours ? HOUR_DAYS.filter(([k]) => hours[k] && (hours[k].closed || (hours[k].open && hours[k].close))) : [];
@@ -351,7 +353,7 @@ function PlaceExtras({ place, className = '' }: { place: Place; className?: stri
   if (menuUrl)   links.push({ href: menuUrl,          icon: 'fa-book-open',      label: 'Speisekarte' });
   if (rsvUrl)    links.push({ href: rsvUrl,           icon: 'fa-calendar-check', label: 'Reservieren' });
   if (website)   links.push({ href: website,          icon: 'fa-globe',          label: 'Website' });
-  if (ticketUrl) links.push({ href: ticketUrl,        icon: 'fa-ticket',         label: 'Tickets' });
+  if (ticketUrl && !free) links.push({ href: ticketUrl,   icon: 'fa-ticket',         label: 'Tickets' });
   if (phone)     links.push({ href: `tel:${phone}`,   icon: 'fa-phone',          label: 'Anrufen' });
   if (email)     links.push({ href: `mailto:${email}`, icon: 'fa-envelope',      label: 'E-Mail' });
 

@@ -13,6 +13,9 @@
     /* Kein Gummiband/Pull-to-Refresh an den Seitenrändern: sonst lässt sich die ganze Seite samt
        Header herumwischen — vertikal wie horizontal. Innere Scroll-Container bleiben unberührt. */
     overscroll-behavior: none;
+    /* Scrollbalken-Platz immer reservieren: sonst springt die Breite (und damit die Ränder), sobald
+       Inhalt wächst/schrumpft — z.B. beim Aufklappen einer „i"-Erklärung. */
+    scrollbar-gutter: stable;
   }
 
   body {

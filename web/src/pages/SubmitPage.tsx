@@ -21,7 +21,7 @@ import { MAP_LAYERS, TILE_URL, HYBRID_ROADS, HYBRID_LABELS, type MapLayer } from
 
 // ─── Brand tokens ─────────────────────────────────────────────────────────────
 const C = { amber: '#F99039', aubergine: '#34254C', lavender: '#71587A' };
-const MAX_MEDIA = 5;
+const MAX_MEDIA = 10;
 const MAX_TIPS  = 5;
 const TOTAL_STEPS = 9;
 
@@ -936,19 +936,28 @@ function QuestionField({ q, value, onChange }: {
           <p className="text-xs text-[#9A8FAA] italic pl-1">Dieser Ort ist rund um die Uhr geöffnet.</p>
         ) : (
         <div className="space-y-1.5">
-        {HOUR_DAYS.map(([key, label]) => {
+        {HOUR_DAYS.map(([key, label], idx) => {
           const d = v[key] ?? {};
+          const prevKey = idx > 0 ? HOUR_DAYS[idx - 1][0] : null;   // ab Dienstag: „wie Vortag"
           return (
             <div key={key} className="flex items-center gap-2">
               <span className="w-16 flex-shrink-0 text-xs font-semibold text-[#9A8FAA]">{label}</span>
               {d.closed ? (
                 <span className="flex-1 text-xs text-[#A89BB5] italic">geschlossen</span>
               ) : (
-                <div className="flex-1 flex items-center gap-1.5">
-                  <input type="time" value={d.open ?? ''} onChange={e => upd(key, { open: e.target.value })} className={timeCls} />
+                <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                  <input type="time" value={d.open ?? ''} onChange={e => upd(key, { open: e.target.value })} className={`${timeCls} min-w-0`} />
                   <span className="text-[#9A8FAA] text-xs">–</span>
-                  <input type="time" value={d.close ?? ''} onChange={e => upd(key, { close: e.target.value })} className={timeCls} />
+                  <input type="time" value={d.close ?? ''} onChange={e => upd(key, { close: e.target.value })} className={`${timeCls} min-w-0`} />
                 </div>
+              )}
+              {prevKey && (
+                <button type="button" onClick={() => onChange({ ...v, [key]: { ...(v[prevKey] ?? {}) } })}
+                  title="Zeiten vom Vortag übernehmen" aria-label="Wie Vortag"
+                  className="text-[10px] font-semibold px-2 py-1 rounded-lg flex-shrink-0 transition-colors"
+                  style={{ background: '#F0EBF7', color: '#71587A' }}>
+                  <i className="fa-solid fa-arrow-up text-[9px] mr-0.5" />Vortag
+                </button>
               )}
               <button type="button" onClick={() => upd(key, { closed: !d.closed })}
                 className="text-[10px] font-semibold px-2 py-1 rounded-lg flex-shrink-0 transition-colors"
@@ -2177,17 +2186,11 @@ function DraftPreview({ state, onClose }: { state: WizardState; onClose: () => v
   );
 }
 
-function ReviewSubmit({ state, isEdit, fromAdmin, onPreview }: { state: WizardState; isEdit: boolean; fromAdmin: boolean; onPreview: () => void }) {
+function ReviewSubmit({ state, isEdit, fromAdmin }: { state: WizardState; isEdit: boolean; fromAdmin: boolean }) {
   const pendingUploads = state.media.filter(m => m.uploading).length;
   const vocab = useTaxVocab();
   return (
     <div className="space-y-5 mt-8 pt-6 border-t border-[#E4DCF0]">
-      {/* Vorschau im neuen Orts-Design (ohne zu speichern) */}
-      <button type="button" onClick={onPreview}
-        className="w-full py-3 rounded-2xl font-bold text-sm border-2 border-[#C4AED0] flex items-center justify-center gap-2 transition-colors hover:border-[var(--color-amber)]"
-        style={{ color: C.aubergine }}>
-        <i className="fa-solid fa-eye" /> Vorschau ansehen
-      </button>
       <div className="rounded-2xl border border-[#E4DCF0] bg-white overflow-hidden">
         <div className="px-5 py-4 border-b border-[#F0EBF7]">
           <p className="text-xs font-bold uppercase tracking-widest mb-1 text-[#B0A3BC]">Zusammenfassung</p>
@@ -2654,6 +2657,16 @@ export function SubmitPage() {
     'Tipps', 'Highlights', 'Kategorie', 'Details & Abschicken',
   ];
 
+  // Vorschau-Knopf für die untere Leiste — auf jedem Schritt verfügbar (zwischen „Zurück" und „Weiter").
+  const previewBtn = (
+    <button type="button" onClick={() => setPreviewOpen(true)}
+      title="Vorschau ansehen" aria-label="Vorschau ansehen"
+      className="w-12 flex-shrink-0 rounded-2xl border-2 border-[#C4AED0] flex items-center justify-center transition-colors hover:border-[var(--color-amber)]"
+      style={{ color: C.aubergine }}>
+      <i className="fa-solid fa-eye text-sm" />
+    </button>
+  );
+
   return (
     <AppShell title={`${isEdit ? 'Bearbeiten' : 'Einreichen'} · ${STEP_TITLES[step - 1]}`} showBack noBottomNav>
       <div ref={topRef} className="max-w-xl mx-auto px-5 py-8 pb-32">
@@ -2680,7 +2693,7 @@ export function SubmitPage() {
         {step === 9 && (
           <>
             <StepDetails state={state} set={set} setState={setState} qConfig={qConfig} />
-            <ReviewSubmit state={state} isEdit={isEdit} fromAdmin={fromAdmin} onPreview={() => setPreviewOpen(true)} />
+            <ReviewSubmit state={state} isEdit={isEdit} fromAdmin={fromAdmin} />
           </>
         )}
 
@@ -2708,6 +2721,7 @@ export function SubmitPage() {
                 >
                   <i className="fa-solid fa-arrow-left text-xs" /> Zurück
                 </button>
+                {previewBtn}
                 <button
                   type="button" onClick={() => handleSubmit(true)}
                   disabled={submitting || state.media.some(m => m.uploading)}
@@ -2737,6 +2751,7 @@ export function SubmitPage() {
                 <i className="fa-solid fa-arrow-left text-xs" /> Zurück
               </button>
             )}
+            {previewBtn}
             {step < TOTAL_STEPS ? (
               <button
                 type="button" onClick={next}

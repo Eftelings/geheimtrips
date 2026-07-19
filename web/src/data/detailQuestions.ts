@@ -63,8 +63,10 @@ export function detailQuestions(tags: (string | null | undefined)[]): SubmitQues
     qs.push({ id: 'reservation_url', label: 'Link zum Reservieren (optional)',  type: 'text', placeholder: 'https://…' });
   }
   if (entry) {
-    qs.push({ id: 'ticket_prices', label: 'Ticketpreise (optional)', type: 'pricefields' });
-    qs.push({ id: 'ticket_url',    label: 'Link zum Ticketkauf (optional)', type: 'text', placeholder: 'https://…' });
+    // Kostenlose Orte haben weder Ticketpreise noch einen Ticketkauf-Link → Fragen ausblenden.
+    const notFree = (a: Record<string, unknown>) => a['budget'] !== 'Kostenlos';
+    qs.push({ id: 'ticket_prices', label: 'Ticketpreise (optional)', type: 'pricefields', showIf: notFree });
+    qs.push({ id: 'ticket_url',    label: 'Link zum Ticketkauf (optional)', type: 'text', placeholder: 'https://…', showIf: notFree });
   }
   return qs;
 }
