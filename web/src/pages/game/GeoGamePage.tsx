@@ -36,8 +36,21 @@ const C = {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface GPlayer { id: string; name: string; }
-interface Score   { playerId: string; name: string; wins: number; }
+interface GPlayer { id: string; name: string; avatarUrl?: string | null; }
+interface Score   { playerId: string; name: string; wins: number; avatarUrl?: string | null; }
+
+// Runder Avatar: Profilbild, sonst Initiale.
+function GAvatar({ name, avatarUrl, className, bg, textClass = 'text-white' }: {
+  name?: string; avatarUrl?: string | null; className: string; bg: string; textClass?: string;
+}) {
+  return (
+    <div className={`${className} rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 font-bold ${textClass}`} style={{ background: bg }}>
+      {avatarUrl
+        ? <img src={avatarUrl} alt={name ?? ''} className="w-full h-full object-cover" />
+        : (name?.[0]?.toUpperCase() ?? '?')}
+    </div>
+  );
+}
 interface GuessResult {
   playerId: string; name: string;
   guess: { lat: number; lng: number } | null;
@@ -144,7 +157,7 @@ export function GeoGamePage() {
       setMyId(msg.playerId as string);
       const pl = msg.players as GPlayer[];
       setPlayers(pl);
-      setScores(pl.map(p => ({ playerId: p.id, name: p.name, wins: 0 })));
+      setScores(pl.map(p => ({ playerId: p.id, name: p.name, wins: 0, avatarUrl: p.avatarUrl })));
       setMatchedOpponent(pl.find(p => p.id !== (msg.playerId as string))?.name ?? 'Entdecker');
       return;
     }
@@ -204,7 +217,7 @@ export function GeoGamePage() {
     setError(null); setMatchedOpponent(null); setPhase('searching');
     const ws = openWs();
     ws.onerror = () => { setError('Verbindung zum Server fehlgeschlagen.'); setPhase('hub'); };
-    ws.onopen  = () => sendMsg({ type: 'find_match', name: myName.trim(), userId: user?.id ?? null });
+    ws.onopen  = () => sendMsg({ type: 'find_match', name: myName.trim(), userId: user?.id ?? null, avatarUrl: user?.avatarUrl ?? null });
   };
 
   const handleCancelSearch = () => {
@@ -274,10 +287,7 @@ export function GeoGamePage() {
             /* Logged-in: show name badge, no input needed */
             <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border"
               style={{ background: 'white', borderColor: `${C.lavender}33` }}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-                style={{ background: C.amber }}>
-                {user.name[0]?.toUpperCase()}
-              </div>
+              <GAvatar name={user.name} avatarUrl={user.avatarUrl} className="w-8 h-8 text-sm" bg={C.amber} />
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-sm truncate" style={{ color: C.aubergine }}>{user.name}</div>
                 <div className="text-[10px]" style={{ color: C.lavender }}>@{user.handle}</div>
@@ -343,14 +353,11 @@ export function GeoGamePage() {
             </div>
             <h2 className="font-display text-2xl font-bold mb-4" style={{ color: C.aubergine }}>Entdecker gefunden!</h2>
             <div className="flex items-center gap-5 mb-6">
-              {[{ name: myName, color: C.amber, sub: 'du' }, { name: matchedOpponent, color: C.aubergine, sub: 'gegner' }].map((p, i) => (
+              {[{ name: myName, color: C.amber, sub: 'du', avatarUrl: user?.avatarUrl ?? null }, { name: matchedOpponent, color: C.aubergine, sub: 'gegner', avatarUrl: opponent?.avatarUrl ?? null }].map((p, i) => (
                 <React.Fragment key={i}>
                   {i === 1 && <span className="font-display text-xl font-bold" style={{ color: C.lavender }}>VS</span>}
                   <div className="text-center">
-                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold text-white mx-auto mb-1"
-                      style={{ background: p.color }}>
-                      {p.name[0]?.toUpperCase()}
-                    </div>
+                    <GAvatar name={p.name} avatarUrl={p.avatarUrl} className="w-12 h-12 text-lg mx-auto mb-1" bg={p.color} />
                     <p className="text-sm font-semibold" style={{ color: C.aubergine }}>{p.name}</p>
                     <p className="text-xs" style={{ color: C.lavender }}>{p.sub}</p>
                   </div>
@@ -395,8 +402,7 @@ export function GeoGamePage() {
               return (
                 <div key={s.playerId} className="flex items-center gap-4 px-5 py-4 rounded-3xl bg-white"
                   style={{ boxShadow: isW ? `0 0 0 2px ${C.amber}` : `0 0 0 1px ${C.bgSoft}` }}>
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-base text-white flex-shrink-0"
-                    style={{ background: isMe ? C.amber : C.aubergine }}>{s.name[0]?.toUpperCase()}</div>
+                  <GAvatar name={s.name} avatarUrl={s.avatarUrl} className="w-10 h-10 text-base" bg={isMe ? C.amber : C.aubergine} />
                   <div className="flex-1">
                     <p className="font-bold" style={{ color: C.aubergine }}>
                       {s.name} {isMe && <span className="text-xs font-normal" style={{ color: C.lavender }}>(du)</span>}
@@ -483,10 +489,7 @@ export function GeoGamePage() {
             {/* Opponent score + avatar */}
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-base" style={{ color: C.aubergine }}>{oppScore}</span>
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm"
-                style={{ background: C.aubergine }}>
-                {opponent?.name[0]?.toUpperCase() ?? '?'}
-              </div>
+              <GAvatar name={opponent?.name} avatarUrl={opponent?.avatarUrl} className="w-7 h-7 text-xs shadow-sm" bg={C.aubergine} />
             </div>
           </div>
 
@@ -523,21 +526,8 @@ export function GeoGamePage() {
         <div className="flex flex-col min-h-0 flex-1 lg:flex-none lg:w-[40%]"
           style={{ gap: revealed ? '1rem' : '0' }}>
 
-          {/* Mobil im Ergebnis: kein Bild (staucht sich sonst) — nur Name + Standort kompakt */}
-          {revealed && revealPlace && (
-            <div className="lg:hidden rounded-2xl p-3.5 flex-shrink-0" style={{ background: C.aubergine }}>
-              <TagBadge slug={revealPlace.tagSlug} fallback={revealPlace.categoryLabel} icon variant="dark" className="mb-1" />
-              <h2 className="font-display text-xl font-bold text-white leading-tight">{revealPlace.name}</h2>
-              <p className="text-white/80 text-sm mt-0.5 flex items-center gap-1.5">
-                <i className="fa-solid fa-location-dot" style={{ color: C.amber }} />{revealPlace.region}
-                <span className="mx-1 opacity-40">·</span>
-                <i className="fa-solid fa-star" style={{ color: C.amber }} />{revealPlace.rating.toFixed(1)}
-              </p>
-            </div>
-          )}
-
-          {/* Photo card (auf Mobile bei Auswertung ausgeblendet) */}
-          <div className={`relative overflow-hidden flex-shrink-0 ${revealed ? 'hidden lg:block' : ''}`}
+          {/* Foto-Karte — auch bei der Auswertung sichtbar; Ort-Infos liegen als Overlay darauf. */}
+          <div className="relative overflow-hidden flex-shrink-0"
             style={{
               flexGrow: revealed ? 0 : 1,
               height: revealed ? '42%' : undefined,
@@ -627,8 +617,7 @@ export function GeoGamePage() {
                   </p>
                   {opponentGuessed && opponent && (
                     <div className="mt-2 inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm rounded-full px-3 py-1 text-xs text-white font-semibold">
-                      <div className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
-                        style={{ background: C.aubergine }}>{opponent.name[0]?.toUpperCase()}</div>
+                      <GAvatar name={opponent.name} avatarUrl={opponent.avatarUrl} className="w-4 h-4 text-[9px]" bg={C.aubergine} />
                       {opponent.name} hat getippt
                     </div>
                   )}
@@ -642,24 +631,8 @@ export function GeoGamePage() {
             <div className="flex-1 min-h-0 bg-white rounded-3xl p-3.5 lg:p-5 overflow-auto"
               style={{ boxShadow: '0 10px 40px rgba(52,37,76,0.08)', border: `1px solid ${C.lavender}1A` }}>
 
-              {/* Winner banner */}
-              <div className="flex items-center justify-between rounded-xl py-2 px-4 mb-2.5 lg:mb-4"
-                style={{ background: `${C.aubergine}0D`, border: `1px solid ${C.aubergine}1A` }}>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full text-white flex items-center justify-center flex-shrink-0"
-                    style={{ background: C.aubergine }}>
-                    <i className={`fa-solid ${iWon ? 'fa-trophy' : revealWinnerId ? 'fa-shield-halved' : 'fa-handshake'} text-sm`} />
-                  </div>
-                  <span className="font-bold text-sm" style={{ color: C.aubergine }}>
-                    {iWon ? 'Du gewinnst diese Runde! 🎉'
-                      : revealWinnerId ? `${players.find(p => p.id === revealWinnerId)?.name} gewinnt diese Runde`
-                      : 'Unentschieden'}
-                  </span>
-                </div>
-                {revealWinnerId && (
-                  <span className="text-xs font-semibold flex-shrink-0 ml-2" style={{ color: C.lavender }}>+1 Punkt</span>
-                )}
-              </div>
+              {/* Runden-Gewinner steht schon am Punktestand oben + an der hervorgehobenen Distanz-Karte;
+                  der eigene Banner ist raus, damit die Auswertung mobil ohne Scrollen passt. */}
 
               {/* Distance stats */}
               <div className="grid grid-cols-2 gap-2.5 mb-2 lg:gap-3 lg:mb-4">

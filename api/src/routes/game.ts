@@ -32,6 +32,7 @@ interface Player {
   id: string;
   name: string;
   userId: number | null;   // DB user id — null for guests
+  avatarUrl: string | null;   // Profilbild (vom Client mitgeschickt) → Kreis mit Bild statt Initiale
   ws: WebSocket;
   guess: { lat: number; lng: number } | null;
   wins: number;
@@ -70,7 +71,7 @@ const rooms      = new Map<string, GameRoom>();
 const wsToRoom   = new Map<WebSocket, string>();
 const wsToPlayer = new Map<WebSocket, string>();
 
-let matchQueue: { ws: WebSocket; pid: string; name: string; userId: number | null } | null = null;
+let matchQueue: { ws: WebSocket; pid: string; name: string; userId: number | null; avatarUrl: string | null } | null = null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -181,7 +182,7 @@ function endRound(room: GameRoom): void {
     },
     results,
     roundWinnerId,
-    scores: playerList.map(p => ({ playerId: p.id, name: p.name, wins: p.wins })),
+    scores: playerList.map(p => ({ playerId: p.id, name: p.name, wins: p.wins, avatarUrl: p.avatarUrl })),
   });
   // Advance is triggered by both players sending 'ready'
 }
@@ -239,6 +240,7 @@ export function handleGameConnection(ws: WebSocket): void {
       if (msg.type === 'find_match') {
         const name   = String(msg.name ?? 'Spieler').trim().slice(0, 30) || 'Spieler';
         const userId = typeof msg.userId === 'number' ? msg.userId : null;
+        const avatarUrl = typeof msg.avatarUrl === 'string' && msg.avatarUrl ? msg.avatarUrl : null;
         const pid    = `p${Date.now()}`;
 
         if (matchQueue && matchQueue.ws.readyState === 1) {
@@ -254,8 +256,8 @@ export function handleGameConnection(ws: WebSocket): void {
           };
           rooms.set(code, room);
 
-          const p1: Player = { id: opp.pid, name: opp.name, userId: opp.userId, ws: opp.ws, guess: null, wins: 0 };
-          const p2: Player = { id: pid,     name,           userId,             ws,          guess: null, wins: 0 };
+          const p1: Player = { id: opp.pid, name: opp.name, userId: opp.userId, avatarUrl: opp.avatarUrl, ws: opp.ws, guess: null, wins: 0 };
+          const p2: Player = { id: pid,     name,           userId,             avatarUrl,             ws,          guess: null, wins: 0 };
           room.players.set(opp.pid, p1);
           room.players.set(pid,     p2);
           wsToRoom.set(opp.ws, code);
@@ -263,7 +265,7 @@ export function handleGameConnection(ws: WebSocket): void {
           wsToPlayer.set(opp.ws, opp.pid);
           wsToPlayer.set(ws,     pid);
 
-          const playerList = [{ id: opp.pid, name: opp.name }, { id: pid, name }];
+          const playerList = [{ id: opp.pid, name: opp.name, avatarUrl: opp.avatarUrl }, { id: pid, name, avatarUrl }];
           send(opp.ws, { type: 'matched', playerId: opp.pid, players: playerList });
           send(ws,     { type: 'matched', playerId: pid,     players: playerList });
 
@@ -276,7 +278,7 @@ export function handleGameConnection(ws: WebSocket): void {
         }
 
         if (matchQueue) matchQueue = null;
-        matchQueue = { ws, pid, name, userId };
+        matchQueue = { ws, pid, name, userId, avatarUrl };
         wsToPlayer.set(ws, pid);
         send(ws, { type: 'searching' });
         return;
