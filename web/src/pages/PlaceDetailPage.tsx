@@ -1950,7 +1950,8 @@ async function handleVerifyToggle() {
       <div style={{ background: '#FBF9FC' }}>
 
         {/* ── Row 1: Navigation bar ─────────────────────────────────────────── */}
-        <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 flex items-center gap-3">
+        {/* flex-wrap: lieber in eine zweite Zeile umbrechen als den Artikel breiter schieben (Mobil) */}
+        <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 flex flex-wrap items-center gap-3">
           {/* Back button — im Overlay nicht nötig (Sheet runterziehen führt zurück) */}
           {!embedded && (
             <button onClick={goBack}
@@ -1971,12 +1972,14 @@ async function handleVerifyToggle() {
             <VisitedToggle isVisited={isVisited} gpsLoading={gpsLoading} onToggle={handleVerifyToggle} />
           )}
 
-          {/* Bewerten — immer sichtbar; ohne Besuch führt es erst durch den Beweis-Ablauf. */}
-          <button onClick={startRating}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold flex-shrink-0 transition-all hover:brightness-110 active:scale-95"
-            style={{ background: 'var(--color-amber)', color: 'white' }}>
-            <i className="fa-solid fa-star text-[11px]" /> Bewerten
-          </button>
+          {/* Bewerten — nur wer schon da war, kann bewerten (sonst nimmt der Knopf unnötig Breite). */}
+          {isVisited && (
+            <button onClick={startRating}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold flex-shrink-0 transition-all hover:brightness-110 active:scale-95"
+              style={{ background: 'var(--color-amber)', color: 'white' }}>
+              <i className="fa-solid fa-star text-[11px]" /> Bewerten
+            </button>
+          )}
 
           {/* Foto/Video hinzufügen */}
           <button onClick={() => gate(() => fileInputRef.current?.click(), 'Melde dich an, um Fotos zu diesem Ort hinzuzufügen.')} title="Foto oder Video hinzufügen"
