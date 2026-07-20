@@ -19,6 +19,7 @@ export interface User {
   facebook: string | null;
   snapchat: string | null;
   allowFollowers: boolean;
+  visitedPublic: boolean;
   emailVerified: boolean;
   emailOptIn: boolean;
   isAdmin: boolean;

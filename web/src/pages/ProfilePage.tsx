@@ -322,6 +322,7 @@ export function ProfilePage() {
           {[
             { label: 'Profil sichtbar', key: 'profileVisible' as const, val: user.profileVisible },
             { label: 'Follower zulassen', key: 'allowFollowers' as const, val: user.allowFollowers },
+            { label: 'Besuchte Orte im Blog zeigen', key: 'visitedPublic' as const, val: user.visitedPublic },
             { label: 'Benachrichtigungen', key: 'notificationsEnabled' as const, val: user.notificationsEnabled },
             { label: 'Meet People aktivieren', key: 'meetPeopleEnabled' as const, val: user.meetPeopleEnabled },
           ].map(s => (

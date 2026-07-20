@@ -25,6 +25,8 @@ export const users = sqliteTable('users', {
   facebook: text('facebook'),
   snapchat: text('snapchat'),
   allowFollowers: integer('allow_followers', { mode: 'boolean' }).notNull().default(false),
+  // Besuchte-Orte-Zahl öffentlich im Blog zeigen?
+  visitedPublic: integer('visited_public', { mode: 'boolean' }).notNull().default(false),
   // E-Mail-Bestätigung (Double-Opt-in) + Zustimmung zum E-Mail-Empfang
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   emailOptIn: integer('email_opt_in', { mode: 'boolean' }).notNull().default(false),

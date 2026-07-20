@@ -66,72 +66,54 @@ export function UserProfilePage() {
     }
   }
 
-  const wallPhotos = user.places.map(p => p.hero).filter(Boolean).slice(0, 12);
-
   return (
-    <AppShell showBack title={user.name}>
+    <AppShell showBack>
       <div className="max-w-lg mx-auto pb-12">
-        {/* ── Titelbild (querformatig, LinkedIn-Stil) ── */}
-        <div className="h-32 sm:h-44 relative overflow-hidden sm:rounded-b-3xl">
+        {/* ── Header wie eine Ortsseite: großes Bild, Infos als Overlay, rundes Profilbild rechts ── */}
+        <div className="relative h-56 sm:h-64 overflow-hidden sm:rounded-b-3xl">
           {user.coverUrl
-            ? <img src={user.coverUrl} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${user.coverCropX * 100}% ${user.coverCropY * 100}%` }} />
-            : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #4a3268, #34254c 55%, #251539)' }} />}
-        </div>
+            ? <img src={user.coverUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: `${user.coverCropX * 100}% ${user.coverCropY * 100}%` }} />
+            : <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #4a3268, #34254c 55%, #251539)' }} />}
+          <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.62) 0%, transparent 52%)' }} />
 
-        <div className="px-6">
-          {/* Avatar überlappt das Titelbild */}
-          <div className="-mt-12 mb-3">
-            <div className="inline-block rounded-full ring-4 ring-white">
-              <Avatar name={user.name} src={user.avatarUrl} size={88} cropX={user.avatarCropX} cropY={user.avatarCropY} />
-            </div>
+          {/* Rundes Profilbild rechts */}
+          <div className="absolute bottom-4 right-5 rounded-full ring-4 ring-white shadow-lg">
+            <Avatar name={user.name} src={user.avatarUrl} size={76} cropX={user.avatarCropX} cropY={user.avatarCropY} />
           </div>
 
-          <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] flex items-center gap-2 flex-wrap">
-            {user.name}
+          {/* Overlay: Badge (wie Hauptkategorie) · Name (wie Ortsname) · Statistik (wie Ort) */}
+          <div className="absolute bottom-0 left-0 right-0 p-5 pr-24">
             {user.isLocalHero && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }}>
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mb-1.5"
+                style={{ background: 'rgba(249,144,57,0.92)', color: 'white' }}>
                 <i className="fa-solid fa-shield-halved" /> Local Hero
               </span>
             )}
-          </h1>
-          <p className="text-sm text-[var(--color-lavender)]">@{user.handle}</p>
-          {user.bio && <p className="text-sm text-[var(--color-body)] mt-2 leading-relaxed">{user.bio}</p>}
-
-          {/* Social-Links */}
-          <SocialLinks user={user} className="mt-3" />
-
-          {/* Metriken: Besuchte & Beigetragene Orte */}
-          <div className="grid grid-cols-2 gap-3 mt-4">
-            {[
-              { label: 'Besuchte Orte', value: user.visitedCount },
-              { label: 'Beigetragene Orte', value: user.placeCount },
-            ].map(m => (
-              <div key={m.label} className="bg-white rounded-2xl p-3 text-center shadow-[var(--shadow-card)]">
-                <div className="font-display font-bold text-2xl text-[var(--color-aubergine)]">{m.value}</div>
-                <div className="text-[11px] text-[var(--color-lavender)] uppercase tracking-wider">{m.label}</div>
-              </div>
-            ))}
+            <h1 className="font-display font-bold text-white leading-tight"
+              style={{ fontSize: 'clamp(1.35rem, 5vw, 1.9rem)', letterSpacing: '-0.01em', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
+              {user.name}
+            </h1>
+            <p className="text-white/85 text-sm mt-1 font-medium">
+              {user.placeCount} {user.placeCount === 1 ? 'Ort' : 'Orte'} erstellt
+              {user.visitedPublic && <> · {user.visitedCount} besucht</>}
+            </p>
           </div>
+        </div>
+
+        <div className="px-6 pt-4">
+          {/* Social-Buttons (unter dem Header) */}
+          <SocialLinks user={user} className="mb-1.5" />
+          <p className="text-xs text-[var(--color-lavender)] mb-3">@{user.handle}</p>
+
+          {/* Persönlicher Text */}
+          {user.bio && <p className="text-sm text-[var(--color-body)] leading-relaxed mb-4">{user.bio}</p>}
 
           {/* Freund-Button */}
-          <div className="flex gap-3 mt-5 mb-7">{friendButton()}</div>
+          <div className="flex gap-3 mb-7">{friendButton()}</div>
 
-          {/* Fotowand — Bilder aus den Beiträgen dieser Person */}
-          {wallPhotos.length > 0 && (
-            <div className="mb-7">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Fotowand</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {wallPhotos.map((src, i) => (
-                  <div key={i} className="aspect-square rounded-xl overflow-hidden">
-                    <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Trips-Slider folgt hier (sobald veröffentlichte Trips existieren) */}
 
-          {/* Eingereichte Orte */}
+          {/* Veröffentlichte Orte */}
           {user.placeCount > 0 && (
             <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">
               Orte von {user.name.split(' ')[0]}

@@ -79,6 +79,7 @@ await db.run(sql`ALTER TABLE users ADD COLUMN cover_url TEXT`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN facebook TEXT`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN snapchat TEXT`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN allow_followers INTEGER NOT NULL DEFAULT 0`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN visited_public INTEGER NOT NULL DEFAULT 0`).catch(() => {});
 // Bild-Ausschnitt (Fokuspunkt 0–1) für Avatar + Titelbild
 await db.run(sql`ALTER TABLE users ADD COLUMN avatar_crop_x REAL NOT NULL DEFAULT 0.5`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN avatar_crop_y REAL NOT NULL DEFAULT 0.5`).catch(() => {});
@@ -202,7 +203,7 @@ router.patch('/me', requireAuth, async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
   const allowed = ['name', 'bio', 'instagram', 'tiktok', 'website', 'facebook', 'snapchat',
-                   'allowFollowers', 'profileVisible',
+                   'allowFollowers', 'visitedPublic', 'profileVisible',
                    'notificationsEnabled', 'playVideos', 'meetPeopleEnabled'] as const;
   // Name darf nachträglich nicht zu einem Sperrbegriff geändert werden
   if (typeof body.name === 'string' && containsBannedWord(body.name)) {

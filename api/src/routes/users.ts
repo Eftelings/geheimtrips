@@ -41,6 +41,7 @@ router.get('/:id', requireAuth, async (c) => {
     avatarCropX: u.avatarCropX, avatarCropY: u.avatarCropY, coverCropX: u.coverCropX, coverCropY: u.coverCropY,
     instagram: u.instagram, tiktok: u.tiktok, website: u.website, facebook: u.facebook, snapchat: u.snapchat,
     allowFollowers: u.allowFollowers,
+    visitedPublic: u.visitedPublic,
     isLocalHero: await isUserLocalHero(u.id),
     placeCount: placeRows.length,       // Beigetragene Orte
     visitedCount: visitedRows.length,   // Besuchte Orte

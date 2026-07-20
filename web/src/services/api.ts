@@ -411,7 +411,7 @@ export interface PublicUser {
   id: number; name: string; handle: string; avatarUrl: string | null; coverUrl: string | null; bio: string | null;
   avatarCropX: number; avatarCropY: number; coverCropX: number; coverCropY: number;
   instagram: string | null; tiktok: string | null; website: string | null; facebook: string | null; snapchat: string | null;
-  allowFollowers: boolean;
+  allowFollowers: boolean; visitedPublic: boolean;
   isLocalHero: boolean; placeCount: number; visitedCount: number;
   friendStatus: FriendStatus; pendingRequestId: number | null;
   places: Place[];
