@@ -408,9 +408,10 @@ export const taxonomyApi = {
 // ─── Öffentliche Profile (reale Nutzer:innen) ──────────────────────────────────
 export type FriendStatus = 'self' | 'none' | 'pending_out' | 'pending_in' | 'friends';
 export interface PublicUser {
-  id: number; name: string; handle: string; avatarUrl: string | null; bio: string | null;
-  instagram: string | null; tiktok: string | null; website: string | null;
-  isLocalHero: boolean; placeCount: number;
+  id: number; name: string; handle: string; avatarUrl: string | null; coverUrl: string | null; bio: string | null;
+  instagram: string | null; tiktok: string | null; website: string | null; facebook: string | null; snapchat: string | null;
+  allowFollowers: boolean;
+  isLocalHero: boolean; placeCount: number; visitedCount: number;
   friendStatus: FriendStatus; pendingRequestId: number | null;
   places: Place[];
 }

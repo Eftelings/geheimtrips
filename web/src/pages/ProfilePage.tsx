@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { AvatarUpload } from '../components/ui/AvatarUpload.js';
+import { SocialLinks } from '../components/ui/SocialLinks.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
-import { authApi, rankingsApi, friendsApi, placesApi, notificationsApi } from '../services/api.js';
+import { authApi, mediaApi, rankingsApi, friendsApi, placesApi, notificationsApi } from '../services/api.js';
 import { RankingCard } from './DiscoverPage.js';
 import type { MyRankStats } from '../services/api.js';
 import type { FriendRequest, Friend, Place } from '../types/index.js';
@@ -18,7 +19,9 @@ export function ProfilePage() {
   const { visitedIds, places, playVideos, setPlayVideos } = useAppStore();
   const [editOpen, setEditOpen]         = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '', age: user?.age != null ? String(user.age) : '' });
+  const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '', facebook: user?.facebook ?? '', snapchat: user?.snapchat ?? '', age: user?.age != null ? String(user.age) : '' });
+  const coverInputRef                   = useRef<HTMLInputElement>(null);
+  const [coverBusy, setCoverBusy]       = useState(false);
   const [pwData, setPwData]             = useState({ current: '', next: '' });
   const [pwError, setPwError]           = useState('');
   const [saving, setSaving]             = useState(false);
@@ -58,6 +61,19 @@ export function ProfilePage() {
     setEditOpen(false);
   }
 
+  // Titelbild hochladen (Server optimiert zu WebP) → Cover-URL speichern
+  async function onCoverFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setCoverBusy(true);
+    try {
+      const { url } = await mediaApi.upload(file);
+      await updateUser({ coverUrl: url });
+    } catch { /* still ok */ }
+    setCoverBusy(false);
+  }
+
   async function changePassword() {
     setPwError('');
     try {
@@ -70,33 +86,41 @@ export function ProfilePage() {
 
   return (
     <AppShell title="Profil">
-      <div className="px-6 pt-5 max-w-lg mx-auto">
-        {/* Header */}
-        <div className="flex items-start gap-4 mb-6">
-          <AvatarUpload name={user.name} src={user.avatarUrl} size={64}
-            onUploaded={url => updateUser({ avatarUrl: url })} />
-          <div className="flex-1 min-w-0">
-            <h1 className="font-display font-bold text-xl text-[var(--color-aubergine)]">{user.name}</h1>
-            <p className="text-sm text-[var(--color-lavender)]">@{user.handle}</p>
-            {rankInfo?.isLocalHero && (
-              <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }}
-                title="Top 25 % der Geheimtriper diesen Monat">
-                <i className="fa-solid fa-shield-halved" /> Local Hero
-              </span>
-            )}
-            {user.bio && <p className="text-sm text-[var(--color-body)] mt-1">{user.bio}</p>}
-            {/* Socials */}
-            <div className="flex gap-3 mt-2">
-              {user.instagram && <a href={`https://instagram.com/${user.instagram}`} target="_blank" rel="noreferrer" className="text-[var(--color-lavender)] hover:text-[var(--color-amber)]"><i className="fa-brands fa-instagram" /></a>}
-              {user.tiktok    && <a href={`https://tiktok.com/@${user.tiktok}`}      target="_blank" rel="noreferrer" className="text-[var(--color-lavender)] hover:text-[var(--color-amber)]"><i className="fa-brands fa-tiktok" /></a>}
-              {user.website   && <a href={user.website} target="_blank" rel="noreferrer" className="text-[var(--color-lavender)] hover:text-[var(--color-amber)]"><i className="fa-solid fa-link" /></a>}
-            </div>
-          </div>
-          <button onClick={() => setSettingsOpen(true)} className="text-[var(--color-lavender)] hover:text-[var(--color-aubergine)]">
-            <i className="fa-solid fa-gear text-lg" />
+      <div className="max-w-lg mx-auto">
+        {/* ── Titelbild (LinkedIn-Stil) ── */}
+        <div className="h-28 sm:h-36 relative overflow-hidden sm:rounded-b-3xl">
+          {user.coverUrl
+            ? <img src={user.coverUrl} alt="" className="w-full h-full object-cover" />
+            : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #4a3268, #34254c 55%, #251539)' }} />}
+          <button onClick={() => coverInputRef.current?.click()} disabled={coverBusy} title="Titelbild ändern"
+            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center hover:bg-black/55 transition-colors">
+            <i className={`fa-solid ${coverBusy ? 'fa-circle-notch fa-spin' : 'fa-camera'} text-sm`} />
           </button>
+          <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={onCoverFile} />
         </div>
+
+        <div className="px-6">
+          {/* Avatar überlappt das Titelbild + Einstellungen */}
+          <div className="flex items-end justify-between -mt-11 mb-3">
+            <div className="rounded-full ring-4 ring-white">
+              <AvatarUpload name={user.name} src={user.avatarUrl} size={80}
+                onUploaded={url => updateUser({ avatarUrl: url })} />
+            </div>
+            <button onClick={() => setSettingsOpen(true)} className="mb-1 text-[var(--color-lavender)] hover:text-[var(--color-aubergine)]">
+              <i className="fa-solid fa-gear text-lg" />
+            </button>
+          </div>
+          <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)]">{user.name}</h1>
+          <p className="text-sm text-[var(--color-lavender)]">@{user.handle}</p>
+          {rankInfo?.isLocalHero && (
+            <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }}
+              title="Top 25 % der Geheimtriper diesen Monat">
+              <i className="fa-solid fa-shield-halved" /> Local Hero
+            </span>
+          )}
+          {user.bio && <p className="text-sm text-[var(--color-body)] mt-2">{user.bio}</p>}
+          <SocialLinks user={user} className="mt-3 mb-6" />
 
         {/* Postfach — Benachrichtigungen liegen jetzt im Profil (lila hervorgehoben) */}
         <button onClick={() => { setNotif(0); navigate('/notifications'); }}
@@ -237,6 +261,7 @@ export function ProfilePage() {
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Edit Profile Sheet */}
@@ -247,6 +272,8 @@ export function ProfilePage() {
             { key: 'bio' as const, label: 'Bio', placeholder: 'Kurze Beschreibung…', multiline: true },
             { key: 'instagram' as const, label: 'Instagram', placeholder: 'handle' },
             { key: 'tiktok' as const,    label: 'TikTok',    placeholder: 'handle' },
+            { key: 'facebook' as const,  label: 'Facebook',  placeholder: 'seiten-name oder profil.id' },
+            { key: 'snapchat' as const,  label: 'Snapchat',  placeholder: 'username' },
             { key: 'website' as const,   label: 'Website',   placeholder: 'https://…' },
           ].map(f => (
             <div key={f.key}>
@@ -282,6 +309,7 @@ export function ProfilePage() {
           {/* Toggles */}
           {[
             { label: 'Profil sichtbar', key: 'profileVisible' as const, val: user.profileVisible },
+            { label: 'Follower zulassen', key: 'allowFollowers' as const, val: user.allowFollowers },
             { label: 'Benachrichtigungen', key: 'notificationsEnabled' as const, val: user.notificationsEnabled },
             { label: 'Meet People aktivieren', key: 'meetPeopleEnabled' as const, val: user.meetPeopleEnabled },
           ].map(s => (

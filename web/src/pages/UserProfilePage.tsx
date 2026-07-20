@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { PlaceCard } from '../components/ui/PlaceCard.js';
 import { Avatar } from '../components/ui/Avatar.js';
+import { SocialLinks } from '../components/ui/SocialLinks.js';
 import { usersApi, friendsApi, type PublicUser } from '../services/api.js';
 
 export function UserProfilePage() {
@@ -65,51 +66,88 @@ export function UserProfilePage() {
     }
   }
 
+  const wallPhotos = user.places.map(p => p.hero).filter(Boolean).slice(0, 12);
+
   return (
     <AppShell showBack title={user.name}>
-      <div className="px-6 pt-5 max-w-lg mx-auto pb-12">
-        {/* Header */}
-        <div className="flex items-start gap-4 mb-5">
-          <Avatar name={user.name} src={user.avatarUrl} size={64} />
-          <div className="flex-1 min-w-0">
-            <h1 className="font-display font-bold text-xl text-[var(--color-aubergine)] flex items-center gap-2 flex-wrap">
-              {user.name}
-              {user.isLocalHero && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }}>
-                  <i className="fa-solid fa-shield-halved" /> Local Hero
-                </span>
-              )}
-            </h1>
-            <p className="text-sm text-[var(--color-lavender)]">@{user.handle}</p>
-            {user.bio && <p className="text-sm text-[var(--color-body)] mt-1 leading-relaxed">{user.bio}</p>}
-            <div className="flex gap-3 mt-2">
-              {user.instagram && <a href={`https://instagram.com/${user.instagram}`} target="_blank" rel="noreferrer" className="text-[var(--color-lavender)] hover:text-[var(--color-amber)]"><i className="fa-brands fa-instagram" /></a>}
-              {user.tiktok && <a href={`https://tiktok.com/@${user.tiktok}`} target="_blank" rel="noreferrer" className="text-[var(--color-lavender)] hover:text-[var(--color-amber)]"><i className="fa-brands fa-tiktok" /></a>}
-              {user.website && <a href={user.website.startsWith('http') ? user.website : `https://${user.website}`} target="_blank" rel="noreferrer" className="text-[var(--color-lavender)] hover:text-[var(--color-amber)]"><i className="fa-solid fa-link text-sm" /></a>}
-            </div>
-          </div>
+      <div className="max-w-lg mx-auto pb-12">
+        {/* ── Titelbild (querformatig, LinkedIn-Stil) ── */}
+        <div className="h-32 sm:h-44 relative overflow-hidden sm:rounded-b-3xl">
+          {user.coverUrl
+            ? <img src={user.coverUrl} alt="" className="w-full h-full object-cover" />
+            : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #4a3268, #34254c 55%, #251539)' }} />}
         </div>
 
-        {/* Freund-Button */}
-        <div className="flex gap-3 mb-7">{friendButton()}</div>
+        <div className="px-6">
+          {/* Avatar überlappt das Titelbild */}
+          <div className="-mt-12 mb-3">
+            <div className="inline-block rounded-full ring-4 ring-white">
+              <Avatar name={user.name} src={user.avatarUrl} size={88} />
+            </div>
+          </div>
 
-        {/* Eingereichte Orte */}
-        {user.placeCount > 0 && (
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">
-            Orte von {user.name.split(' ')[0]}
-          </p>
-        )}
-        {user.places.length === 0 ? (
-          <div className="text-center py-8 text-[var(--color-lavender-lt)]">
-            <i className="fa-solid fa-map-pin text-3xl mb-2 opacity-30" />
-            <p className="text-sm">Noch keine Orte eingereicht.</p>
+          <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] flex items-center gap-2 flex-wrap">
+            {user.name}
+            {user.isLocalHero && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }}>
+                <i className="fa-solid fa-shield-halved" /> Local Hero
+              </span>
+            )}
+          </h1>
+          <p className="text-sm text-[var(--color-lavender)]">@{user.handle}</p>
+          {user.bio && <p className="text-sm text-[var(--color-body)] mt-2 leading-relaxed">{user.bio}</p>}
+
+          {/* Social-Links */}
+          <SocialLinks user={user} className="mt-3" />
+
+          {/* Metriken: Besuchte & Beigetragene Orte */}
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            {[
+              { label: 'Besuchte Orte', value: user.visitedCount },
+              { label: 'Beigetragene Orte', value: user.placeCount },
+            ].map(m => (
+              <div key={m.label} className="bg-white rounded-2xl p-3 text-center shadow-[var(--shadow-card)]">
+                <div className="font-display font-bold text-2xl text-[var(--color-aubergine)]">{m.value}</div>
+                <div className="text-[11px] text-[var(--color-lavender)] uppercase tracking-wider">{m.label}</div>
+              </div>
+            ))}
           </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {user.places.map(p => <PlaceCard key={p.id} place={p} />)}
-          </div>
-        )}
+
+          {/* Freund-Button */}
+          <div className="flex gap-3 mt-5 mb-7">{friendButton()}</div>
+
+          {/* Fotowand — Bilder aus den Beiträgen dieser Person */}
+          {wallPhotos.length > 0 && (
+            <div className="mb-7">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Fotowand</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {wallPhotos.map((src, i) => (
+                  <div key={i} className="aspect-square rounded-xl overflow-hidden">
+                    <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Eingereichte Orte */}
+          {user.placeCount > 0 && (
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">
+              Orte von {user.name.split(' ')[0]}
+            </p>
+          )}
+          {user.places.length === 0 ? (
+            <div className="text-center py-8 text-[var(--color-lavender-lt)]">
+              <i className="fa-solid fa-map-pin text-3xl mb-2 opacity-30" />
+              <p className="text-sm">Noch keine Orte eingereicht.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {user.places.map(p => <PlaceCard key={p.id} place={p} />)}
+            </div>
+          )}
+        </div>
       </div>
     </AppShell>
   );
