@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 
 interface Props {
@@ -32,9 +33,20 @@ export function BottomSheet({ open, onClose, title, children, className = '' }: 
     return () => { vv.removeEventListener('resize', apply); vv.removeEventListener('scroll', apply); };
   }, [open]);
 
+  // Escape schließt (Desktop) — zusätzliche, immer verfügbare Schließ-Möglichkeit.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
-  return (
+  // In einen Portal an <body> hängen: sonst positioniert ein transformierter/gefilterter Vorfahre
+  // (z.B. das animierte Orts-Sheet) dieses `fixed`-Overlay relativ zu sich — dann liegen Backdrop
+  // und X-Knopf außerhalb des Sichtbaren und das Sheet lässt sich „manchmal" nicht schließen.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center"
       style={{ bottom: kbInset, transition: 'bottom .2s ease' }}>
       {/* Backdrop */}
@@ -64,6 +76,7 @@ export function BottomSheet({ open, onClose, title, children, className = '' }: 
         )}
         <div className="px-5 pb-6 pt-2">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
