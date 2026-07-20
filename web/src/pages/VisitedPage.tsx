@@ -255,10 +255,11 @@ export function VisitedPage() {
                       const stars = ratingFor(place.id);
                       const d = place.visitedAt ? new Date(place.visitedAt) : null;
                       return (
-                        <div key={place.id} className="bg-white rounded-2xl shadow-[var(--shadow-card)] flex gap-3 p-3">
-                          <button onClick={() => navigate(`/ort/${place.id}`)} className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
+                        <div key={place.id} onClick={() => navigate(`/ort/${place.id}`)}
+                          className="bg-white rounded-2xl shadow-[var(--shadow-card)] flex gap-3 p-3 cursor-pointer active:scale-[0.99] transition-transform">
+                          <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
                             <PlaceImage src={place.hero} category={place.category} alt={place.name} className="w-full h-full object-cover" iconClass="text-lg" />
-                          </button>
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
@@ -273,10 +274,10 @@ export function VisitedPage() {
                               {stars > 0 ? (
                                 <div className="flex items-center gap-2">
                                   <Stars n={stars} />
-                                  <button onClick={() => setRatingTarget(place)} className="text-[10px] text-[var(--color-lavender-lt)] underline">Ändern</button>
+                                  <button onClick={e => { e.stopPropagation(); setRatingTarget(place); }} className="text-[10px] text-[var(--color-lavender-lt)] underline">Ändern</button>
                                 </div>
                               ) : (
-                                <button onClick={() => setRatingTarget(place)}
+                                <button onClick={e => { e.stopPropagation(); setRatingTarget(place); }}
                                   className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-amber)] bg-[var(--color-amber)]/10 px-3 py-1 rounded-full">
                                   <i className="fa-regular fa-star text-[10px]" /> Bewerten
                                 </button>

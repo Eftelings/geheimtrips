@@ -1,6 +1,7 @@
 import { useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/useAuthStore.js';
+import { useAppStore } from './store/useAppStore.js';
 import { useAuthGate } from './store/useAuthGate.js';
 import { AuthGateModal } from './components/ui/AuthGateModal.js';
 import { CookieConsent } from './components/ui/CookieConsent.js';
@@ -97,6 +98,12 @@ const PageFallback = (
 
 export function App() {
   const { hydrate } = useAuthStore();
+  const user        = useAuthStore(s => s.user);
+  const loadVisited = useAppStore(s => s.loadVisited);
+
+  // „Besucht"-Häkchen mit dem Backend abgleichen, sobald jemand eingeloggt ist (auch nach
+  // Kontowechsel) — sonst zeigt der lokal gespiegelte Stand veraltete Häkchen.
+  useEffect(() => { if (user) loadVisited(); }, [user, loadVisited]);
 
   useEffect(() => {
     hydrate();

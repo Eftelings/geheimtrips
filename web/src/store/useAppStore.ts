@@ -17,6 +17,7 @@ interface AppState {
 
   toggleSave:  (placeId: string) => Promise<void>;
   markVisited: (placeId: string) => Promise<void>;
+  loadVisited: () => Promise<void>;   // vom Backend abgleichen (Quelle der Wahrheit)
   swipeNope:   (placeId: string) => void;   // „Nicht meins" — entmerkt auch
   swipeSkip:   (placeId: string) => void;   // „Nächstes" — nur Signal, keine bleibende Wirkung
   togglePhotoLike: (placeId: string, url: string) => Promise<void>;
@@ -88,6 +89,17 @@ export const useAppStore = create<AppState>()(
         const next = new Set(get().visitedIds);
         next.add(placeId);
         set({ visitedIds: next });
+      },
+
+      // Besuchte Orte sind serverseitig die Wahrheit. Der lokal gemerkte (und in localStorage
+      // gespiegelte) Satz kann veralten — z.B. aus einer früheren Sitzung/anderem Konto — und
+      // dann fälschlich das „Besucht ✓"-Häkchen an Orten zeigen, die gar nicht in der Zeitleiste
+      // stehen. Beim Laden gegen das Backend abgleichen und den Satz ersetzen.
+      loadVisited: async () => {
+        try {
+          const visited = await placesApi.myVisited();
+          set({ visitedIds: new Set(visited.map(p => p.id)) });
+        } catch { /* offline / nicht eingeloggt → lokalen Stand behalten */ }
       },
 
       // „Nicht meins" entmerkt auch: sonst stünde ein Ort weiter in „Meine Orte", über den man
