@@ -227,15 +227,17 @@ export function AdminPlaces() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
+                      {/* Bearbeiten = vollständig durch den Wizard (wie beim Einreichen) */}
                       <button onClick={() => navigate(`/submit?edit=${p.id}`)}
-                        title="Vollständig bearbeiten (alle Schritte wie beim Einreichen)"
+                        title="Bearbeiten – vollständig durch alle Schritte wie beim Einreichen"
                         className="p-1.5 bg-[var(--color-amber)]/15 hover:bg-[var(--color-amber)]/30 rounded-lg text-[var(--color-amber)] transition-colors">
-                        <i className="fa-solid fa-list-check text-xs" />
-                      </button>
-                      <button onClick={() => setEditing(p)}
-                        title="Schnell bearbeiten (Kurzform)"
-                        className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors">
                         <i className="fa-solid fa-pen text-xs" />
+                      </button>
+                      {/* Kurzform (nur Stammdaten, z.B. Autor:in zuordnen) — bewusst unauffällig */}
+                      <button onClick={() => setEditing(p)}
+                        title="Schnell-Korrektur (Kurzform, z.B. Autor:in)"
+                        className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white/80 transition-colors">
+                        <i className="fa-solid fa-bolt text-[11px]" />
                       </button>
                       <button onClick={() => setConfirm(p.id)}
                         className="p-1.5 bg-white/5 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition-colors">
