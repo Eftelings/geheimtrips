@@ -692,9 +692,11 @@ export function GeoGamePage() {
         </div>
 
         {/* ── RIGHT COLUMN: Map ───────────────────────────────────────── */}
-        <div className="flex-1 min-h-0 relative"
+        {/* Bei der Auswertung mobil kleiner (feste Höhe), damit der Gewinn-Block ohne Scrollen passt;
+            Desktop bleibt flexibel. Beim Raten füllt die Karte wie gehabt die Fläche. */}
+        <div className={`min-h-0 relative ${revealed ? 'flex-none h-[34vh] lg:h-auto lg:flex-1' : 'flex-1'}`}
           style={{
-            minHeight: '30%',
+            minHeight: revealed ? undefined : '30%',
             borderRadius: '1.5rem',
             overflow: 'hidden',
             boxShadow: '0 10px 40px rgba(52,37,76,0.08)',
