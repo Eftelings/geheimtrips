@@ -12,9 +12,14 @@ export const users = sqliteTable('users', {
   bio: text('bio').default(''),
   avatarUrl: text('avatar_url'),
   age: integer('age'),
+  // Creator-Profil (Epic 1): Titelbild + Social-Links + Follower-Opt-in
+  coverUrl: text('cover_url'),
   instagram: text('instagram'),
   tiktok: text('tiktok'),
   website: text('website'),
+  facebook: text('facebook'),
+  snapchat: text('snapchat'),
+  allowFollowers: integer('allow_followers', { mode: 'boolean' }).notNull().default(false),
   // E-Mail-Bestätigung (Double-Opt-in) + Zustimmung zum E-Mail-Empfang
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   emailOptIn: integer('email_opt_in', { mode: 'boolean' }).notNull().default(false),

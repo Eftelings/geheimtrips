@@ -7,10 +7,14 @@ export interface User {
   handle: string;
   bio: string;
   avatarUrl: string | null;
+  coverUrl: string | null;
   age: number | null;
   instagram: string | null;
   tiktok: string | null;
   website: string | null;
+  facebook: string | null;
+  snapchat: string | null;
+  allowFollowers: boolean;
   emailVerified: boolean;
   emailOptIn: boolean;
   isAdmin: boolean;

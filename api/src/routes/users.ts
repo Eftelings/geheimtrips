@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { users, places, friendships } from '../db/schema.js';
+import { users, places, friendships, visitedPlaces } from '../db/schema.js';
 import { eq, and, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { hydrate } from './places.js';
@@ -32,14 +32,17 @@ router.get('/:id', requireAuth, async (c) => {
     }
   }
 
-  // Eingereichte Orte dieser Person
-  const placeRows = await db.select().from(places).where(eq(places.submittedBy, id)).all();
+  // Beigetragene (eingereichte) + besuchte Orte dieser Person — die zwei Profil-Metriken
+  const placeRows   = await db.select().from(places).where(eq(places.submittedBy, id)).all();
+  const visitedRows = await db.select({ id: visitedPlaces.id }).from(visitedPlaces).where(eq(visitedPlaces.userId, id)).all();
 
   return c.json({
-    id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl, bio: u.bio,
-    instagram: u.instagram, tiktok: u.tiktok, website: u.website,
+    id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl, coverUrl: u.coverUrl, bio: u.bio,
+    instagram: u.instagram, tiktok: u.tiktok, website: u.website, facebook: u.facebook, snapchat: u.snapchat,
+    allowFollowers: u.allowFollowers,
     isLocalHero: await isUserLocalHero(u.id),
-    placeCount: placeRows.length,
+    placeCount: placeRows.length,       // Beigetragene Orte
+    visitedCount: visitedRows.length,   // Besuchte Orte
     friendStatus, pendingRequestId,
     places: placeRows.map(hydrate),
   });

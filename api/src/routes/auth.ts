@@ -74,6 +74,11 @@ await db.run(sql`CREATE TABLE IF NOT EXISTS email_verification_tokens (
 
 // Alter-Spalte nachrüsten (für Phase C / Profil)
 await db.run(sql`ALTER TABLE users ADD COLUMN age INTEGER`).catch(() => {});
+// Creator-Profil (Epic 1): Titelbild, weitere Social-Links, Follower-Opt-in
+await db.run(sql`ALTER TABLE users ADD COLUMN cover_url TEXT`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN facebook TEXT`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN snapchat TEXT`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN allow_followers INTEGER NOT NULL DEFAULT 0`).catch(() => {});
 // Standort-Spalten nachrüsten (Phase C / „Neue Leute in der Nähe")
 await db.run(sql`ALTER TABLE users ADD COLUMN lat REAL`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN lng REAL`).catch(() => {});
@@ -191,7 +196,8 @@ router.get('/me', requireAuth, (c) => {
 router.patch('/me', requireAuth, async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
-  const allowed = ['name', 'bio', 'instagram', 'tiktok', 'website', 'profileVisible',
+  const allowed = ['name', 'bio', 'instagram', 'tiktok', 'website', 'facebook', 'snapchat',
+                   'allowFollowers', 'profileVisible',
                    'notificationsEnabled', 'playVideos', 'meetPeopleEnabled'] as const;
   // Name darf nachträglich nicht zu einem Sperrbegriff geändert werden
   if (typeof body.name === 'string' && containsBannedWord(body.name)) {
@@ -201,10 +207,14 @@ router.patch('/me', requireAuth, async (c) => {
   for (const key of allowed) {
     if (key in body) update[key] = body[key];
   }
-  // Profilbild: nur eigene Uploads bzw. leeren (kein beliebiges Hotlink-Ziel setzen)
+  // Profil- + Titelbild: nur eigene Uploads bzw. leeren (kein beliebiges Hotlink-Ziel setzen)
   if ('avatarUrl' in body) {
     const u = body.avatarUrl;
     update.avatarUrl = (typeof u === 'string' && /^\/(?:api\/)?uploads\//.test(u)) ? u : null;
+  }
+  if ('coverUrl' in body) {
+    const u = body.coverUrl;
+    update.coverUrl = (typeof u === 'string' && /^\/(?:api\/)?uploads\//.test(u)) ? u : null;
   }
   // Alter separat (Zahl/leer → null, plausibel begrenzt)
   if ('age' in body) {
