@@ -10,16 +10,17 @@ interface StatCard {
   icon: string;
   color: string;
   urgent?: boolean;
+  to?: string;   // Kachel führt per Klick zur jeweiligen Seite
 }
 
 const STAT_CARDS: StatCard[] = [
-  { key: 'users',              label: 'Nutzer:innen',       icon: 'fa-users',               color: '#8A6FB3' },
-  { key: 'places',             label: 'Orte',               icon: 'fa-map-pin',             color: '#F99039' },
+  { key: 'users',              label: 'Nutzer:innen',       icon: 'fa-users',               color: '#8A6FB3', to: '/admin/users' },
+  { key: 'places',             label: 'Orte',               icon: 'fa-map-pin',             color: '#F99039', to: '/admin/places' },
   { key: 'visits',             label: 'Besuche',            icon: 'fa-location-crosshairs', color: '#5B8F6E' },
   { key: 'trips',              label: 'Trips',              icon: 'fa-flag-checkered',      color: '#C9A227' },
   { key: 'media',              label: 'Medien',             icon: 'fa-images',              color: '#71587A' },
-  { key: 'openReports',        label: 'Offene Meldungen',  icon: 'fa-flag',                color: '#C96442', urgent: true },
-  { key: 'pendingSubmissions', label: 'Neue Einreichungen', icon: 'fa-inbox',               color: '#F99039', urgent: true },
+  { key: 'openReports',        label: 'Offene Meldungen',  icon: 'fa-flag',                color: '#C96442', urgent: true, to: '/admin/takedown' },
+  { key: 'pendingSubmissions', label: 'Neue Einreichungen', icon: 'fa-inbox',               color: '#F99039', urgent: true, to: '/admin/submissions' },
 ];
 
 // ─── SMTP-Diagnose (Passwort-Reset-Mails) ──────────────────────────────────────
@@ -151,8 +152,9 @@ export function AdminDashboard() {
             {STAT_CARDS.map(card => {
               const value = stats.stats[card.key];
               return (
-                <div key={card.key}
-                  className={`bg-white/5 border rounded-2xl p-4 hover:bg-white/8 transition-colors ${card.urgent && value > 0 ? 'border-[var(--color-amber)]/40' : 'border-white/8'}`}>
+                <button key={card.key} type="button"
+                  onClick={card.to ? () => navigate(card.to!) : undefined}
+                  className={`text-left w-full bg-white/5 border rounded-2xl p-4 transition-colors ${card.to ? 'hover:bg-white/8 cursor-pointer' : 'cursor-default'} ${card.urgent && value > 0 ? 'border-[var(--color-amber)]/40' : 'border-white/8'}`}>
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center"
                       style={{ backgroundColor: card.color + '22' }}>
@@ -166,7 +168,7 @@ export function AdminDashboard() {
                   </div>
                   <div className="font-bold text-2xl text-white mb-0.5">{value}</div>
                   <div className="text-xs text-white/40">{card.label}</div>
-                </div>
+                </button>
               );
             })}
           </div>

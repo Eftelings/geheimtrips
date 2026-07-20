@@ -233,12 +233,6 @@ export function AdminPlaces() {
                         className="p-1.5 bg-[var(--color-amber)]/15 hover:bg-[var(--color-amber)]/30 rounded-lg text-[var(--color-amber)] transition-colors">
                         <i className="fa-solid fa-pen text-xs" />
                       </button>
-                      {/* Kurzform (nur Stammdaten, z.B. Autor:in zuordnen) — bewusst unauffällig */}
-                      <button onClick={() => setEditing(p)}
-                        title="Schnell-Korrektur (Kurzform, z.B. Autor:in)"
-                        className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white/80 transition-colors">
-                        <i className="fa-solid fa-bolt text-[11px]" />
-                      </button>
                       <button onClick={() => setConfirm(p.id)}
                         className="p-1.5 bg-white/5 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition-colors">
                         <i className="fa-solid fa-trash text-xs" />
