@@ -11,9 +11,14 @@ export const users = sqliteTable('users', {
   handle: text('handle').notNull().unique(),
   bio: text('bio').default(''),
   avatarUrl: text('avatar_url'),
+  // Fokuspunkt (0–1) fürs runde Profilbild — „Ausschnitt anpassen"
+  avatarCropX: real('avatar_crop_x').notNull().default(0.5),
+  avatarCropY: real('avatar_crop_y').notNull().default(0.5),
   age: integer('age'),
-  // Creator-Profil (Epic 1): Titelbild + Social-Links + Follower-Opt-in
+  // Creator-Profil (Epic 1): Titelbild (+ Fokuspunkt) + Social-Links + Follower-Opt-in
   coverUrl: text('cover_url'),
+  coverCropX: real('cover_crop_x').notNull().default(0.5),
+  coverCropY: real('cover_crop_y').notNull().default(0.5),
   instagram: text('instagram'),
   tiktok: text('tiktok'),
   website: text('website'),

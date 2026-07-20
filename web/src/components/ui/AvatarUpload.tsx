@@ -7,10 +7,12 @@ import { mediaApi } from '../../services/api.js';
  * Dateiauswahl, lädt hoch (Server optimiert zu WebP) und meldet die URL zurück.
  * Upload braucht Login (mediaApi) → daher beim Registrieren erst im Onboarding.
  */
-export function AvatarUpload({ name, src, size = 72, onUploaded, onError }: {
+export function AvatarUpload({ name, src, size = 72, cropX, cropY, onUploaded, onError }: {
   name: string;
   src?: string | null;
   size?: number;
+  cropX?: number;
+  cropY?: number;
   onUploaded: (url: string) => void | Promise<void>;
   onError?: (msg: string) => void;
 }) {
@@ -40,7 +42,7 @@ export function AvatarUpload({ name, src, size = 72, onUploaded, onError }: {
     <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}
       className="relative flex-shrink-0 rounded-full group active:scale-95 transition-transform"
       style={{ width: size, height: size }} aria-label="Profilbild ändern">
-      <Avatar name={name} src={src} size={size} />
+      <Avatar name={name} src={src} size={size} cropX={cropX} cropY={cropY} />
       <span className="absolute inset-0 rounded-full flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
         {busy && <i className="fa-solid fa-circle-notch fa-spin text-white text-lg" />}
       </span>

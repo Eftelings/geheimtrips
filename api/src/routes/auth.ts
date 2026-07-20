@@ -79,6 +79,11 @@ await db.run(sql`ALTER TABLE users ADD COLUMN cover_url TEXT`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN facebook TEXT`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN snapchat TEXT`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN allow_followers INTEGER NOT NULL DEFAULT 0`).catch(() => {});
+// Bild-Ausschnitt (Fokuspunkt 0–1) für Avatar + Titelbild
+await db.run(sql`ALTER TABLE users ADD COLUMN avatar_crop_x REAL NOT NULL DEFAULT 0.5`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN avatar_crop_y REAL NOT NULL DEFAULT 0.5`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN cover_crop_x REAL NOT NULL DEFAULT 0.5`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN cover_crop_y REAL NOT NULL DEFAULT 0.5`).catch(() => {});
 // Standort-Spalten nachrüsten (Phase C / „Neue Leute in der Nähe")
 await db.run(sql`ALTER TABLE users ADD COLUMN lat REAL`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN lng REAL`).catch(() => {});
@@ -215,6 +220,13 @@ router.patch('/me', requireAuth, async (c) => {
   if ('coverUrl' in body) {
     const u = body.coverUrl;
     update.coverUrl = (typeof u === 'string' && /^\/(?:api\/)?uploads\//.test(u)) ? u : null;
+  }
+  // Bild-Ausschnitt (Fokuspunkt) — auf 0–1 begrenzt
+  for (const key of ['avatarCropX', 'avatarCropY', 'coverCropX', 'coverCropY'] as const) {
+    if (key in body) {
+      const n = Number(body[key]);
+      if (Number.isFinite(n)) update[key] = Math.min(1, Math.max(0, n));
+    }
   }
   // Alter separat (Zahl/leer → null, plausibel begrenzt)
   if ('age' in body) {

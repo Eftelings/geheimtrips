@@ -74,7 +74,7 @@ export function UserProfilePage() {
         {/* ── Titelbild (querformatig, LinkedIn-Stil) ── */}
         <div className="h-32 sm:h-44 relative overflow-hidden sm:rounded-b-3xl">
           {user.coverUrl
-            ? <img src={user.coverUrl} alt="" className="w-full h-full object-cover" />
+            ? <img src={user.coverUrl} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${user.coverCropX * 100}% ${user.coverCropY * 100}%` }} />
             : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #4a3268, #34254c 55%, #251539)' }} />}
         </div>
 
@@ -82,7 +82,7 @@ export function UserProfilePage() {
           {/* Avatar überlappt das Titelbild */}
           <div className="-mt-12 mb-3">
             <div className="inline-block rounded-full ring-4 ring-white">
-              <Avatar name={user.name} src={user.avatarUrl} size={88} />
+              <Avatar name={user.name} src={user.avatarUrl} size={88} cropX={user.avatarCropX} cropY={user.avatarCropY} />
             </div>
           </div>
 

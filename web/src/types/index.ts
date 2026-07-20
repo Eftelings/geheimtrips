@@ -7,7 +7,11 @@ export interface User {
   handle: string;
   bio: string;
   avatarUrl: string | null;
+  avatarCropX: number;
+  avatarCropY: number;
   coverUrl: string | null;
+  coverCropX: number;
+  coverCropY: number;
   age: number | null;
   instagram: string | null;
   tiktok: string | null;

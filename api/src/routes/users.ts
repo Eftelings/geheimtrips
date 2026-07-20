@@ -38,6 +38,7 @@ router.get('/:id', requireAuth, async (c) => {
 
   return c.json({
     id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl, coverUrl: u.coverUrl, bio: u.bio,
+    avatarCropX: u.avatarCropX, avatarCropY: u.avatarCropY, coverCropX: u.coverCropX, coverCropY: u.coverCropY,
     instagram: u.instagram, tiktok: u.tiktok, website: u.website, facebook: u.facebook, snapchat: u.snapchat,
     allowFollowers: u.allowFollowers,
     isLocalHero: await isUserLocalHero(u.id),

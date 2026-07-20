@@ -5,6 +5,7 @@ import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { AvatarUpload } from '../components/ui/AvatarUpload.js';
+import { ImageFocusSheet } from '../components/ui/ImageFocusSheet.js';
 import { SocialLinks } from '../components/ui/SocialLinks.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
@@ -22,6 +23,8 @@ export function ProfilePage() {
   const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '', facebook: user?.facebook ?? '', snapchat: user?.snapchat ?? '', age: user?.age != null ? String(user.age) : '' });
   const coverInputRef                   = useRef<HTMLInputElement>(null);
   const [coverBusy, setCoverBusy]       = useState(false);
+  // Nach dem Hochladen: Ausschnitt (Fokuspunkt) anpassen — rund fürs Avatar, quer fürs Titelbild
+  const [cropTarget, setCropTarget]     = useState<{ kind: 'cover' | 'avatar'; url: string } | null>(null);
   const [pwData, setPwData]             = useState({ current: '', next: '' });
   const [pwError, setPwError]           = useState('');
   const [saving, setSaving]             = useState(false);
@@ -61,7 +64,7 @@ export function ProfilePage() {
     setEditOpen(false);
   }
 
-  // Titelbild hochladen (Server optimiert zu WebP) → Cover-URL speichern
+  // Titelbild hochladen (Server optimiert zu WebP) → danach Ausschnitt anpassen
   async function onCoverFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -69,9 +72,17 @@ export function ProfilePage() {
     setCoverBusy(true);
     try {
       const { url } = await mediaApi.upload(file);
-      await updateUser({ coverUrl: url });
+      setCropTarget({ kind: 'cover', url });
     } catch { /* still ok */ }
     setCoverBusy(false);
+  }
+
+  // Ausschnitt (Fokuspunkt) übernehmen und Bild + Fokus speichern
+  async function saveCrop(cropX: number, cropY: number) {
+    const t = cropTarget; if (!t) return;
+    if (t.kind === 'cover') await updateUser({ coverUrl: t.url, coverCropX: cropX, coverCropY: cropY }).catch(() => {});
+    else await updateUser({ avatarUrl: t.url, avatarCropX: cropX, avatarCropY: cropY }).catch(() => {});
+    setCropTarget(null);
   }
 
   async function changePassword() {
@@ -90,7 +101,7 @@ export function ProfilePage() {
         {/* ── Titelbild (LinkedIn-Stil) ── */}
         <div className="h-28 sm:h-36 relative overflow-hidden sm:rounded-b-3xl">
           {user.coverUrl
-            ? <img src={user.coverUrl} alt="" className="w-full h-full object-cover" />
+            ? <img src={user.coverUrl} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${user.coverCropX * 100}% ${user.coverCropY * 100}%` }} />
             : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #4a3268, #34254c 55%, #251539)' }} />}
           <button onClick={() => coverInputRef.current?.click()} disabled={coverBusy} title="Titelbild ändern"
             className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center hover:bg-black/55 transition-colors">
@@ -104,7 +115,8 @@ export function ProfilePage() {
           <div className="flex items-end justify-between -mt-11 mb-3">
             <div className="rounded-full ring-4 ring-white">
               <AvatarUpload name={user.name} src={user.avatarUrl} size={80}
-                onUploaded={url => updateUser({ avatarUrl: url })} />
+                cropX={user.avatarCropX} cropY={user.avatarCropY}
+                onUploaded={url => setCropTarget({ kind: 'avatar', url })} />
             </div>
             <button onClick={() => setSettingsOpen(true)} className="mb-1 text-[var(--color-lavender)] hover:text-[var(--color-aubergine)]">
               <i className="fa-solid fa-gear text-lg" />
@@ -358,6 +370,17 @@ export function ProfilePage() {
           </button>
         </div>
       </BottomSheet>
+
+      {cropTarget && (
+        <ImageFocusSheet
+          src={cropTarget.url}
+          shape={cropTarget.kind === 'avatar' ? 'round' : 'cover'}
+          initX={cropTarget.kind === 'avatar' ? user.avatarCropX : user.coverCropX}
+          initY={cropTarget.kind === 'avatar' ? user.avatarCropY : user.coverCropY}
+          onSave={saveCrop}
+          onClose={() => setCropTarget(null)}
+        />
+      )}
 
       <LegalFooter />
     </AppShell>
