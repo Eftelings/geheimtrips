@@ -946,6 +946,24 @@ export function TripDetailPage() {
           <p className="text-xs text-[var(--color-lavender)]">≈ {(totalSum / persons).toFixed(0)} € pro Person · Eintritte basieren auf den hinterlegten Erwachsenen-Preisen</p>
         </div>
 
+        {/* Im „Dein Blog"-Profil veröffentlichen */}
+        {editable && !trip.isCurated && (
+          <div className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-[var(--color-bg-soft)] bg-white p-3.5">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[var(--color-aubergine)]">Im Blog veröffentlichen</p>
+              <p className="text-xs text-[var(--color-lavender)]">Zeigt diesen Trip auf deinem öffentlichen Profil.</p>
+            </div>
+            <button aria-label="Im Blog veröffentlichen" onClick={async () => {
+                const next = !trip.published;
+                setTrip({ ...trip, published: next });
+                await tripsApi.update(trip.id, { published: next }).catch(() => setTrip({ ...trip, published: !next }));
+              }}
+              className={`w-12 h-6 rounded-full relative transition-colors flex-shrink-0 ${trip.published ? 'bg-[var(--color-amber)]' : 'bg-[var(--color-bg-soft)]'}`}>
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${trip.published ? 'right-0.5' : 'left-0.5'}`} />
+            </button>
+          </div>
+        )}
+
         {/* Trip löschen */}
         {editable && !trip.isCurated && (
           <button onClick={async () => { await deleteTrip(trip.id); navigate('/saved'); }}

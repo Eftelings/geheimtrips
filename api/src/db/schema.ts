@@ -169,6 +169,8 @@ export const trips = sqliteTable('trips', {
   endLat: real('end_lat'),
   endLng: real('end_lng'),
   isCurated: integer('is_curated', { mode: 'boolean' }).default(false),
+  // Im „Dein Blog"-Profil öffentlich zeigen?
+  published: integer('published', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
 

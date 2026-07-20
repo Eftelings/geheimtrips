@@ -219,6 +219,7 @@ export interface Trip {
   endLat?: number | null;
   endLng?: number | null;
   isCurated: boolean;
+  published?: boolean;         // im „Dein Blog"-Profil öffentlich sichtbar
   isOwner?: boolean;           // von GET /trips/:id gesetzt
   myStatus?: 'owner' | 'invited' | 'accepted' | 'declined' | null;
   participants?: TripParticipant[];

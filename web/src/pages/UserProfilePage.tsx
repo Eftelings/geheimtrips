@@ -111,7 +111,28 @@ export function UserProfilePage() {
           {/* Freund-Button */}
           <div className="flex gap-3 mb-7">{friendButton()}</div>
 
-          {/* Trips-Slider folgt hier (sobald veröffentlichte Trips existieren) */}
+          {/* Trips — horizontaler Slider mit hochformatigen Kacheln (nur veröffentlichte) */}
+          {user.trips.length > 0 && (
+            <div className="mb-7">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Meine Trips</p>
+              <div className="flex gap-3 overflow-x-auto -mx-6 px-6 pb-1" style={{ scrollbarWidth: 'none' }}>
+                {user.trips.map(t => (
+                  <button key={t.id} onClick={() => navigate(`/trips/${t.id}`)}
+                    className="relative flex-shrink-0 w-36 aspect-[3/4] rounded-2xl overflow-hidden shadow-[var(--shadow-card)] active:scale-95 transition-transform">
+                    {t.hero
+                      ? <img src={t.hero} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                      : <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #4a3268, #34254c)' }} />}
+                    <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 55%)' }} />
+                    <div className="absolute bottom-0 left-0 right-0 p-3 text-left">
+                      <p className="text-white font-display font-bold text-sm leading-tight line-clamp-2">{t.title}</p>
+                      {t.subtitle && <p className="text-white/75 text-[11px] mt-0.5 line-clamp-1">{t.subtitle}</p>}
+                      <p className="text-white/70 text-[10px] mt-1"><i className="fa-solid fa-map-pin mr-1" />{t.places.length} Orte</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Veröffentlichte Orte */}
           {user.placeCount > 0 && (

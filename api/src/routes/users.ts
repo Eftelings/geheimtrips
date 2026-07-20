@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { users, places, friendships, visitedPlaces } from '../db/schema.js';
+import { users, places, friendships, visitedPlaces, trips } from '../db/schema.js';
 import { eq, and, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { hydrate } from './places.js';
+import { expandTrips } from './trips.js';
 import { isUserLocalHero } from '../lib/ranking.js';
 
 const router = new Hono();
@@ -35,6 +36,9 @@ router.get('/:id', requireAuth, async (c) => {
   // Beigetragene (eingereichte) + besuchte Orte dieser Person — die zwei Profil-Metriken
   const placeRows   = await db.select().from(places).where(eq(places.submittedBy, id)).all();
   const visitedRows = await db.select({ id: visitedPlaces.id }).from(visitedPlaces).where(eq(visitedPlaces.userId, id)).all();
+  // Veröffentlichte Trips fürs Blog-Carousel
+  const tripRows       = await db.select().from(trips).where(and(eq(trips.userId, id), eq(trips.published, true))).all();
+  const publishedTrips = await expandTrips(tripRows);
 
   return c.json({
     id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl, coverUrl: u.coverUrl, bio: u.bio,
@@ -47,6 +51,7 @@ router.get('/:id', requireAuth, async (c) => {
     visitedCount: visitedRows.length,   // Besuchte Orte
     friendStatus, pendingRequestId,
     places: placeRows.map(hydrate),
+    trips: publishedTrips,
   });
 });
 

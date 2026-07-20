@@ -11,6 +11,7 @@ import { notify } from '../lib/notify.js';
 
 // ── Runtime schema migrations (idempotent) ────────────────────────────────────
 db.run(sql`ALTER TABLE trips ADD COLUMN intro TEXT DEFAULT ''`).catch(() => {});
+db.run(sql`ALTER TABLE trips ADD COLUMN published INTEGER NOT NULL DEFAULT 0`).catch(() => {});
 db.run(sql`ALTER TABLE trips ADD COLUMN costs_json TEXT DEFAULT '{}'`).catch(() => {});
 db.run(sql`ALTER TABLE trip_overnights ADD COLUMN hotel_lat REAL`).catch(() => {});
 db.run(sql`ALTER TABLE trip_overnights ADD COLUMN hotel_lng REAL`).catch(() => {});
@@ -126,6 +127,7 @@ router.patch('/:id', requireAuth,
     intro: z.string().optional(),
     hero: z.string().optional(),
     transport: z.enum(['walk', 'bike', 'transit', 'train', 'auto']).optional(),
+    published: z.boolean().optional(),
     startDate: z.string().nullable().optional(),
     endDate: z.string().nullable().optional(),
     persons: z.number().int().min(1).optional(),
@@ -347,7 +349,7 @@ async function getParticipants(tripId: number) {
     .where(eq(tripParticipants.tripId, tripId)).all();
 }
 
-async function expandTrips(tripRows: (typeof trips.$inferSelect)[]) {
+export async function expandTrips(tripRows: (typeof trips.$inferSelect)[]) {
   if (!tripRows.length) return [];
   const ids = tripRows.map(t => t.id);
   const allTripPlaces = await db.select().from(tripPlaces).where(inArray(tripPlaces.tripId, ids)).all();

@@ -415,6 +415,7 @@ export interface PublicUser {
   isLocalHero: boolean; placeCount: number; visitedCount: number;
   friendStatus: FriendStatus; pendingRequestId: number | null;
   places: Place[];
+  trips: Trip[];
 }
 export const usersApi = {
   get: (id: number) => get<PublicUser>(`/users/${id}`),
