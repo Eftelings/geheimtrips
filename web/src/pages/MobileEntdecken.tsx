@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -423,6 +423,11 @@ export function MobileEntdecken() {
     setPickToast(true); window.clearTimeout(pickToastTimer.current); pickToastTimer.current = window.setTimeout(() => setPickToast(false), 1900);
   }
 
+  // Spiegel für die nativen Listener: die werden einmal gesetzt und sähen sonst alte Werte.
+  const snapRef = useRef(snap); snapRef.current = snap;
+  const sheetDragYRef = useRef(sheetDragY); sheetDragYRef.current = sheetDragY;
+  const pullCleanup = useRef<(() => void) | null>(null);
+
   function onSheetTouchStart(e: React.TouchEvent) {
     setPanel(null);   // wer das Overlay anfasst, ist mit dem Filter fertig
     sheetDrag.current = { startY: e.touches[0].clientY, startOffset: sheetDragY, moved: 0 };
@@ -438,31 +443,64 @@ export function MobileEntdecken() {
    * Zug am INHALT des Overlays: steht der Inhalt schon ganz oben und man zieht nach unten,
    * gehört die Geste dem Overlay — nicht dem Scroll-Container. Man muss also nicht erst den
    * Griff am oberen Rand treffen, sondern kann irgendwo im Inhalt (z.B. am Titelbild) ziehen.
+   *
+   * WICHTIG: Der touchmove-Listener wird von Hand und mit passive:false gesetzt. React hängt
+   * onTouchMove passiv ein — dort verpufft preventDefault, der Browser würde den Inhalt also
+   * ZUSÄTZLICH federn lassen. Genau das schob den Inhalt schneller nach unten als das Overlay
+   * und riss oben einen weißen Rand auf.
    */
-  const contentPull = useRef<{ startY: number; el: HTMLElement | null; active: boolean }>({ startY: 0, el: null, active: false });
-  function onContentTouchStart(e: React.TouchEvent<HTMLElement>) {
-    contentPull.current = { startY: e.touches[0].clientY, el: e.currentTarget, active: false };
-  }
-  function onContentTouchMove(e: React.TouchEvent<HTMLElement>) {
-    const c = contentPull.current;
-    if (!c.el) return;
-    if (!c.active) {
-      // Erst übernehmen, wenn eindeutig nach unten gezogen wird UND nichts mehr zu scrollen ist
-      if (c.el.scrollTop > 0 || e.touches[0].clientY - c.startY < 5) return;
-      c.active = true;
-      onSheetTouchStart(e);
-    }
-    onSheetTouchMove(e);
-  }
-  function onContentTouchEnd() {
-    const c = contentPull.current;
-    contentPull.current = { startY: 0, el: null, active: false };
-    if (!c.active) return;
-    // Bewusst nicht onSheetTouchEnd: dessen „Tippen = eine Stufe" gilt nur für den Griff.
-    sheetDrag.current = null;
-    setSheetDragging(false);
-    setSheetSnap(settleSnap(sheetDragY));
-  }
+  const pullState = useRef({ startY: 0, active: false, atTop: false });
+  const overlayPull = useCallback((el: HTMLDivElement | null) => {
+    const prev = pullCleanup.current;
+    if (prev) { prev(); pullCleanup.current = null; }
+    if (!el) return;
+
+    // Steht der Inhalt beim Aufsetzen schon oben, ist jeder Zug nach unten ein Overlay-Zug.
+    const start = (e: TouchEvent) => { pullState.current = { startY: e.touches[0].clientY, active: false, atTop: el.scrollTop <= 0 }; };
+    const move = (e: TouchEvent) => {
+      const p = pullState.current;
+      const y = e.touches[0].clientY;
+      if (!p.active) {
+        if (!p.atTop || y <= p.startY) return;
+        // Ab dem ersten Pixel abwehren: entscheidet der Browser erst, federt der Inhalt mit.
+        e.preventDefault();
+        if (y - p.startY < 3) return;
+        p.active = true;
+        setPanel(null);
+        sheetDrag.current = { startY: y, startOffset: sheetDragYRef.current, moved: 0 };
+        setSheetDragging(true);
+      }
+      e.preventDefault();   // der Inhalt selbst rührt sich nicht — nur das Overlay
+      const d = sheetDrag.current; if (!d) return;
+      const next = Math.min(Math.max(d.startOffset + (y - d.startY), 0), snapRef.current.offs[0]);
+      sheetDragYRef.current = next;
+      setSheetDragY(next);
+    };
+    const end = () => {
+      const p = pullState.current;
+      pullState.current = { startY: 0, active: false, atTop: false };
+      if (!p.active) return;
+      sheetDrag.current = null;
+      setSheetDragging(false);
+      // Bewusst ohne „Tippen = eine Stufe" — das gilt nur für den Griff.
+      const offs = snapRef.current.offs;
+      let best: SheetSnap = 0, bd = Infinity;
+      offs.forEach((v, i) => { const dist = Math.abs(v - sheetDragYRef.current); if (dist < bd) { bd = dist; best = i as SheetSnap; } });
+      setSheetSnap(best);
+    };
+
+    el.addEventListener('touchstart', start, { passive: true });
+    el.addEventListener('touchmove', move, { passive: false });
+    el.addEventListener('touchend', end);
+    el.addEventListener('touchcancel', end);
+    pullCleanup.current = () => {
+      el.removeEventListener('touchstart', start);
+      el.removeEventListener('touchmove', move);
+      el.removeEventListener('touchend', end);
+      el.removeEventListener('touchcancel', end);
+    };
+  }, []);
+
   /** Nächstgelegene Rast zu einem Zug-Offset — eine Regel für Griff UND Bild. */
   function settleSnap(y: number): SheetSnap {
     let best: SheetSnap = 0, bd = Infinity;
@@ -929,7 +967,7 @@ export function MobileEntdecken() {
                 sonst stünde eine weiße Leiste über dem Header. */}
             <div className="h-full overflow-y-auto overscroll-contain no-scrollbar"
               style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}
-              onTouchStart={onContentTouchStart} onTouchMove={onContentTouchMove} onTouchEnd={onContentTouchEnd}>
+              ref={overlayPull}>
               <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
                 {blogMode && blogUserId !== null
                   ? <BlogEmbed key={blogUserId} userId={blogUserId} embedded
