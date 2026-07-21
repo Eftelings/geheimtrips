@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { users, places, friendships, visitedPlaces, savedPlaces, trips, follows } from '../db/schema.js';
-import { eq, and, or, sql } from 'drizzle-orm';
+import { users, places, friendships, visitedPlaces, savedPlaces, favoritePlaces, placeMedia, trips, follows } from '../db/schema.js';
+import { eq, and, or, sql, inArray, desc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { hydrate } from './places.js';
 import { expandTrips } from './trips.js';
@@ -28,6 +28,16 @@ router.get('/me/following', requireAuth, async (c) => {
   }).from(follows)
     .innerJoin(users, eq(users.id, follows.followeeId))
     .where(eq(follows.followerId, me.id)).all();
+  return c.json(rows);
+});
+
+// GET /users/me/photos — eigene Foto-Uploads fürs private Profil (vor '/:id' registrieren)
+router.get('/me/photos', requireAuth, async (c) => {
+  const me = c.get('user');
+  const rows = await db.select({ id: placeMedia.id, url: placeMedia.url, placeId: placeMedia.placeId })
+    .from(placeMedia)
+    .where(and(eq(placeMedia.userId, me.id), eq(placeMedia.type, 'photo')))
+    .orderBy(desc(placeMedia.id)).all();
   return c.json(rows);
 });
 
@@ -69,14 +79,41 @@ router.get('/:id', requireAuth, async (c) => {
   const iFollow = id === me.id ? false : !!(await db.select({ id: follows.id }).from(follows)
     .where(and(eq(follows.followerId, me.id), eq(follows.followeeId, id))).get());
 
+  /**
+   * Sichtbarkeit: Wer Follower zulässt, zeigt die freigegebenen Abschnitte allen. Wer sie
+   * nicht zulässt, zeigt sie nur Freund:innen. Sich selbst sieht man immer.
+   */
+  const viewerOk = id === me.id || u.allowFollowers || friendStatus === 'friends';
+  const show = (flag: boolean) => viewerOk && flag;
+
+  // Hochgeladene Fotos (Galerie im Blog) — neueste zuerst, mit Ort für den Absprung
+  const photoRows = show(u.photosPublic)
+    ? await db.select({ id: placeMedia.id, url: placeMedia.url, placeId: placeMedia.placeId, createdAt: placeMedia.createdAt })
+        .from(placeMedia)
+        .where(and(eq(placeMedia.userId, id), eq(placeMedia.type, 'photo')))
+        .orderBy(desc(placeMedia.id)).all()
+    : [];
+
+  // Lieblingsorte in der selbst gewählten Reihenfolge
+  let favorites: ReturnType<typeof hydrate>[] = [];
+  if (show(u.favoritesPublic)) {
+    const favRows = await db.select().from(favoritePlaces).where(eq(favoritePlaces.userId, id)).all();
+    const ordered = [...favRows].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    if (ordered.length) {
+      const favPlaces = await db.select().from(places).where(inArray(places.id, ordered.map(f => f.placeId))).all();
+      const byId = new Map(favPlaces.map(p => [p.id, p]));
+      favorites = ordered.map(f => byId.get(f.placeId)).filter((p): p is typeof favPlaces[number] => !!p).map(hydrate);
+    }
+  }
+
   return c.json({
     id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl, coverUrl: u.coverUrl, bio: u.bio,
     avatarCropX: u.avatarCropX, avatarCropY: u.avatarCropY, avatarZoom: u.avatarZoom,
     coverCropX: u.coverCropX, coverCropY: u.coverCropY, coverZoom: u.coverZoom,
     instagram: u.instagram, tiktok: u.tiktok, website: u.website, facebook: u.facebook, snapchat: u.snapchat,
     allowFollowers: u.allowFollowers,
-    // Die drei Zahlen im Blog zeigt nur, wer sie freigegeben hat
-    visitedPublic: u.visitedPublic, createdPublic: u.createdPublic, savedPublic: u.savedPublic,
+    // Was das Gegenüber tatsächlich sehen darf — Freigabe UND Beziehung entscheiden
+    visitedPublic: show(u.visitedPublic), createdPublic: show(u.createdPublic), savedPublic: show(u.savedPublic),
     isLocalHero: await isUserLocalHero(u.id),
     placeCount: placeRows.length,       // Beigetragene Orte
     visitedCount: visitedRows.length,   // Besuchte Orte
@@ -85,8 +122,10 @@ router.get('/:id', requireAuth, async (c) => {
     followingCount: followingRows.length,
     isFollowing: iFollow,
     friendStatus, pendingRequestId,
-    places: placeRows.map(hydrate),
-    trips: publishedTrips,
+    places: show(u.createdPublic) ? placeRows.map(hydrate) : [],
+    trips: show(u.tripsPublic) ? publishedTrips : [],
+    photos: photoRows,
+    favorites,
   });
 });
 

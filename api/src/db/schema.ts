@@ -32,6 +32,10 @@ export const users = sqliteTable('users', {
   visitedPublic: integer('visited_public', { mode: 'boolean' }).notNull().default(false),
   createdPublic: integer('created_public', { mode: 'boolean' }).notNull().default(true),
   savedPublic: integer('saved_public', { mode: 'boolean' }).notNull().default(false),
+  // Abschnitte im Blog: Trips, hochgeladene Bilder, Lieblingsorte
+  tripsPublic: integer('trips_public', { mode: 'boolean' }).notNull().default(false),
+  photosPublic: integer('photos_public', { mode: 'boolean' }).notNull().default(false),
+  favoritesPublic: integer('favorites_public', { mode: 'boolean' }).notNull().default(false),
   // E-Mail-Bestätigung (Double-Opt-in) + Zustimmung zum E-Mail-Empfang
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   emailOptIn: integer('email_opt_in', { mode: 'boolean' }).notNull().default(false),

@@ -147,19 +147,63 @@ export function UserProfilePage({ userId, embedded, onUser }: Props = {}) {
           )}
 
           {/* Veröffentlichte Orte */}
-          {user.placeCount > 0 && (
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">
-              Orte von {user.name.split(' ')[0]}
-            </p>
+          {user.places.length > 0 && (
+            <div className="mb-7">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">
+                Orte von {user.name.split(' ')[0]}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {user.places.map(p => <PlaceCard key={p.id} place={p} />)}
+              </div>
+            </div>
           )}
-          {user.places.length === 0 ? (
+
+          {/* Lieblingsorte in der selbst gewählten Reihenfolge */}
+          {user.favorites.length > 0 && (
+            <div className="mb-7">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">
+                Lieblingsorte
+              </p>
+              <div className="flex flex-col gap-2">
+                {user.favorites.map((p, i) => (
+                  <button key={p.id} onClick={() => navigate(`/ort/${p.id}`)}
+                    className="w-full flex items-center gap-3 bg-white rounded-2xl p-2.5 shadow-[var(--shadow-card)] text-left active:scale-[0.99] transition-transform">
+                    <span className="font-display font-bold text-lg w-6 text-center flex-shrink-0"
+                      style={{ color: i < 3 ? 'var(--color-amber)' : 'var(--color-lavender-lt)' }}>{i + 1}</span>
+                    <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
+                      <img src={p.hero} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-[var(--color-aubergine)] truncate">{p.name}</p>
+                      <p className="text-xs text-[var(--color-lavender)] truncate">{p.region}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Bildergalerie: alles, was diese Person zu Orten hochgeladen hat */}
+          {user.photos.length > 0 && (
+            <div className="mb-4">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">
+                Bilder von {user.name.split(' ')[0]}
+              </p>
+              <div className="grid grid-cols-2 gap-1.5 -mx-1">
+                {user.photos.map(ph => (
+                  <button key={ph.id} onClick={() => navigate(`/ort/${ph.placeId}`)}
+                    className="aspect-square rounded-xl overflow-hidden bg-[var(--color-bg-soft)] active:scale-95 transition-transform">
+                    <img src={ph.url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {user.places.length === 0 && user.favorites.length === 0 && user.photos.length === 0 && (
             <div className="text-center py-8 text-[var(--color-lavender-lt)]">
               <i className="fa-solid fa-map-pin text-3xl mb-2 opacity-30" />
-              <p className="text-sm">Noch keine Orte eingereicht.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {user.places.map(p => <PlaceCard key={p.id} place={p} />)}
+              <p className="text-sm">Hier gibt es noch nichts zu sehen.</p>
             </div>
           )}
       </div>

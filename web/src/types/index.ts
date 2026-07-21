@@ -24,6 +24,9 @@ export interface User {
   visitedPublic: boolean;
   createdPublic: boolean;
   savedPublic: boolean;
+  tripsPublic: boolean;
+  photosPublic: boolean;
+  favoritesPublic: boolean;
   emailVerified: boolean;
   emailOptIn: boolean;
   isAdmin: boolean;

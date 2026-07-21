@@ -8,12 +8,14 @@ import { ImageFocusSheet } from '../components/ui/ImageFocusSheet.js';
 import { SocialLinks } from '../components/ui/SocialLinks.js';
 import { ProfileHeader } from '../components/ui/ProfileHeader.js';
 import { SlideToConfirm } from '../components/ui/SlideToConfirm.js';
+import { SwipeTabs } from '../components/ui/SwipeTabs.js';
+import { PublicToggle } from '../components/ui/PublicToggle.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
-import { authApi, mediaApi, rankingsApi, friendsApi, placesApi, notificationsApi } from '../services/api.js';
+import { authApi, mediaApi, rankingsApi, friendsApi, placesApi, notificationsApi, usersApi, tripsApi } from '../services/api.js';
 import { StatusSlider, MiniLeaderboard } from '../components/ui/StatusTiers.js';
-import type { MyRankStats, VisitedPlace } from '../services/api.js';
-import type { FriendRequest, Friend, Place } from '../types/index.js';
+import type { MyRankStats, VisitedPlace, UserPhoto } from '../services/api.js';
+import type { FriendRequest, Place, Trip } from '../types/index.js';
 
 /** `embedded`: im Entdecken-Overlay gerendert — dann bringt das Overlay den Rahmen mit. */
 export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
@@ -37,18 +39,21 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
   const [saving, setSaving]             = useState(false);
   const [rankInfo, setRankInfo]         = useState<MyRankStats | null>(null);
   const [requests, setRequests]         = useState<FriendRequest[]>([]);
-  const [friends, setFriends]           = useState<Friend[]>([]);
   const [myPlaces, setMyPlaces]         = useState<Place[]>([]);
   const [notif, setNotif]               = useState(0);
   const [visited, setVisited]           = useState<VisitedPlace[]>([]);
-  const [visitedView, setVisitedView]   = useState<'timeline' | 'favorites'>('timeline');
+  const [myPhotos, setMyPhotos]         = useState<UserPhoto[]>([]);
+  const [myTrips, setMyTrips]           = useState<Trip[]>([]);
+  // 0 = Ranking, 1 = Zeitstrahl, 2 = Lieblingsorte (wischbar)
+  const [listTab, setListTab]           = useState(0);
 
   useEffect(() => {
     rankingsApi.me().then(setRankInfo).catch(() => {});
     friendsApi.requests().then(setRequests).catch(() => {});
-    friendsApi.list().then(setFriends).catch(() => {});
     placesApi.myCreated().then(setMyPlaces).catch(() => {});
     placesApi.myVisited().then(setVisited).catch(() => {});
+    usersApi.myPhotos().then(setMyPhotos).catch(() => {});
+    tripsApi.list().then(setMyTrips).catch(() => {});
     notificationsApi.count().then(r => setNotif(r.count)).catch(() => {});
   }, []);
 
@@ -108,6 +113,47 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
     } catch (e: any) {
       setPwError(e.message ?? 'Fehler');
     }
+  }
+
+  /** Eine Liste besuchter Orte — als Zeitstrahl (mit Datum) oder als Rangfolge (mit Platz). */
+  function visitedList(items: VisitedPlace[], kind: 'timeline' | 'favorites') {
+    if (!items.length) return (
+      <div key={kind} className="text-center py-10 text-[var(--color-lavender-lt)]">
+        <i className="fa-solid fa-map-location-dot text-3xl mb-2 opacity-30 block" />
+        <p className="text-sm">Noch keine besuchten Orte.</p>
+      </div>
+    );
+    return (
+      /* Fenster fuer gut 5 Eintraege — der Rest bleibt scrollbar erreichbar */
+      <div key={kind} className="flex flex-col gap-2 overflow-y-auto overscroll-contain no-scrollbar" style={{ maxHeight: 340 }}>
+        {items.map((p, i) => {
+          const d = p.visitedAt ? new Date(p.visitedAt) : null;
+          const stars = ratings[p.id]?.stars ?? 0;
+          return (
+            <button key={p.id} onClick={() => navigate(`/ort/${p.id}`)}
+              className="w-full flex items-center gap-3 bg-white rounded-2xl p-2.5 shadow-[var(--shadow-card)] flex-shrink-0 text-left active:scale-[0.99] transition-transform">
+              {kind === 'favorites' && (
+                <span className="font-display font-bold text-lg w-6 text-center flex-shrink-0"
+                  style={{ color: i < 3 ? 'var(--color-amber)' : 'var(--color-lavender-lt)' }}>{i + 1}</span>
+              )}
+              <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
+                <img src={p.hero} alt="" loading="lazy" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm text-[var(--color-aubergine)] truncate">{p.name}</p>
+                <p className="text-xs text-[var(--color-lavender)] truncate">{p.region}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {stars > 0 && <span className="text-[11px] text-[var(--color-amber)]">{'★'.repeat(stars)}</span>}
+                  {kind === 'timeline' && d && (
+                    <span className="text-[10px] text-[var(--color-lavender-lt)]">{d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: '2-digit' })}</span>
+                  )}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
   }
 
   const content = (
@@ -204,89 +250,48 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
           </div>
         )}
 
-        {/* ── Dein Status: dieselbe Kachel und derselbe Slider wie auf der Prämien-Seite ── */}
+        {/* ── Dein Status: derselbe Stufen-Slider wie auf der Praemien-Seite ── */}
         {rankInfo && (
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)]">Dein Status</p>
-              <button onClick={() => navigate('/rangliste')} className="text-[11px] font-bold text-[var(--color-lavender)]">
-                Prämien <i className="fa-solid fa-chevron-right text-[9px]" />
-              </button>
-            </div>
-            {/* Ohne die breite Info-Kachel: der Slider zeigt Stufe und Boni ohnehin. */}
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Dein Status</p>
+            {/* Ohne breite Info-Kachel: der Slider zeigt Stufe und Boni ohnehin. */}
             <StatusSlider tierKey={rankInfo.tierKey} />
           </div>
         )}
 
-        {/* ── Ranking (Top 5) ── */}
-        <div className="mb-6">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Ranking</p>
-          <MiniLeaderboard limit={5} myId={user.id}
-            onOpenUser={id => navigate(`/u/${id}`)} onOpenAll={() => navigate('/rangliste')} />
-        </div>
-
-        {/* ── Zeitstrahl / Lieblingsorte — die besuchten Orte liegen jetzt hier ── */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3 gap-2">
-            <div className="flex gap-1 p-1 bg-[var(--color-bg-soft)] rounded-2xl">
-              {([['timeline', 'fa-person-walking-luggage', 'Zeitstrahl'], ['favorites', 'fa-heart', 'Lieblingsorte']] as const).map(([id, icon, label]) => (
-                <button key={id} onClick={() => setVisitedView(id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${visitedView === id ? 'bg-white text-[var(--color-aubergine)] shadow-sm' : 'text-[var(--color-lavender)]'}`}>
-                  <i className={`fa-solid ${icon}`} />{label}
-                </button>
-              ))}
-            </div>
-            {visited.length > 0 && (
-              <button onClick={() => navigate('/besucht')} className="text-[11px] font-bold text-[var(--color-lavender)] flex-shrink-0">
-                Alle <i className="fa-solid fa-chevron-right text-[9px]" />
-              </button>
-            )}
-          </div>
-          {visited.length === 0 ? (
-            <div className="text-center py-8 text-[var(--color-lavender-lt)]">
-              <i className="fa-solid fa-map-location-dot text-3xl mb-2 opacity-30 block" />
-              <p className="text-sm">Noch keine besuchten Orte.</p>
-            </div>
-          ) : (
-            /* Fenster für gut 5 Einträge — der Rest bleibt scrollbar erreichbar */
-            <div className="flex flex-col gap-2 overflow-y-auto overscroll-contain pr-1" style={{ maxHeight: 340 }}>
-              {(visitedView === 'timeline' ? byDate : byRating).map((p, i) => {
-                const d = p.visitedAt ? new Date(p.visitedAt) : null;
-                const stars = ratings[p.id]?.stars ?? 0;
-                return (
-                  <button key={p.id} onClick={() => navigate(`/ort/${p.id}`)}
-                    className="w-full flex items-center gap-3 bg-white rounded-2xl p-2.5 shadow-[var(--shadow-card)] flex-shrink-0 text-left active:scale-[0.99] transition-transform">
-                    {visitedView === 'favorites' && (
-                      <span className="font-display font-bold text-lg w-6 text-center flex-shrink-0"
-                        style={{ color: i < 3 ? 'var(--color-amber)' : 'var(--color-lavender-lt)' }}>{i + 1}</span>
-                    )}
-                    <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
-                      <img src={p.hero} alt="" loading="lazy" className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-[var(--color-aubergine)] truncate">{p.name}</p>
-                      <p className="text-xs text-[var(--color-lavender)] truncate">{p.region}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {stars > 0 && <span className="text-[11px] text-[var(--color-amber)]">{'★'.repeat(stars)}</span>}
-                        {visitedView === 'timeline' && d && (
-                          <span className="text-[10px] text-[var(--color-lavender-lt)]">{d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: '2-digit' })}</span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+        {/* ── Ranking · Zeitstrahl · Lieblingsorte teilen sich einen Platz (wischbar) ── */}
+        <div className="mb-7">
+          <SwipeTabs
+            tabs={[
+              { key: 'ranking',   label: 'Ranking',       icon: 'fa-ranking-star' },
+              { key: 'timeline',  label: 'Zeitstrahl',    icon: 'fa-person-walking-luggage' },
+              { key: 'favorites', label: 'Lieblingsorte', icon: 'fa-heart' },
+            ]}
+            index={listTab} onIndex={setListTab}
+            right={listTab > 0 ? (
+              <PublicToggle
+                on={listTab === 1 ? user.visitedPublic : user.favoritesPublic}
+                onChange={v => updateUser(listTab === 1 ? { visitedPublic: v } : { favoritesPublic: v })} />
+            ) : undefined}>
+            {[
+              <MiniLeaderboard key="ranking" limit={5} myId={user.id} onOpenUser={id => navigate(`/u/${id}`)} />,
+              visitedList(byDate, 'timeline'),
+              visitedList(byRating, 'favorites'),
+            ]}
+          </SwipeTabs>
         </div>
 
         {/* Kein Sammel-Knopf „Profil bearbeiten" mehr: jeder Stift oben bearbeitet direkt das,
             was daneben steht — Bild, Name, Text, Social-Profile, Sichtbarkeit der Zahlen. */}
 
         {/* Meine erstellten Orte (inkl. „in Prüfung") */}
+        {/* Beigetragene Orte (inkl. „in Pruefung") */}
         {myPlaces.length > 0 && (
           <div className="mb-6" ref={myPlacesRef}>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Meine Orte ({myPlaces.length})</p>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)]">Beigetragene Orte ({myPlaces.length})</p>
+              <PublicToggle on={user.createdPublic} onChange={v => updateUser({ createdPublic: v })} />
+            </div>
             <div className="grid grid-cols-3 gap-1.5">
               {myPlaces.map(p => (
                 <button key={p.id} onClick={() => navigate(`/ort/${p.id}`)} className="aspect-square rounded-xl overflow-hidden relative active:scale-95 transition-transform">
@@ -295,7 +300,7 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
                     <span className="text-white text-[9px] font-bold leading-tight text-left">{p.name}</span>
                   </div>
                   {p.isUserSubmitted && (
-                    <span className="absolute top-1 left-1 text-[8px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-amber)', color: 'white' }}>In Prüfung</span>
+                    <span className="absolute top-1 left-1 text-[8px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-amber)', color: 'white' }}>In Pruefung</span>
                   )}
                 </button>
               ))}
@@ -303,25 +308,50 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
           </div>
         )}
 
-        {/* Meine Freunde */}
-        {friends.length > 0 && (
+        {/* Meine Trips — im Blog erscheinen davon nur die veroeffentlichten */}
+        {myTrips.length > 0 && (
           <div className="mb-6">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Meine Freunde ({friends.length})</p>
-            <div className="flex flex-col gap-2">
-              {friends.map(f => (
-                <button key={f.id} onClick={() => navigate(`/u/${f.id}`)}
-                  className="flex items-center gap-3 bg-white rounded-2xl p-2.5 shadow-[var(--shadow-card)] active:scale-[0.99] transition-transform text-left">
-                  <Avatar name={f.name} src={f.avatarUrl} size={40} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{f.name}</p>
-                    <p className="text-xs text-[var(--color-lavender)] truncate">@{f.handle}</p>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)]">Meine Trips ({myTrips.length})</p>
+              <PublicToggle on={user.tripsPublic} onChange={v => updateUser({ tripsPublic: v })} />
+            </div>
+            <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-6 px-6 pb-1">
+              {myTrips.map(t => (
+                <button key={t.id} onClick={() => navigate(`/trips/${t.id}`)}
+                  className="relative flex-shrink-0 w-32 aspect-[3/4] rounded-2xl overflow-hidden shadow-[var(--shadow-card)] active:scale-95 transition-transform">
+                  {t.hero
+                    ? <img src={t.hero} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                    : <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #4a3268, #34254c)' }} />}
+                  <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 55%)' }} />
+                  <div className="absolute bottom-0 left-0 right-0 p-2.5 text-left">
+                    <p className="text-white font-display font-bold text-xs leading-tight line-clamp-2">{t.title}</p>
+                    {!t.published && <p className="text-white/70 text-[10px] mt-0.5">Entwurf</p>}
                   </div>
-                  <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)] text-sm" />
                 </button>
               ))}
             </div>
           </div>
         )}
+
+        {/* Meine Bilder — alles, was ich zu Orten hochgeladen habe */}
+        {myPhotos.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)]">Meine Bilder ({myPhotos.length})</p>
+              <PublicToggle on={user.photosPublic} onChange={v => updateUser({ photosPublic: v })} />
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {myPhotos.map(ph => (
+                <button key={ph.id} onClick={() => navigate(`/ort/${ph.placeId}`)}
+                  className="aspect-square rounded-xl overflow-hidden active:scale-95 transition-transform bg-[var(--color-bg-soft)]">
+                  <img src={ph.url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Freund:innen stehen unter „Traveler" — hier waeren sie doppelt. */}
         </div>
       </div>
 
@@ -335,6 +365,9 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
           <div className="flex flex-col gap-1">
             <p className="text-xs text-[var(--color-lavender)] mb-3">
               Diese Zahlen sehen andere in deinem Blog. Was du hier ausschaltest, taucht dort gar nicht erst auf.
+              {user.allowFollowers
+                ? ' Da du Folgen erlaubst, sehen die Freigaben alle.'
+                : ' Da du kein Folgen erlaubst, sehen die Freigaben nur deine Freund:innen.'}
             </p>
             {[
               { label: 'Besuchte Orte', icon: 'fa-person-walking-luggage', key: 'visitedPublic' as const, val: user.visitedPublic },

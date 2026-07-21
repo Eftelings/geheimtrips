@@ -42,7 +42,6 @@ const SavedPage          = lz(() => import('./pages/SavedPage.js'), 'SavedPage')
 const TripDetailPage     = lz(() => import('./pages/TripDetailPage.js'), 'TripDetailPage');
 const VisitedPage        = lz(() => import('./pages/VisitedPage.js'), 'VisitedPage');
 const MapPage            = lz(() => import('./pages/MapPage.js'), 'MapPage');
-const RankingPage        = lz(() => import('./pages/RankingPage.js'), 'RankingPage');
 const AwardsPage         = lz(() => import('./pages/AwardsPage.js'), 'AwardsPage');
 const ProfilePage        = lz(() => import('./pages/ProfilePage.js'), 'ProfilePage');
 const NotificationInboxPage = lz(() => import('./pages/NotificationInboxPage.js'), 'NotificationInboxPage');
@@ -182,8 +181,6 @@ export function App() {
         <Route path="/trips/:id" element={<RequireAuth><TripDetailPage /></RequireAuth>} />
         <Route path="/karte"    element={<RequireAuth><MapPage /></RequireAuth>} />
         <Route path="/map"      element={<RedirectTo to="/karte" />} />
-        <Route path="/rangliste" element={<RequireAuth><RankingPage /></RequireAuth>} />
-        <Route path="/ranking"   element={<RedirectTo to="/rangliste" />} />
         <Route path="/awards"   element={<RequireAuth><AwardsPage /></RequireAuth>} />
         <Route path="/profil"   element={<RequireAuth><OwnProfileRoute /></RequireAuth>} />
         <Route path="/profile"  element={<RedirectTo to="/profil" />} />

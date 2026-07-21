@@ -18,7 +18,6 @@ const TABS = [
   { to: '/meine-trips', icon: 'fa-route',           label: 'Meine Trips'   },
   { to: '/besucht',     icon: 'fa-flag-checkered',  label: 'Besuchte Orte' },
   { to: '/awards',      icon: 'fa-trophy',          label: 'Awards'        },
-  { to: '/rangliste',   icon: 'fa-medal',           label: 'Prämien'       },
   { to: '/einreichen',  icon: 'fa-feather-pointed', label: 'Einreichen'    },
 ];
 

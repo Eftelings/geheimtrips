@@ -171,12 +171,14 @@ export function StatusSlider({ tierKey }: { tierKey: string }) {
 }
 
 // ─── Rangliste, gekürzt (fürs Profil) ─────────────────────────────────────────
-export function MiniLeaderboard({ limit = 5, myId, onOpenUser, onOpenAll }: {
-  limit?: number; myId?: number; onOpenUser: (id: number) => void; onOpenAll: () => void;
+export function MiniLeaderboard({ limit = 5, myId, onOpenUser }: {
+  limit?: number; myId?: number; onOpenUser: (id: number) => void;
 }) {
   const [board, setBoard]     = useState<RankBoardId>('gesamt');
   const [entries, setEntries] = useState<RankingEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  // Aufgeklappt bleibt die Liste an Ort und Stelle — sie wird nur scrollbar, statt wegzuführen.
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -204,8 +206,9 @@ export function MiniLeaderboard({ limit = 5, myId, onOpenUser, onOpenAll }: {
       ) : entries.length === 0 ? (
         <div className="text-center py-6 text-[var(--color-lavender)] text-sm">Noch keine Platzierungen — sei der/die Erste!</div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {entries.slice(0, limit).map((e, i) => {
+        <div className={`flex flex-col gap-2 ${expanded ? 'overflow-y-auto overscroll-contain no-scrollbar pr-0.5' : ''}`}
+          style={expanded ? { maxHeight: 340 } : undefined}>
+          {(expanded ? entries : entries.slice(0, limit)).map((e, i) => {
             const rank = i + 1;
             const isMe = myId != null && e.id === myId;
             return (
@@ -232,9 +235,13 @@ export function MiniLeaderboard({ limit = 5, myId, onOpenUser, onOpenAll }: {
         </div>
       )}
 
-      <button onClick={onOpenAll} className="w-full mt-2.5 text-[11px] font-bold text-[var(--color-amber)] py-1.5">
-        Ganze Rangliste ansehen <i className="fa-solid fa-chevron-right text-[9px] ml-0.5" />
-      </button>
+      {entries.length > limit && (
+        <button onClick={() => setExpanded(v => !v)} className="w-full mt-2.5 text-[11px] font-bold text-[var(--color-amber)] py-1.5">
+          {expanded
+            ? <>Weniger zeigen <i className="fa-solid fa-chevron-up text-[9px] ml-0.5" /></>
+            : <>Ganze Rangliste <i className="fa-solid fa-chevron-down text-[9px] ml-0.5" /></>}
+        </button>
+      )}
     </div>
   );
 }

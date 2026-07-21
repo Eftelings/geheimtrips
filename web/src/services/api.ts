@@ -414,11 +414,17 @@ export interface PublicUser {
   instagram: string | null; tiktok: string | null; website: string | null; facebook: string | null; snapchat: string | null;
   allowFollowers: boolean; visitedPublic: boolean; createdPublic: boolean; savedPublic: boolean;
   isLocalHero: boolean; placeCount: number; visitedCount: number; savedCount: number;
+  /** Hochgeladene Fotos + Lieblingsorte — nur gefüllt, wenn freigegeben und man sie sehen darf. */
+  photos: UserPhoto[];
+  favorites: Place[];
   followerCount: number; followingCount: number; isFollowing: boolean;
   friendStatus: FriendStatus; pendingRequestId: number | null;
   places: Place[];
   trips: Trip[];
 }
+/** Ein von einer Person hochgeladenes Foto (Galerie im Blog). */
+export interface UserPhoto { id: number; url: string; placeId: string; }
+
 /** Person, der ich folge — für „Traveler" und den Personenfilter. */
 export interface FollowedUser {
   id: number; name: string; handle: string;
@@ -427,6 +433,7 @@ export interface FollowedUser {
 export const usersApi = {
   get:       (id: number) => get<PublicUser>(`/users/${id}`),
   following: ()           => get<FollowedUser[]>('/users/me/following'),
+  myPhotos:  ()           => get<UserPhoto[]>('/users/me/photos'),
   follow:   (id: number) => post<{ ok: boolean; isFollowing: boolean }>(`/users/${id}/follow`, {}),
   unfollow: (id: number) => del<{ ok: boolean; isFollowing: boolean }>(`/users/${id}/follow`),
 };
