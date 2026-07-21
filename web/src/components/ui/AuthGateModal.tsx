@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/useAuthStore.js';
 import { useAuthGate } from '../../store/useAuthGate.js';
 import { authApi } from '../../services/api.js';
 import { BrandMark } from './BrandMark.js';
+import { BrandLogo } from './BrandLogo.js';
 import { Turnstile, turnstileEnabled } from './Turnstile.js';
 
 /**
@@ -71,7 +72,11 @@ export function AuthGateModal() {
           <i className="fa-solid fa-xmark" />
         </button>
 
-        <BrandMark size={46} className="mb-3" />
+        {/* Bildmarke + Schriftzug — dieselbe Kombination wie im Header */}
+        <div className="flex items-center gap-2.5 mb-4">
+          <BrandMark size={42} />
+          <BrandLogo size="lg" />
+        </div>
 
         {forgot ? (
           /* ── Passwort vergessen ── */
