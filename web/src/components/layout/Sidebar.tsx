@@ -11,6 +11,7 @@ import { Avatar } from '../ui/Avatar.js';
 const TABS = [
   { to: '/',            icon: 'fa-compass',         label: 'Entdecken',     open: true },
   { to: '/leute',       icon: 'fa-user-group',      label: 'Neue Leute'    },
+  { to: '/traveler',    icon: 'fa-users',           label: 'Traveler'      },
   { to: '/postfach',    icon: 'fa-bell',            label: 'Postfach'      },
   { to: '/geheimquiz',  icon: 'fa-earth-europe',    label: 'Geheimquiz'    },
   { to: '/meine-orte',  icon: 'fa-bookmark',        label: 'Meine Orte'    },

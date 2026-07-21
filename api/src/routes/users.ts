@@ -18,6 +18,19 @@ await db.run(sql`CREATE TABLE IF NOT EXISTS follows (
   UNIQUE(follower_id, followee_id)
 )`).catch(() => {});
 
+// GET /users/me/following — Personen, denen ich folge („Traveler" + Personenfilter).
+// MUSS vor '/:id' stehen, sonst würde 'me' als ID interpretiert.
+router.get('/me/following', requireAuth, async (c) => {
+  const me = c.get('user');
+  const rows = await db.select({
+    id: users.id, name: users.name, handle: users.handle,
+    avatarUrl: users.avatarUrl, avatarCropX: users.avatarCropX, avatarCropY: users.avatarCropY,
+  }).from(follows)
+    .innerJoin(users, eq(users.id, follows.followeeId))
+    .where(eq(follows.followerId, me.id)).all();
+  return c.json(rows);
+});
+
 // GET /users/:id — öffentliches Profil einer realen Nutzer:in + mein Freundschaftsstatus
 router.get('/:id', requireAuth, async (c) => {
   const me = c.get('user');

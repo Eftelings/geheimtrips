@@ -19,6 +19,8 @@ import { useRequireAuth } from '../hooks/useRequireAuth.js';
 import { useUiStore } from '../store/useUiStore.js';
 import { MAP_LAYERS, TILE_URL, HYBRID_ROADS, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../utils/mapTiles.js';
 import { imgUrl } from '../utils/img.js';
+import { Avatar } from '../components/ui/Avatar.js';
+import { usersApi, type FollowedUser } from '../services/api.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
 const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
@@ -141,12 +143,13 @@ export function MobileEntdecken() {
   const pickToastTimer = useRef<number>(0);
   const [radiusKm, setRadiusKm] = useState(entdeckenCache.radiusKm);
   const [mode, setMode] = useState<Mode>(entdeckenCache.mode);
-  // Personenfilter (aus einem Blog geöffnet): zeigt nur die Orte dieser Person
+  // Personenfilter (aus einem Blog geöffnet oder über den Traveler-Filter): nur Orte dieser Person
   const [personFilter, setPersonFilter] = useState<{ id: number; name: string } | null>(null);
+  const [travelers, setTravelers] = useState<FollowedUser[] | null>(null);   // null = noch nicht geladen
   const [tagSel, setTagSel] = useState<TagSelection>(entdeckenCache.tagSel);
   const [facets, setFacets] = useState<Facets>(entdeckenCache.facets);
   const [selectedId, setSelectedId] = useState<string | null>(entdeckenCache.selectedId);
-  const [panel, setPanel] = useState<null | 'cat' | 'loc' | 'reach'>(null);
+  const [panel, setPanel] = useState<null | 'cat' | 'loc' | 'reach' | 'traveler'>(null);
   const [mapLayer, setMapLayer] = useState<MapLayer>('standard');   // Standard/Satellit/Hybrid
 
   // Standort-Suche (Adresse → Suchzentrum)
@@ -650,6 +653,18 @@ export function MobileEntdecken() {
             style={{ ...toolShadow, color: anyFilter ? '#F99039' : '#34254c' }} aria-label="Filter">
             <i className="fa-solid fa-filter" />
           </button>
+          {/* Traveler-Filter: nur die Orte einer Person, der ich folge */}
+          <button onClick={() => gate(() => {
+            const opening = panel !== 'traveler';
+            setPanel(opening ? 'traveler' : null);
+            if (opening) {
+              setSheetSnap(0);
+              if (travelers === null) usersApi.following().then(setTravelers).catch(() => setTravelers([]));
+            }
+          }, 'Melde dich an, um nach Travelern zu filtern.')} className={toolBtn}
+            style={{ ...toolShadow, color: personFilter ? '#F99039' : '#34254c' }} aria-label="Nach Traveler filtern">
+            <i className="fa-solid fa-user-group" />
+          </button>
           {/* Eine weiße Leiste, zwei Tippziele: links Standort ändern, rechts Reichweite einstellen */}
           <div className="flex-1 min-w-0 flex items-center bg-white rounded-xl h-10" style={toolShadow}>
             <button onClick={() => setPanel(panel === 'loc' ? null : 'loc')}
@@ -685,12 +700,17 @@ export function MobileEntdecken() {
           <div className="bg-white rounded-2xl p-3.5" style={{ boxShadow: '0 14px 40px rgba(52,37,76,0.22)', maxHeight: '56vh', overflowY: 'auto' }}>
             <div className="flex items-center justify-between mb-2.5">
               <p className="text-xs font-bold text-[var(--color-aubergine)]">
-                {panel === 'cat' ? 'Filter' : panel === 'loc' ? 'Standort' : 'Reichweite'}
+                {panel === 'cat' ? 'Filter' : panel === 'loc' ? 'Standort' : panel === 'traveler' ? 'Traveler' : 'Reichweite'}
               </p>
               <div className="flex items-center gap-3">
                 {panel === 'cat' && anyFilter && (
                   <button onClick={() => { setTagSel(EMPTY_TAG_SEL); setFacets(EMPTY_FACETS); }} className="text-[11px] font-bold text-[var(--color-amber)]">
                     <i className="fa-solid fa-rotate-left mr-1" />Alle zurücksetzen
+                  </button>
+                )}
+                {panel === 'traveler' && personFilter && (
+                  <button onClick={() => setPersonFilter(null)} className="text-[11px] font-bold text-[var(--color-amber)]">
+                    <i className="fa-solid fa-rotate-left mr-1" />Zurücksetzen
                   </button>
                 )}
                 <button onClick={() => setPanel(null)} className="text-[var(--color-lavender)]" aria-label="Schließen">
@@ -699,6 +719,35 @@ export function MobileEntdecken() {
               </div>
             </div>
             {panel === 'cat' && <PlaceFilters vocab={vocab} sel={tagSel} onSel={setTagSel} facets={facets} onFacets={setFacets} />}
+            {panel === 'traveler' && (
+              travelers === null ? (
+                <div className="flex justify-center py-6 text-[var(--color-lavender-lt)]"><i className="fa-solid fa-circle-notch fa-spin" /></div>
+              ) : travelers.length === 0 ? (
+                <div className="text-center py-5 text-[var(--color-lavender)]">
+                  <i className="fa-solid fa-user-plus text-2xl mb-2 opacity-30 block" />
+                  <p className="text-sm">Du folgst noch niemandem.</p>
+                  <button onClick={() => navigate('/traveler')} className="text-xs font-bold text-[var(--color-amber)] mt-1.5">Traveler entdecken</button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {travelers.map(t => {
+                    const active = personFilter?.id === t.id;
+                    return (
+                      <button key={t.id}
+                        onClick={() => { setPersonFilter(active ? null : { id: t.id, name: t.name }); setPanel(null); }}
+                        className={`w-full flex items-center gap-2.5 rounded-xl p-1.5 text-left transition-colors ${active ? 'bg-[var(--color-amber)]/12' : 'bg-[var(--color-bg-soft)]'}`}>
+                        <Avatar name={t.name} src={t.avatarUrl} size={34} cropX={t.avatarCropX} cropY={t.avatarCropY} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-semibold text-[var(--color-aubergine)] truncate">{t.name}</span>
+                          <span className="block text-[11px] text-[var(--color-lavender)] truncate">@{t.handle}</span>
+                        </span>
+                        {active && <i className="fa-solid fa-check text-[var(--color-amber)] mr-1.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            )}
             {panel === 'loc' && locSearch}
             {panel === 'reach' && (
               <ReachControls

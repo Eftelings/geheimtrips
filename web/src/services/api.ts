@@ -418,8 +418,14 @@ export interface PublicUser {
   places: Place[];
   trips: Trip[];
 }
+/** Person, der ich folge — für „Traveler" und den Personenfilter. */
+export interface FollowedUser {
+  id: number; name: string; handle: string;
+  avatarUrl: string | null; avatarCropX: number; avatarCropY: number;
+}
 export const usersApi = {
-  get:      (id: number) => get<PublicUser>(`/users/${id}`),
+  get:       (id: number) => get<PublicUser>(`/users/${id}`),
+  following: ()           => get<FollowedUser[]>('/users/me/following'),
   follow:   (id: number) => post<{ ok: boolean; isFollowing: boolean }>(`/users/${id}/follow`, {}),
   unfollow: (id: number) => del<{ ok: boolean; isFollowing: boolean }>(`/users/${id}/follow`),
 };

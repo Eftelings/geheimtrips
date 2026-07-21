@@ -8,7 +8,9 @@ const LEFT_TABS = [
 ];
 const RIGHT_TABS = [
   { to: '/geheimquiz',  icon: 'fa-earth-europe',   label: 'Geheimquiz',    reason: 'Melde dich an, um das Geheimquiz zu spielen.' },
-  { to: '/besucht',     icon: 'fa-flag-checkered', label: 'Besuchte Orte', reason: 'Melde dich an, um deine besuchten Orte zu sehen.' },
+  // „Besuchte Orte" liegen jetzt im persönlichen Profil — hier stattdessen die Traveler
+  // (Personen denen ich folge + Freund:innen) als schnellster Weg zu deren Blogs.
+  { to: '/traveler',    icon: 'fa-user-group',     label: 'Traveler',      reason: 'Melde dich an, um deine Traveler zu sehen.' },
 ];
 
 export function BottomNav() {

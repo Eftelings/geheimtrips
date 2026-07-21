@@ -49,6 +49,7 @@ const MeetPeoplePage     = lz(() => import('./pages/MeetPeoplePage.js'), 'MeetPe
 const LegalPage          = lz(() => import('./pages/LegalPage.js'), 'LegalPage');
 const ResetPasswordPage  = lz(() => import('./pages/ResetPasswordPage.js'), 'ResetPasswordPage');
 const EmailVerifyPage    = lz(() => import('./pages/EmailVerifyPage.js'), 'EmailVerifyPage');
+const TravelerPage       = lz(() => import('./pages/TravelerPage.js'), 'TravelerPage');
 const SubmitPage         = lz(() => import('./pages/SubmitPage.js'), 'SubmitPage');
 const GeoGamePage        = lz(() => import('./pages/game/GeoGamePage.js'), 'GeoGamePage');
 
@@ -153,6 +154,7 @@ export function App() {
         <Route path="/besucht"     element={<RequireAuth><VisitedPage /></RequireAuth>} />
         <Route path="/visited"     element={<RedirectTo to="/besucht" />} />
         <Route path="/meine-trips" element={<RequireAuth><SavedPage initialTab="trips" /></RequireAuth>} />
+        <Route path="/traveler"    element={<RequireAuth><TravelerPage /></RequireAuth>} />
         <Route path="/trips"       element={<RedirectTo to="/meine-trips" />} />
         <Route path="/trips/erstellen" element={<RequireAuth><TripCreatePage /></RequireAuth>} />
         <Route path="/trips/create"    element={<RedirectTo to="/trips/erstellen" />} />
