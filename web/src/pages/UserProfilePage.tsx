@@ -131,6 +131,15 @@ export function UserProfilePage() {
             )}
           </div>
 
+          {/* Orte dieser Person auf der Karte (Personenfilter) */}
+          {user.places.length > 0 && (
+            <button onClick={() => navigate('/', { state: { personId: user.id, personName: user.name } })}
+              className="w-full flex items-center justify-center gap-2 bg-white border border-[var(--color-bg-soft)] text-[var(--color-aubergine)] font-semibold py-3 rounded-xl text-sm mb-7 active:scale-[0.98] transition-transform shadow-[var(--shadow-card)]">
+              <i className="fa-solid fa-map-location-dot text-[var(--color-amber)]" />
+              Orte von {user.name.split(' ')[0]} auf der Karte
+            </button>
+          )}
+
           {/* Trips — horizontaler Slider mit hochformatigen Kacheln (nur veröffentlichte) */}
           {user.trips.length > 0 && (
             <div className="mb-7">

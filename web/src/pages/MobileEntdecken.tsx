@@ -141,6 +141,8 @@ export function MobileEntdecken() {
   const pickToastTimer = useRef<number>(0);
   const [radiusKm, setRadiusKm] = useState(entdeckenCache.radiusKm);
   const [mode, setMode] = useState<Mode>(entdeckenCache.mode);
+  // Personenfilter (aus einem Blog geöffnet): zeigt nur die Orte dieser Person
+  const [personFilter, setPersonFilter] = useState<{ id: number; name: string } | null>(null);
   const [tagSel, setTagSel] = useState<TagSelection>(entdeckenCache.tagSel);
   const [facets, setFacets] = useState<Facets>(entdeckenCache.facets);
   const [selectedId, setSelectedId] = useState<string | null>(entdeckenCache.selectedId);
@@ -180,6 +182,8 @@ export function MobileEntdecken() {
     const hasAny = (have: string[], want: string[]) => want.some(w => have.includes(w));
 
     let base = places.filter(p => p.lat != null && p.lng != null);
+    // Personenfilter: nur Orte einer bestimmten Person (z.B. aus deren Blog geöffnet)
+    if (personFilter) base = base.filter(p => p.submittedBy === personFilter.id);
     if (catActive) base = base.filter(p => placeMatchesTag(p, tagSel, vocab));
     // Facetten: OR innerhalb einer Facette, AND über die Facetten hinweg (narrows, aber nicht leer).
     if (facets.merkmale.length) base = base.filter(p => hasAny(attrArr(p, 'merkmale'), facets.merkmale));
@@ -195,7 +199,7 @@ export function MobileEntdecken() {
       base = base.filter(within);
     }
     return base;
-  }, [places, tagSel, catActive, facets, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm]);
+  }, [places, personFilter, tagSel, catActive, facets, vocab, reachCenter, reach.travelMode, reach.travelMinutes, reach.iso, radiusKm]);
 
   // Karte + Liste: Modus-Regel, „Nein" wirkt nur bei Vorschlägen — „Alle" heißt alle.
   const shownPlaces = useMemo(() => {
@@ -442,7 +446,15 @@ export function MobileEntdecken() {
    * der Router-State geleert, sonst risse ein Zurück/Reload den Ort erneut auf.
    */
   useEffect(() => {
-    const st = location.state as { openPlace?: string; place?: Place; mode?: Mode; from?: string } | null;
+    const st = location.state as { openPlace?: string; place?: Place; mode?: Mode; from?: string; personId?: number; personName?: string } | null;
+    // Aus einem Blog: Karte automatisch auf die Orte dieser Person filtern
+    if (st?.personId) {
+      setPersonFilter({ id: st.personId, name: st.personName ?? '' });
+      setMode('all');           // alle Orte der Person zeigen, nicht der „Für dich"-Ausschnitt
+      setSheetSnap(1);          // Karte + Liste (kein Swipe)
+      navigate('.', { replace: true, state: null });
+      return;
+    }
     if (!st?.openPlace) return;
     // Eingereichte Orte (in Prüfung) sind nicht im Store → das mitgegebene Objekt als Fallback.
     const p = places.find(x => x.id === st.openPlace) ?? st.place;
@@ -699,6 +711,15 @@ export function MobileEntdecken() {
         )}
 
         <div className="flex gap-1.5 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+          {personFilter && (
+            <button onClick={() => setPersonFilter(null)}
+              className="text-[11px] font-bold rounded-full px-3 py-1.5 flex-shrink-0 inline-flex items-center gap-1.5 text-white"
+              style={{ background: '#F99039' }} title="Personenfilter aufheben">
+              <i className="fa-solid fa-user text-[10px]" />
+              Orte von {personFilter.name || 'dieser Person'}
+              <i className="fa-solid fa-xmark text-[10px]" />
+            </button>
+          )}
           {MODES.map(m => (
             <button key={m.id} onClick={() => m.id === 'saved'
               ? gate(() => setMode(m.id), 'Melde dich an, um deine gemerkten Orte zu filtern.')
