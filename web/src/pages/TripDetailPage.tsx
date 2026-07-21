@@ -12,6 +12,7 @@ import { AppShell } from '../components/layout/AppShell.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { useAppStore } from '../store/useAppStore.js';
+import { useAuthStore } from '../store/useAuthStore.js';
 import type { Place, Trip, TripPlace, Transport, Friend } from '../types/index.js';
 import { MOBILITY, DEMO_HOTELS } from '../types/index.js';
 import { tripsApi, geoApi, friendsApi } from '../services/api.js';
@@ -406,6 +407,8 @@ export function TripDetailPage() {
   }, [id]); // eslint-disable-line
 
   const editable = !!trip?.isOwner;
+  // Der Profil-Schalter „Meine Trips" ist die Klammer über allen einzelnen Trips
+  const tripsPublic = useAuthStore(st => !!st.user?.tripsPublic);
 
   // Stopps in Reihenfolge (Tag, dann Position)
   const ordered = useMemo(() =>
@@ -946,12 +949,16 @@ export function TripDetailPage() {
           <p className="text-xs text-[var(--color-lavender)]">≈ {(totalSum / persons).toFixed(0)} € pro Person · Eintritte basieren auf den hinterlegten Erwachsenen-Preisen</p>
         </div>
 
-        {/* Im „Dein Blog"-Profil veröffentlichen */}
+        {/* Im „Dein Blog"-Profil veröffentlichen — jeder Trip einzeln, Standard ist aus */}
         {editable && !trip.isCurated && (
           <div className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-[var(--color-bg-soft)] bg-white p-3.5">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-[var(--color-aubergine)]">Im Blog veröffentlichen</p>
-              <p className="text-xs text-[var(--color-lavender)]">Zeigt diesen Trip auf deinem öffentlichen Profil.</p>
+              <p className="text-xs text-[var(--color-lavender)]">
+                {tripsPublic
+                  ? 'Zeigt diesen Trip auf deinem öffentlichen Profil.'
+                  : 'Trips sind in deinem Profil noch nicht freigegeben — dort erst „Meine Trips" öffentlich stellen.'}
+              </p>
             </div>
             <button aria-label="Im Blog veröffentlichen" onClick={async () => {
                 const next = !trip.published;

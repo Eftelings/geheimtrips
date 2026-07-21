@@ -10,6 +10,7 @@ import { ProfileHeader } from '../components/ui/ProfileHeader.js';
 import { SlideToConfirm } from '../components/ui/SlideToConfirm.js';
 import { SwipeTabs } from '../components/ui/SwipeTabs.js';
 import { PublicToggle } from '../components/ui/PublicToggle.js';
+import { TimelinePanel, FavoritesPanel } from '../components/ui/VisitedPanels.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { authApi, mediaApi, rankingsApi, friendsApi, placesApi, notificationsApi, usersApi, tripsApi } from '../services/api.js';
@@ -46,12 +47,19 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
   const [myTrips, setMyTrips]           = useState<Trip[]>([]);
   // 0 = Ranking, 1 = Zeitstrahl, 2 = Lieblingsorte (wischbar)
   const [listTab, setListTab]           = useState(0);
+  // null = automatisch nach Bewertung; Array = selbst gezogene Reihenfolge
+  const [favOrder, setFavOrder]         = useState<string[] | null>(null);
 
   useEffect(() => {
     rankingsApi.me().then(setRankInfo).catch(() => {});
     friendsApi.requests().then(setRequests).catch(() => {});
     placesApi.myCreated().then(setMyPlaces).catch(() => {});
-    placesApi.myVisited().then(setVisited).catch(() => {});
+    placesApi.myVisited().then(v => {
+      setVisited(v);
+      // Gespeicherte Rangfolge uebernehmen, sonst bleibt es bei der Auto-Sortierung
+      const saved = v.filter(p => p.favoritePosition != null).sort((a, b) => a.favoritePosition! - b.favoritePosition!);
+      setFavOrder(saved.length ? saved.map(p => p.id) : null);
+    }).catch(() => {});
     usersApi.myPhotos().then(setMyPhotos).catch(() => {});
     tripsApi.list().then(setMyTrips).catch(() => {});
     notificationsApi.count().then(r => setNotif(r.count)).catch(() => {});
@@ -60,12 +68,25 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
   // Zeitstrahl: neueste Besuche zuerst. Lieblingsorte: eigene Reihenfolge, sonst nach Bewertung.
   const byDate = useMemo(() =>
     [...visited].sort((a, b) => (b.visitedAt ?? '').localeCompare(a.visitedAt ?? '')), [visited]);
-  const byRating = useMemo(() => [...visited].sort((a, b) => {
-    const pa = a.favoritePosition, pb = b.favoritePosition;
-    if (pa != null || pb != null) return (pa ?? 9e9) - (pb ?? 9e9);
-    return (ratings[b.id]?.stars ?? 0) - (ratings[a.id]?.stars ?? 0)
-        || (b.visitedAt ?? '').localeCompare(a.visitedAt ?? '');
-  }), [visited, ratings]);
+  const byRating = useMemo(() => {
+    const auto = [...visited].sort((a, b) =>
+      (ratings[b.id]?.stars ?? 0) - (ratings[a.id]?.stars ?? 0)
+      || (b.visitedAt ?? '').localeCompare(a.visitedAt ?? ''));
+    if (!favOrder) return auto;
+    const byId = new Map(visited.map(p => [p.id, p]));
+    const inOrder = favOrder.map(id => byId.get(id)).filter((p): p is VisitedPlace => !!p);
+    // Neu hinzugekommene Orte haengen hinten an, statt zu verschwinden
+    return [...inOrder, ...auto.filter(p => !favOrder.includes(p.id))];
+  }, [visited, ratings, favOrder]);
+
+  function reorderFavorites(ids: string[]) {
+    setFavOrder(ids);
+    placesApi.saveFavorites(ids).catch(() => {});
+  }
+  function resetFavorites() {
+    setFavOrder(null);
+    placesApi.saveFavorites([]).catch(() => {});
+  }
 
   async function respondRequest(friendshipId: number, accept: boolean) {
     try {
@@ -113,47 +134,6 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
     } catch (e: any) {
       setPwError(e.message ?? 'Fehler');
     }
-  }
-
-  /** Eine Liste besuchter Orte — als Zeitstrahl (mit Datum) oder als Rangfolge (mit Platz). */
-  function visitedList(items: VisitedPlace[], kind: 'timeline' | 'favorites') {
-    if (!items.length) return (
-      <div key={kind} className="text-center py-10 text-[var(--color-lavender-lt)]">
-        <i className="fa-solid fa-map-location-dot text-3xl mb-2 opacity-30 block" />
-        <p className="text-sm">Noch keine besuchten Orte.</p>
-      </div>
-    );
-    return (
-      /* Fenster fuer gut 5 Eintraege — der Rest bleibt scrollbar erreichbar */
-      <div key={kind} className="flex flex-col gap-2 overflow-y-auto overscroll-contain no-scrollbar" style={{ maxHeight: 340 }}>
-        {items.map((p, i) => {
-          const d = p.visitedAt ? new Date(p.visitedAt) : null;
-          const stars = ratings[p.id]?.stars ?? 0;
-          return (
-            <button key={p.id} onClick={() => navigate(`/ort/${p.id}`)}
-              className="w-full flex items-center gap-3 bg-white rounded-2xl p-2.5 shadow-[var(--shadow-card)] flex-shrink-0 text-left active:scale-[0.99] transition-transform">
-              {kind === 'favorites' && (
-                <span className="font-display font-bold text-lg w-6 text-center flex-shrink-0"
-                  style={{ color: i < 3 ? 'var(--color-amber)' : 'var(--color-lavender-lt)' }}>{i + 1}</span>
-              )}
-              <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
-                <img src={p.hero} alt="" loading="lazy" className="w-full h-full object-cover" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm text-[var(--color-aubergine)] truncate">{p.name}</p>
-                <p className="text-xs text-[var(--color-lavender)] truncate">{p.region}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {stars > 0 && <span className="text-[11px] text-[var(--color-amber)]">{'★'.repeat(stars)}</span>}
-                  {kind === 'timeline' && d && (
-                    <span className="text-[10px] text-[var(--color-lavender-lt)]">{d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: '2-digit' })}</span>
-                  )}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    );
   }
 
   const content = (
@@ -276,8 +256,9 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
             ) : undefined}>
             {[
               <MiniLeaderboard key="ranking" limit={5} myId={user.id} onOpenUser={id => navigate(`/u/${id}`)} />,
-              visitedList(byDate, 'timeline'),
-              visitedList(byRating, 'favorites'),
+              <TimelinePanel key="timeline" items={byDate} ratings={ratings} onOpen={id => navigate(`/ort/${id}`)} />,
+              <FavoritesPanel key="favorites" items={byRating} ratings={ratings} manual={favOrder !== null}
+                onOpen={id => navigate(`/ort/${id}`)} onReorder={reorderFavorites} onReset={resetFavorites} />,
             ]}
           </SwipeTabs>
         </div>
@@ -316,6 +297,11 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
               <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)]">Meine Trips ({myTrips.length})</p>
               <PublicToggle on={user.tripsPublic} onChange={v => updateUser({ tripsPublic: v })} />
             </div>
+            <p className="text-[11px] text-[var(--color-lavender)] mb-3 -mt-1">
+              {user.tripsPublic
+                ? 'Welche Trips im Blog stehen, entscheidest du im Trip selbst.'
+                : 'Solange das aus ist, bleibt jeder Trip privat.'}
+            </p>
             <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-6 px-6 pb-1">
               {myTrips.map(t => (
                 <button key={t.id} onClick={() => navigate(`/trips/${t.id}`)}
@@ -326,8 +312,14 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
                   <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 55%)' }} />
                   <div className="absolute bottom-0 left-0 right-0 p-2.5 text-left">
                     <p className="text-white font-display font-bold text-xs leading-tight line-clamp-2">{t.title}</p>
-                    {!t.published && <p className="text-white/70 text-[10px] mt-0.5">Entwurf</p>}
                   </div>
+                  {/* Zeigt auf einen Blick, was im Blog steht — umschalten geht im Trip */}
+                  <span className="absolute top-1.5 left-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={t.published && user.tripsPublic
+                      ? { background: 'var(--color-amber)', color: '#fff' }
+                      : { background: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.85)' }}>
+                    {t.published && user.tripsPublic ? 'Im Blog' : 'Privat'}
+                  </span>
                 </button>
               ))}
             </div>
