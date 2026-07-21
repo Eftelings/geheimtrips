@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { users, places, friendships, visitedPlaces, trips, follows } from '../db/schema.js';
+import { users, places, friendships, visitedPlaces, savedPlaces, trips, follows } from '../db/schema.js';
 import { eq, and, or, sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { hydrate } from './places.js';
@@ -58,6 +58,7 @@ router.get('/:id', requireAuth, async (c) => {
   // Beigetragene (eingereichte) + besuchte Orte dieser Person — die zwei Profil-Metriken
   const placeRows   = await db.select().from(places).where(eq(places.submittedBy, id)).all();
   const visitedRows = await db.select({ id: visitedPlaces.id }).from(visitedPlaces).where(eq(visitedPlaces.userId, id)).all();
+  const savedRows   = await db.select({ id: savedPlaces.id }).from(savedPlaces).where(eq(savedPlaces.userId, id)).all();
   // Veröffentlichte Trips fürs Blog-Carousel
   const tripRows       = await db.select().from(trips).where(and(eq(trips.userId, id), eq(trips.published, true))).all();
   const publishedTrips = await expandTrips(tripRows);
@@ -73,10 +74,12 @@ router.get('/:id', requireAuth, async (c) => {
     avatarCropX: u.avatarCropX, avatarCropY: u.avatarCropY, coverCropX: u.coverCropX, coverCropY: u.coverCropY,
     instagram: u.instagram, tiktok: u.tiktok, website: u.website, facebook: u.facebook, snapchat: u.snapchat,
     allowFollowers: u.allowFollowers,
-    visitedPublic: u.visitedPublic,
+    // Die drei Zahlen im Blog zeigt nur, wer sie freigegeben hat
+    visitedPublic: u.visitedPublic, createdPublic: u.createdPublic, savedPublic: u.savedPublic,
     isLocalHero: await isUserLocalHero(u.id),
     placeCount: placeRows.length,       // Beigetragene Orte
     visitedCount: visitedRows.length,   // Besuchte Orte
+    savedCount: savedRows.length,       // Gemerkte Orte
     followerCount: followerRows.length,
     followingCount: followingRows.length,
     isFollowing: iFollow,

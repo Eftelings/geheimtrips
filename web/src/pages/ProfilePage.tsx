@@ -11,6 +11,7 @@ import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { authApi, mediaApi, rankingsApi, friendsApi, placesApi, notificationsApi } from '../services/api.js';
 import { StatusTile, StatusSlider, MiniLeaderboard } from '../components/ui/StatusTiers.js';
+import { ProfileCounts } from '../components/ui/ProfileCounts.js';
 import type { MyRankStats, VisitedPlace } from '../services/api.js';
 import type { FriendRequest, Friend, Place } from '../types/index.js';
 
@@ -22,6 +23,7 @@ export function ProfilePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '', facebook: user?.facebook ?? '', snapchat: user?.snapchat ?? '', age: user?.age != null ? String(user.age) : '' });
   const coverInputRef                   = useRef<HTMLInputElement>(null);
+  const myPlacesRef                     = useRef<HTMLDivElement>(null);
   const [coverBusy, setCoverBusy]       = useState(false);
   // Nach dem Hochladen: Ausschnitt (Fokuspunkt) anpassen — rund fürs Avatar, quer fürs Titelbild
   const [cropTarget, setCropTarget]     = useState<{ kind: 'cover' | 'avatar'; url: string } | null>(null);
@@ -143,24 +145,12 @@ export function ProfilePage() {
           <SocialLinks user={user} className="mt-3 mb-4" />
 
           {/* Zum Kopf gehören die drei Zahlen: besucht · erstellt · gemerkt */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            {[
-              { label: 'Besucht', value: visited.length, icon: 'fa-flag-checkered' },
-              { label: 'Erstellt', value: myPlaces.length, icon: 'fa-feather-pointed' },
-              { label: 'Gemerkt', value: savedIds.size, to: '/meine-orte', icon: 'fa-bookmark' },
-            ].map(s => {
-              const cls = 'bg-white rounded-2xl py-3 text-center shadow-[var(--shadow-card)]';
-              const inner = (
-                <>
-                  <div className="font-display font-bold text-2xl text-[var(--color-aubergine)]">{s.value}</div>
-                  <div className="text-[11px] text-[var(--color-lavender)] uppercase tracking-wider">{s.label}</div>
-                </>
-              );
-              return s.to
-                ? <button key={s.label} onClick={() => navigate(s.to!)} className={`${cls} active:scale-95 transition-transform`}>{inner}</button>
-                : <div key={s.label} className={cls}>{inner}</div>;
-            })}
-          </div>
+          <ProfileCounts className="mb-6" items={[
+            { icon: 'fa-timeline', value: visited.length, label: 'besuchte Orte', onClick: () => navigate('/besucht') },
+            { icon: 'fa-feather-pointed', value: myPlaces.length, label: 'erstellte Orte',
+              onClick: () => myPlacesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+            { icon: 'fa-bookmark', value: savedIds.size, label: 'gemerkte Orte', onClick: () => navigate('/meine-orte') },
+          ]} />
 
         {/* Postfach — Benachrichtigungen liegen jetzt im Profil (lila hervorgehoben) */}
         <button onClick={() => { setNotif(0); navigate('/notifications'); }}
@@ -298,7 +288,7 @@ export function ProfilePage() {
 
         {/* Meine erstellten Orte (inkl. „in Prüfung") */}
         {myPlaces.length > 0 && (
-          <div className="mb-6">
+          <div className="mb-6" ref={myPlacesRef}>
             <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Meine Orte ({myPlaces.length})</p>
             <div className="grid grid-cols-3 gap-1.5">
               {myPlaces.map(p => (
@@ -384,7 +374,10 @@ export function ProfilePage() {
           {[
             { label: 'Profil sichtbar', key: 'profileVisible' as const, val: user.profileVisible },
             { label: 'Follower zulassen', key: 'allowFollowers' as const, val: user.allowFollowers },
+            // Die drei Zahlen im Blog — jede einzeln freischaltbar
             { label: 'Besuchte Orte im Blog zeigen', key: 'visitedPublic' as const, val: user.visitedPublic },
+            { label: 'Erstellte Orte im Blog zeigen', key: 'createdPublic' as const, val: user.createdPublic },
+            { label: 'Gemerkte Orte im Blog zeigen', key: 'savedPublic' as const, val: user.savedPublic },
             { label: 'Benachrichtigungen', key: 'notificationsEnabled' as const, val: user.notificationsEnabled },
             { label: 'Meet People aktivieren', key: 'meetPeopleEnabled' as const, val: user.meetPeopleEnabled },
           ].map(s => (

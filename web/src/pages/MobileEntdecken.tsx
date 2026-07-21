@@ -421,6 +421,35 @@ export function MobileEntdecken() {
     d.moved = Math.max(d.moved, Math.abs(delta));
     setSheetDragY(Math.min(Math.max(d.startOffset + delta, 0), snap.offs[0]));
   }
+  /**
+   * Zug am INHALT des Overlays: steht der Inhalt schon ganz oben und man zieht nach unten,
+   * gehört die Geste dem Overlay — nicht dem Scroll-Container. Man muss also nicht erst den
+   * Griff am oberen Rand treffen, sondern kann irgendwo im Inhalt (z.B. am Titelbild) ziehen.
+   */
+  const contentPull = useRef<{ startY: number; el: HTMLElement | null; active: boolean }>({ startY: 0, el: null, active: false });
+  function onContentTouchStart(e: React.TouchEvent<HTMLElement>) {
+    contentPull.current = { startY: e.touches[0].clientY, el: e.currentTarget, active: false };
+  }
+  function onContentTouchMove(e: React.TouchEvent<HTMLElement>) {
+    const c = contentPull.current;
+    if (!c.el) return;
+    if (!c.active) {
+      // Erst übernehmen, wenn eindeutig nach unten gezogen wird UND nichts mehr zu scrollen ist
+      if (c.el.scrollTop > 0 || e.touches[0].clientY - c.startY < 5) return;
+      c.active = true;
+      onSheetTouchStart(e);
+    }
+    onSheetTouchMove(e);
+  }
+  function onContentTouchEnd() {
+    const c = contentPull.current;
+    contentPull.current = { startY: 0, el: null, active: false };
+    if (!c.active) return;
+    // Bewusst nicht onSheetTouchEnd: dessen „Tippen = eine Stufe" gilt nur für den Griff.
+    sheetDrag.current = null;
+    setSheetDragging(false);
+    setSheetSnap(settleSnap(sheetDragY));
+  }
   /** Nächstgelegene Rast zu einem Zug-Offset — eine Regel für Griff UND Bild. */
   function settleSnap(y: number): SheetSnap {
     let best: SheetSnap = 0, bd = Infinity;
@@ -879,11 +908,11 @@ export function MobileEntdecken() {
             {/* Das Titelbild beginnt ganz oben — Griff und Zurück liegen IM Bild (wie beim Ort),
                 sonst stünde eine weiße Leiste über dem Header. */}
             <div className="h-full overflow-y-auto overscroll-contain no-scrollbar"
-              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}>
+              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}
+              onTouchStart={onContentTouchStart} onTouchMove={onContentTouchMove} onTouchEnd={onContentTouchEnd}>
               <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
                 <BlogEmbed key={blogUserId} userId={blogUserId} embedded
-                  onUser={u => setPersonFilter(pf => (pf && pf.id === u.id ? { id: u.id, name: u.name } : pf))}
-                  onShowOnMap={() => setSheetSnap(1)} />
+                  onUser={u => setPersonFilter(pf => (pf && pf.id === u.id ? { id: u.id, name: u.name } : pf))} />
               </Suspense>
             </div>
             {/* Zieh-Griff über dem Bild — nimmt die Geste an, ohne Fläche zu belegen */}

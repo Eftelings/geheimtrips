@@ -4,6 +4,7 @@ import { AppShell } from '../components/layout/AppShell.js';
 import { PlaceCard } from '../components/ui/PlaceCard.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { SocialLinks } from '../components/ui/SocialLinks.js';
+import { ProfileCounts } from '../components/ui/ProfileCounts.js';
 import { usersApi, friendsApi, type PublicUser } from '../services/api.js';
 
 interface Props {
@@ -13,11 +14,9 @@ interface Props {
   embedded?: boolean;
   /** Meldet das geladene Profil nach oben (z.B. für die Beschriftung des Personenfilters). */
   onUser?: (u: PublicUser) => void;
-  /** „Auf der Karte" — im Overlay einfach das Sheet senken statt zu navigieren. */
-  onShowOnMap?: () => void;
 }
 
-export function UserProfilePage({ userId, embedded, onUser, onShowOnMap }: Props = {}) {
+export function UserProfilePage({ userId, embedded, onUser }: Props = {}) {
   const { id: paramId } = useParams<{ id: string }>();
   const id = userId ?? Number(paramId);
   const navigate = useNavigate();
@@ -97,7 +96,7 @@ export function UserProfilePage({ userId, embedded, onUser, onShowOnMap }: Props
             <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.62) 0%, transparent 52%)' }} />
 
             {/* Overlay: Badge (wie Hauptkategorie) · Name (wie Ortsname) · Statistik (wie Ort) */}
-            <div className="absolute bottom-0 left-0 right-0 p-5 pr-28">
+            <div className="absolute bottom-0 left-0 right-0 p-5 pr-32">
               {user.isLocalHero && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mb-1.5"
                   style={{ background: 'rgba(249,144,57,0.92)', color: 'white' }}>
@@ -108,16 +107,20 @@ export function UserProfilePage({ userId, embedded, onUser, onShowOnMap }: Props
                 style={{ fontSize: 'clamp(1.35rem, 5vw, 1.9rem)', letterSpacing: '-0.01em', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
                 {user.name}
               </h1>
-              <p className="text-white/85 text-sm mt-1 font-medium">
-                {user.placeCount} {user.placeCount === 1 ? 'Ort' : 'Orte'} erstellt
-                {user.visitedPublic && <> · {user.visitedCount} besucht</>}
-              </p>
+              {/* Nur die Zahlen, die diese Person freigegeben hat */}
+              <ProfileCounts onImage className="mt-2" items={[
+                ...(user.visitedPublic ? [{ icon: 'fa-timeline', value: user.visitedCount, label: 'besuchte Orte' }] : []),
+                ...(user.createdPublic ? [{ icon: 'fa-feather-pointed', value: user.placeCount, label: 'erstellte Orte' }] : []),
+                ...(user.savedPublic ? [{ icon: 'fa-bookmark', value: user.savedCount, label: 'gemerkte Orte' }] : []),
+              ]} />
             </div>
           </div>
 
-          {/* Rundes Profilbild rechts — genau zur Hälfte im Header, zur Hälfte darunter */}
-          <div className="absolute right-5 bottom-0 translate-y-1/2 z-10 rounded-full ring-4 ring-white shadow-lg">
-            <Avatar name={user.name} src={user.avatarUrl} size={76} cropX={user.avatarCropX} cropY={user.avatarCropY} />
+          {/* Rundes Profilbild rechts — genau zur Hälfte im Header, zur Hälfte darunter.
+              Der Ring nimmt die Hintergrundfarbe der Seite auf, nicht Weiß. */}
+          <div className="absolute right-5 bottom-0 translate-y-1/2 z-10 rounded-full shadow-lg"
+            style={{ boxShadow: '0 0 0 5px var(--color-bg), 0 8px 20px rgba(52,37,76,0.22)' }}>
+            <Avatar name={user.name} src={user.avatarUrl} size={96} cropX={user.avatarCropX} cropY={user.avatarCropY} />
           </div>
         </div>
 
@@ -144,14 +147,8 @@ export function UserProfilePage({ userId, embedded, onUser, onShowOnMap }: Props
             )}
           </div>
 
-          {/* Orte dieser Person auf der Karte (Personenfilter) */}
-          {user.places.length > 0 && (
-            <button onClick={() => (onShowOnMap ? onShowOnMap() : navigate('/', { state: { personId: user.id, personName: user.name } }))}
-              className="w-full flex items-center justify-center gap-2 bg-white border border-[var(--color-bg-soft)] text-[var(--color-aubergine)] font-semibold py-3 rounded-xl text-sm mb-7 active:scale-[0.98] transition-transform shadow-[var(--shadow-card)]">
-              <i className="fa-solid fa-map-location-dot text-[var(--color-amber)]" />
-              Orte von {user.name.split(' ')[0]} auf der Karte
-            </button>
-          )}
+          {/* Kein „auf der Karte"-Knopf: das Overlay herunterziehen zeigt genau das —
+              die Karte, bereits über den Personenfilter auf diese Person eingestellt. */}
 
           {/* Trips — horizontaler Slider mit hochformatigen Kacheln (nur veröffentlichte) */}
           {user.trips.length > 0 && (
