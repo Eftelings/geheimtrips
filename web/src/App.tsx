@@ -5,6 +5,7 @@ import { useAppStore } from './store/useAppStore.js';
 import { useAuthGate } from './store/useAuthGate.js';
 import { AuthGateModal } from './components/ui/AuthGateModal.js';
 import { CookieConsent } from './components/ui/CookieConsent.js';
+import { useIsMobile } from './hooks/useIsMobile.js';
 import React from 'react';
 
 // Routen lazy laden → kleineres Initial-Bundle (v.a. mobil). Named exports → default mappen.
@@ -78,6 +79,18 @@ function PlaceRedirect() {
   return <Navigate to={`/ort/${id ?? ''}`} replace />;
 }
 
+/**
+ * /u/:id — der Blog einer Person. Mobil gehört er auf das Entdecken-Overlay: herunterziehen
+ * zeigt die Karte, bereits auf die Orte dieser Person gefiltert. Auf dem Desktop bleibt es
+ * bei der eigenständigen Seite. Die URL bleibt in beiden Fällen teilbar.
+ */
+function UserBlogRoute() {
+  const { id } = useParams();
+  const isMobile = useIsMobile(1024);
+  if (isMobile) return <Navigate to="/" replace state={{ blogUserId: Number(id) }} />;
+  return <UserProfilePage />;
+}
+
 // Alte englische Route → deutsche Route, Query-String bleibt erhalten (z.B. ?edit=…)
 function RedirectTo({ to }: { to: string }) {
   const { search } = useLocation();
@@ -147,7 +160,7 @@ export function App() {
         <Route path="/trip-wizard" element={<RequireAuth><TripWizardPage /></RequireAuth>} />
         <Route path="/results"  element={<RequireAuth><ResultsPage /></RequireAuth>} />
         <Route path="/author/:id" element={<RequireAuth><AuthorPage /></RequireAuth>} />
-        <Route path="/u/:id"      element={<RequireAuth><UserProfilePage /></RequireAuth>} />
+        <Route path="/u/:id"      element={<RequireAuth><UserBlogRoute /></RequireAuth>} />
 
         <Route path="/meine-orte"  element={<RequireAuth><SavedPage /></RequireAuth>} />
         <Route path="/saved"       element={<RedirectTo to="/meine-orte" />} />

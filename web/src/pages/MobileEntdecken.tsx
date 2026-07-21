@@ -24,6 +24,8 @@ import { usersApi, type FollowedUser } from '../services/api.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
 const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
+// Blog einer Person im selben Overlay (lazy → nur laden, wenn wirklich jemand geöffnet wird)
+const BlogEmbed = lazy(() => import('./UserProfilePage.js').then(m => ({ default: m.UserProfilePage })));
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place, Transport } from '../types/index.js';
 
@@ -264,8 +266,12 @@ export function MobileEntdecken() {
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>(entdeckenCache.sheetSnap);
   const [swipeFeed, setSwipeFeed] = useState<Place[]>([]);   // stabiler Snapshot beim Öffnen (Index springt sonst)
   const [swipeFocus, setSwipeFocus] = useState<Place | null>(null);   // aktueller Swipe-Ort (Karte fokussiert ihn)
+  // Blog einer Person: liegt AUF dem Overlay (Rast 2). Zieht man es herunter, kommt die
+  // Karte — über den Personenfilter bereits auf die Orte dieser Person gefiltert.
+  const [blogUserId, setBlogUserId] = useState<number | null>(null);
+  const blogMode = blogUserId !== null && sheetSnap === 2;
   // Rast 2 IST der Swipe — es gibt kein eigenes Sheet und keine eigene Seite mehr.
-  const swipeMode = sheetSnap === 2;
+  const swipeMode = sheetSnap === 2 && blogUserId === null;
   const [swipeArticle, setSwipeArticle] = useState(false);   // Artikel unter dem Bild (gleiche Seite)
   const [reviewsSignal, setReviewsSignal] = useState(0);     // Sterne am Hero → Rezensionen aufklappen
   // Stapel neu aufnehmen anfordern. Über einen Zähler statt direktem setSwipeFeed: Modus/Filter
@@ -304,6 +310,7 @@ export function MobileEntdecken() {
   // Einen Ort als Artikel zeigen — ohne den Zurück-Stapel anzufassen (nutzen alle Öffner intern).
   const showPlace = (p: Place) => {
     setPanel(null);         // sonst schwebt der offene Filter über dem Artikel
+    setBlogUserId(null);    // ein Ort löst ein offenes Blog im selben Overlay ab
     setSwipeFeed([p]);      // Einzel-Feed: es geht um GENAU diesen Ort
     setSwipeFocus(p);       // direkt setzen — sonst rendert der Artikel einen Frame lang den alten Ort
     setArticleOnly(true);
@@ -312,6 +319,16 @@ export function MobileEntdecken() {
   };
   // Gezielt geöffnet (Liste, Pin, „Meine Orte"): frische Sitzung → Zurück-Stapel leeren.
   const openPlace = (p: Place) => { setPlaceStack([]); showPlace(p); };
+  /**
+   * Blog einer Person im Overlay öffnen. Der Personenfilter wird gleich mitgesetzt, damit
+   * die Karte darunter schon ihre Orte zeigt, sobald man das Blog herunterzieht.
+   */
+  const openBlog = (id: number, name = '') => {
+    setPanel(null);
+    setPersonFilter({ id, name });
+    setBlogUserId(id);
+    setSheetSnap(2);
+  };
   // Ort→Ort-Link IM Artikel: den aktuellen Ort merken, damit „Zurück" wieder zu ihm führt.
   const openPlaceId = (id: string) => {
     const p = places.find(x => x.id === id);
@@ -365,7 +382,7 @@ export function MobileEntdecken() {
       selectedId, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
       // Rast 2 NICHT merken: der Swipe-Feed ist ein Snapshot dieser Sitzung — beim Neuaufbau
       // stünde man sonst im Swipe vor einem leeren Feed. „Zurück" landet in der Liste.
-      sheetSnap: swipeMode ? 1 : sheetSnap,
+      sheetSnap: swipeMode || blogMode ? 1 : sheetSnap,
     });
   });
   // Beim Öffnen zuletzt gemerkte Scroll-Position der Liste wiederherstellen
@@ -430,7 +447,7 @@ export function MobileEntdecken() {
   }
   // „Swipen" zieht nur das Overlay auf die oberste Rast — dort IST der Swipe. Nur HIER endet eine
   // gezielte Ort-Sitzung: wer bewusst swipen geht, will keinen Zurückpfeil nach „Meine Orte" mehr.
-  function goSwipe() { setPanel(null); setArticleOnly(false); setBackTo(null); setPlaceStack([]); setSheetSnap(2); }
+  function goSwipe() { setPanel(null); setArticleOnly(false); setBackTo(null); setPlaceStack([]); setBlogUserId(null); setSheetSnap(2); }
   // Ankommen auf Rast 2 (egal ob per Button oder mit der Hand hochgezogen): Feed einfrieren.
   // Snapshot, sonst indiziert der Feed beim Weglegen neu → Index springt.
   useEffect(() => {
@@ -449,7 +466,14 @@ export function MobileEntdecken() {
    * der Router-State geleert, sonst risse ein Zurück/Reload den Ort erneut auf.
    */
   useEffect(() => {
-    const st = location.state as { openPlace?: string; place?: Place; mode?: Mode; from?: string; personId?: number; personName?: string } | null;
+    const st = location.state as { openPlace?: string; place?: Place; mode?: Mode; from?: string; personId?: number; personName?: string; blogUserId?: number; blogName?: string } | null;
+    // Blog einer Person (/u/:id leitet mobil hierher): als Overlay öffnen, Karte darunter gefiltert
+    if (st?.blogUserId) {
+      setMode('all');
+      openBlog(st.blogUserId, st.blogName ?? '');
+      navigate('.', { replace: true, state: null });
+      return;
+    }
     // Aus einem Blog: Karte automatisch auf die Orte dieser Person filtern
     if (st?.personId) {
       setPersonFilter({ id: st.personId, name: st.personName ?? '' });
@@ -794,7 +818,7 @@ export function MobileEntdecken() {
         }}>
         {/* Griff + Kopf (Zieh-Bereich) — nur in der Liste. Im Swipe liegen Griff und „Liste"-Button
             IM Bild (siehe SwipeDeck), damit sie mit dem Hero wegscrollen statt zu schweben. */}
-        {!swipeMode && (
+        {!swipeMode && !blogMode && (
           <div className="flex-shrink-0 relative z-30" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
             <div className="flex justify-center pt-2.5 pb-1.5">
               <div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} />
@@ -848,6 +872,31 @@ export function MobileEntdecken() {
               )} />
           </div>
         )}
+        {/* Blog einer Person — liegt auf demselben Overlay. Am Griff herunterziehen zeigt die Karte,
+            die über den Personenfilter schon auf ihre Orte gefiltert ist; noch weiter die Liste. */}
+        {blogMode && blogUserId !== null && (
+          <div className="absolute inset-0 z-30 flex flex-col bg-white rounded-t-3xl overflow-hidden">
+            <div className="flex-shrink-0 flex justify-center pt-2.5 pb-1.5"
+              onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
+              <div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} />
+            </div>
+            <div className="flex-1 overflow-y-auto overscroll-contain"
+              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}>
+              <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
+                <BlogEmbed key={blogUserId} userId={blogUserId} embedded
+                  onUser={u => setPersonFilter(pf => (pf && pf.id === u.id ? { id: u.id, name: u.name } : pf))}
+                  onShowOnMap={() => setSheetSnap(1)} />
+              </Suspense>
+            </div>
+            {/* Schließen: Blog weg, Karte bleibt auf diese Person gefiltert (Chip oben löst ihn) */}
+            <button onClick={() => { setBlogUserId(null); setSheetSnap(1); }}
+              className="absolute left-4 top-9 w-9 h-9 rounded-full flex items-center justify-center text-white"
+              style={{ background: 'rgba(0,0,0,0.38)', backdropFilter: 'blur(6px)' }} aria-label="Blog schließen">
+              <i className="fa-solid fa-arrow-left" />
+            </button>
+          </div>
+        )}
+
         {/* Scrollbare Liste (nach rechts wischen startet den Swipe). Scroll-Fuß = Bottom-Nav + der
             Teil des Sheets, der in dieser Rast unter dem Bildschirmrand hängt — sonst wären die
             letzten Orte nicht erreichbar. Bewusst an der RAST statt am laufenden Zug: sonst würde

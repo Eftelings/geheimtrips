@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { PlaceCard } from '../components/ui/PlaceCard.js';
@@ -6,8 +6,20 @@ import { Avatar } from '../components/ui/Avatar.js';
 import { SocialLinks } from '../components/ui/SocialLinks.js';
 import { usersApi, friendsApi, type PublicUser } from '../services/api.js';
 
-export function UserProfilePage() {
-  const { id } = useParams<{ id: string }>();
+interface Props {
+  /** Eingebettet im Entdecken-Overlay: ID kommt als Prop, nicht aus der URL. */
+  userId?: number;
+  /** Ohne AppShell rendern (das Overlay bringt Rahmen und Griff schon mit). */
+  embedded?: boolean;
+  /** Meldet das geladene Profil nach oben (z.B. für die Beschriftung des Personenfilters). */
+  onUser?: (u: PublicUser) => void;
+  /** „Auf der Karte" — im Overlay einfach das Sheet senken statt zu navigieren. */
+  onShowOnMap?: () => void;
+}
+
+export function UserProfilePage({ userId, embedded, onUser, onShowOnMap }: Props = {}) {
+  const { id: paramId } = useParams<{ id: string }>();
+  const id = userId ?? Number(paramId);
   const navigate = useNavigate();
   const [user, setUser]       = useState<PublicUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -16,7 +28,7 @@ export function UserProfilePage() {
 
   async function load() {
     setLoading(true);
-    try { setUser(await usersApi.get(Number(id))); setNotFound(false); }
+    try { const u = await usersApi.get(Number(id)); setUser(u); onUser?.(u); setNotFound(false); }
     catch { setNotFound(true); }
     finally { setLoading(false); }
   }
@@ -44,18 +56,17 @@ export function UserProfilePage() {
     catch (e) { setUser(u => u && { ...u, isFollowing: !willFollow, followerCount: u.followerCount + (willFollow ? -1 : 1) }); alert((e as Error).message ?? 'Fehler'); }
   }
 
-  if (loading) return (
-    <AppShell showBack>
-      <div className="flex justify-center py-20 text-[var(--color-lavender-lt)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>
-    </AppShell>
+  // Eingebettet bringt das Overlay den Rahmen schon mit — dann ohne AppShell rendern.
+  const wrap = (content: ReactNode) => (embedded ? <>{content}</> : <AppShell showBack>{content}</AppShell>);
+
+  if (loading) return wrap(
+    <div className="flex justify-center py-20 text-[var(--color-lavender-lt)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>
   );
-  if (notFound || !user) return (
-    <AppShell showBack>
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-[var(--color-lavender)]">
-        <i className="fa-solid fa-user-slash text-4xl mb-3 opacity-30" />
-        <p>Profil nicht gefunden</p>
-      </div>
-    </AppShell>
+  if (notFound || !user) return wrap(
+    <div className="flex flex-col items-center justify-center min-h-[50vh] text-[var(--color-lavender)]">
+      <i className="fa-solid fa-user-slash text-4xl mb-3 opacity-30" />
+      <p>Profil nicht gefunden</p>
+    </div>
   );
 
   function friendButton() {
@@ -74,9 +85,8 @@ export function UserProfilePage() {
     }
   }
 
-  return (
-    <AppShell showBack>
-      <div className="max-w-lg mx-auto pb-12">
+  return wrap(
+    <div className="max-w-lg mx-auto pb-12">
         {/* ── Header wie eine Ortsseite; das Profilbild liegt zur Hälfte darüber/darunter ── */}
         <div className="relative">
           {/* Bild + Overlay (geclippt) */}
@@ -136,7 +146,7 @@ export function UserProfilePage() {
 
           {/* Orte dieser Person auf der Karte (Personenfilter) */}
           {user.places.length > 0 && (
-            <button onClick={() => navigate('/', { state: { personId: user.id, personName: user.name } })}
+            <button onClick={() => (onShowOnMap ? onShowOnMap() : navigate('/', { state: { personId: user.id, personName: user.name } }))}
               className="w-full flex items-center justify-center gap-2 bg-white border border-[var(--color-bg-soft)] text-[var(--color-aubergine)] font-semibold py-3 rounded-xl text-sm mb-7 active:scale-[0.98] transition-transform shadow-[var(--shadow-card)]">
               <i className="fa-solid fa-map-location-dot text-[var(--color-amber)]" />
               Orte von {user.name.split(' ')[0]} auf der Karte
@@ -182,8 +192,7 @@ export function UserProfilePage() {
               {user.places.map(p => <PlaceCard key={p.id} place={p} />)}
             </div>
           )}
-        </div>
       </div>
-    </AppShell>
+    </div>
   );
 }
