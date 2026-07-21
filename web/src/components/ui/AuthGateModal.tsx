@@ -136,7 +136,7 @@ export function AuthGateModal() {
               {tab === 'register' && (
                 <div className="flex gap-2">
                   <input className={input} placeholder="Vorname" value={name} onChange={e => setName(e.target.value)} required />
-                  <input className={input} placeholder="@handle" value={handle} onChange={e => setHandle(e.target.value.replace(/\s/g, ''))} required />
+                  <input className={input} placeholder="Benutzername" value={handle} onChange={e => setHandle(e.target.value.replace(/\s/g, ''))} required />
                 </div>
               )}
               <input className={input} type="email" placeholder="E-Mail" value={email} onChange={e => setEmail(e.target.value)} required />
