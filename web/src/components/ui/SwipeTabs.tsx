@@ -46,13 +46,16 @@ export function SwipeTabs({ tabs, index, onIndex, right, children }: {
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <div className="flex gap-1 p-1 bg-[var(--color-bg-soft)] rounded-2xl min-w-0">
+      <div className="flex items-center gap-2 mb-3">
+        {/* Die Leiste nimmt den ganzen Rest der Zeile — jeder Reiter bekommt gleich viel Platz,
+            damit auch „Lieblingsorte" neben dem Schalter noch hineinpasst. */}
+        <div className="flex-1 min-w-0 flex gap-1 p-1 bg-[var(--color-bg-soft)] rounded-2xl">
           {tabs.map((t, i) => (
             <button key={t.key} onClick={() => onIndex(i)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all ${
+              className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 px-1.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
                 i === index ? 'bg-white text-[var(--color-aubergine)] shadow-sm' : 'text-[var(--color-lavender)]'}`}>
-              {t.icon && <i className={`fa-solid ${t.icon}`} />}{t.label}
+              {t.icon && <i className={`fa-solid ${t.icon} flex-shrink-0`} />}
+              <span className="truncate">{t.label}</span>
             </button>
           ))}
         </div>

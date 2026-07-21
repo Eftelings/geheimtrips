@@ -455,13 +455,15 @@ export function MobileEntdecken() {
     if (prev) { prev(); pullCleanup.current = null; }
     if (!el) return;
 
-    // Steht der Inhalt beim Aufsetzen schon oben, ist jeder Zug nach unten ein Overlay-Zug.
     const start = (e: TouchEvent) => { pullState.current = { startY: e.touches[0].clientY, active: false, atTop: el.scrollTop <= 0 }; };
     const move = (e: TouchEvent) => {
       const p = pullState.current;
       const y = e.touches[0].clientY;
       if (!p.active) {
-        if (!p.atTop || y <= p.startY) return;
+        // Auch MITTEN in der Geste übernehmen: wer nach oben scrollt und am Anfang ankommt,
+        // zieht sonst weiter am Inhalt — der federt dann über den Header hinaus (weißer Rand).
+        if (el.scrollTop > 0) { p.startY = y; p.atTop = true; return; }
+        if (y <= p.startY) { p.startY = y; return; }   // nach oben gewischt: gehört dem Inhalt
         // Ab dem ersten Pixel abwehren: entscheidet der Browser erst, federt der Inhalt mit.
         e.preventDefault();
         if (y - p.startY < 3) return;
@@ -965,8 +967,8 @@ export function MobileEntdecken() {
           <div className="absolute inset-0 z-30 bg-white rounded-t-3xl overflow-hidden">
             {/* Das Titelbild beginnt ganz oben — Griff und Zurück liegen IM Bild (wie beim Ort),
                 sonst stünde eine weiße Leiste über dem Header. */}
-            <div className="h-full overflow-y-auto overscroll-contain no-scrollbar"
-              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}
+            <div className="h-full overflow-y-auto no-scrollbar"
+              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)', overscrollBehavior: 'none' }}
               ref={overlayPull}>
               <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
                 {blogMode && blogUserId !== null

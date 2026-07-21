@@ -2,11 +2,22 @@
  * Kleiner Schalter hinter einer Überschrift: gibt diesen Abschnitt fürs öffentliche Blog frei.
  * „Öffentlich" heißt: wer Follower zulässt, zeigt ihn allen — sonst nur Freund:innen.
  */
-export function PublicToggle({ on, onChange, label = 'Öffentlich' }: {
+export function PublicToggle({ on, onChange, label = 'Öffentlich', compact }: {
   on: boolean;
   onChange: (next: boolean) => void;
   label?: string;
+  /** Nur Auge statt Text + Schalter — für enge Zeilen wie die Reiterleiste. */
+  compact?: boolean;
 }) {
+  if (compact) return (
+    <button onClick={() => onChange(!on)} title={on ? `${label} — sichtbar` : `${label} — nur für dich`}
+      aria-label={label}
+      className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform"
+      style={{ background: on ? 'var(--color-amber)' : 'var(--color-bg-soft)' }}>
+      <i className={`fa-solid ${on ? 'fa-eye' : 'fa-eye-slash'} text-xs`}
+        style={{ color: on ? '#fff' : 'var(--color-lavender-lt)' }} />
+    </button>
+  );
   return (
     <button onClick={() => onChange(!on)} title={on ? `${label} — sichtbar` : `${label} — nur für dich`}
       className="flex items-center gap-1.5 flex-shrink-0 active:scale-95 transition-transform">

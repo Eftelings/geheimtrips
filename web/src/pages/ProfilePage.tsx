@@ -262,14 +262,15 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
         {/* ── Ranking · Zeitstrahl · Lieblingsorte teilen sich einen Platz (wischbar) ── */}
         <div className="mb-7">
           <SwipeTabs
+            /* Ohne Symbole: drei Reiter plus Schalter muessen in eine Zeile passen */
             tabs={[
-              { key: 'ranking',   label: 'Ranking',       icon: 'fa-ranking-star' },
-              { key: 'timeline',  label: 'Zeitstrahl',    icon: 'fa-person-walking-luggage' },
-              { key: 'favorites', label: 'Lieblingsorte', icon: 'fa-heart' },
+              { key: 'ranking',   label: 'Ranking' },
+              { key: 'timeline',  label: 'Zeitstrahl' },
+              { key: 'favorites', label: 'Lieblingsorte' },
             ]}
             index={listTab} onIndex={setListTab}
             right={listTab > 0 ? (
-              <PublicToggle
+              <PublicToggle compact
                 on={listTab === 1 ? user.visitedPublic : user.favoritesPublic}
                 onChange={v => updateUser(listTab === 1 ? { visitedPublic: v } : { favoritesPublic: v })} />
             ) : undefined}>
