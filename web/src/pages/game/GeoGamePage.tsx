@@ -272,7 +272,7 @@ export function GeoGamePage() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   if (phase === 'hub') return (
-    <AppShell title="Geheimquiz">
+    <AppShell>
       <div className="max-w-sm mx-auto px-6 py-10">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
@@ -321,7 +321,7 @@ export function GeoGamePage() {
   );
 
   if (phase === 'searching') return (
-    <AppShell title="Geheimquiz">
+    <AppShell>
       <div className="flex flex-col items-center justify-center min-h-[60dvh] px-6 py-10">
         {!matchedOpponent ? (
           <>
@@ -381,7 +381,7 @@ export function GeoGamePage() {
     const isWinner = winnerId === myId;
     const winnerName = finalScores.find(s => s.playerId === winnerId)?.name ?? '';
     return (
-      <AppShell title="Geheimquiz">
+      <AppShell>
         <div className="max-w-sm mx-auto px-6 py-8">
           <div className="text-center mb-6">
             <div className="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-3"

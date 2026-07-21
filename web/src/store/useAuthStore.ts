@@ -13,7 +13,7 @@ interface AuthState {
   hydrated: boolean;
 
   login:    (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, handle: string, emailOptIn?: boolean) => Promise<void>;
+  register: (email: string, password: string, name: string, handle: string, emailOptIn?: boolean, captcha?: string) => Promise<void>;
   logout:   () => void;
   hydrate:  () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
@@ -39,10 +39,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  register: async (email, password, name, handle, emailOptIn = false) => {
+  register: async (email, password, name, handle, emailOptIn = false, captcha = '') => {
     set({ loading: true, error: null });
     try {
-      const { token, user } = await authApi.register(email, password, name, handle, emailOptIn);
+      const { token, user } = await authApi.register(email, password, name, handle, emailOptIn, captcha);
       localStorage.setItem('gt_token', token);
       set({ user, token, loading: false });
     } catch (e) {

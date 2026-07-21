@@ -39,7 +39,7 @@ export function TravelerPage() {
   );
 
   return (
-    <AppShell title="Traveler">
+    <AppShell>
       <div className="px-6 pt-5 max-w-lg mx-auto pb-10">
         {/* Neue Leute kennenlernen — gehört hierher, nicht ins eigene Profil */}
         <button onClick={() => navigate('/leute')}

@@ -588,9 +588,11 @@ export function SavedPage({ initialTab = 'orte' }: { initialTab?: Tab } = {}) {
 
         {/* ── Trips-Tab ─────────────────────────────────────────────────── */}
         {tab === 'trips' && (
-          <div className="flex flex-col gap-3">
-            {/* Kategorien — filtern Trips über ihre enthaltenen Orte */}
-            <TagFilter value={tagSel} onChange={setTagSel} />
+          <div className="flex flex-col gap-3 min-w-0">
+            {/* Kategorien — filtern Trips über ihre enthaltenen Orte. Der Block-Wrapper ist
+                wichtig: als direktes Flex-Kind koennte der Filter die Spalte ueber die
+                Bildschirmbreite dehnen, dann waere dieser Tab breiter als „Meine Orte". */}
+            <div className="min-w-0"><TagFilter value={tagSel} onChange={setTagSel} /></div>
 
             {/* Trefferzahl / Sortier-Hinweis */}
             {(q.trim() || catActive || tripView !== 'alle') && trips.length > 0 && (

@@ -48,16 +48,16 @@ import type { User } from '../types/index.js';
 
 export const authApi = {
   login:          (email: string, password: string)    => post<{ token: string; user: User }>('/auth/login', { email, password }),
-  register:       (email: string, password: string, name: string, handle: string, emailOptIn = false) =>
-                    post<{ token: string; user: User }>('/auth/register', { email, password, name, handle, emailOptIn }),
+  register:       (email: string, password: string, name: string, handle: string, emailOptIn = false, captcha = '') =>
+                    post<{ token: string; user: User }>('/auth/register', { email, password, name, handle, emailOptIn, captcha }),
   verifyEmail:    (token: string) => post<{ ok: boolean }>('/auth/verify-email', { token }),
   resendVerification: () => post<{ ok: boolean; alreadyVerified?: boolean; autoVerified?: boolean }>('/auth/resend-verification', {}),
   me:             ()                                   => get<{ user: User }>('/auth/me'),
   updateMe:       (data: Partial<User>)                => patch<{ user: User }>('/auth/me', data),
   changePassword: (currentPassword: string, newPassword: string) =>
                     post<{ ok: boolean }>('/auth/change-password', { currentPassword, newPassword }),
-  forgotPassword: (email: string) =>
-                    post<{ ok: boolean }>('/auth/forgot', { email }),
+  forgotPassword: (email: string, captcha = '') =>
+                    post<{ ok: boolean }>('/auth/forgot', { email, captcha }),
   resetPassword:  (token: string, newPassword: string) =>
                     post<{ ok: boolean }>('/auth/reset', { token, newPassword }),
 };

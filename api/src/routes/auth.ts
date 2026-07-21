@@ -98,6 +98,28 @@ await db.run(sql`ALTER TABLE users ADD COLUMN lng REAL`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN location_updated_at TEXT`).catch(() => {});
 
 const APP_URL = (process.env.APP_URL ?? 'https://www.geheimtrips.de').replace(/\/$/, '');
+
+/**
+ * Cloudflare Turnstile — Bot-Schutz für Registrierung und Passwort-Reset.
+ * Ohne TURNSTILE_SECRET wird nicht geprüft: lokale Umgebungen und Installationen ohne
+ * Schlüssel laufen unverändert weiter. Mit Schlüssel ist ein gültiger Token Pflicht.
+ */
+const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET ?? '';
+async function captchaOk(token: unknown, ip?: string): Promise<boolean> {
+  if (!TURNSTILE_SECRET) return true;
+  if (typeof token !== 'string' || !token) return false;
+  try {
+    const body = new URLSearchParams({ secret: TURNSTILE_SECRET, response: token });
+    if (ip) body.set('remoteip', ip);
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body });
+    const data = await res.json() as { success?: boolean };
+    return !!data.success;
+  } catch {
+    return false;   // Prüfdienst nicht erreichbar → lieber abweisen als durchwinken
+  }
+}
+const clientIp = (c: { req: { header: (k: string) => string | undefined } }) =>
+  c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 async function makeToken(userId: number): Promise<string> {
@@ -135,6 +157,8 @@ const registerSchema = z.object({
   handle: z.string().max(30).regex(/^[a-z0-9_]*$/, 'Der Handle darf nur Kleinbuchstaben, Zahlen und _ enthalten.').optional(),
   // Zustimmung zum E-Mail-Empfang (Newsletter/Hinweise) — die Doppel-Bestätigung erfolgt über den Link.
   emailOptIn: z.boolean().optional().default(false),
+  // Turnstile-Token; ohne konfiguriertes Secret wird es ignoriert.
+  captcha: z.string().optional().default(''),
 });
 
 router.post('/login', jsonBody(loginSchema), async (c) => {
@@ -149,7 +173,10 @@ router.post('/login', jsonBody(loginSchema), async (c) => {
 });
 
 router.post('/register', jsonBody(registerSchema), async (c) => {
-  const { email, password, name, emailOptIn } = c.req.valid('json');
+  const { email, password, name, emailOptIn, captcha } = c.req.valid('json');
+  if (!(await captchaOk(captcha, clientIp(c)))) {
+    return c.json({ error: 'Sicherheitsprüfung fehlgeschlagen. Bitte lade die Seite neu.' }, 400);
+  }
   // Handle optional: getippten übernehmen (mind. 2 Zeichen), sonst aus dem Namen erzeugen.
   let handle = (c.req.valid('json').handle ?? '').trim().toLowerCase();
   if (!/^[a-z0-9_]{2,30}$/.test(handle)) handle = await uniqueHandle(name || email.split('@')[0]);
@@ -274,9 +301,12 @@ router.post('/change-password', requireAuth,
 
 // POST /auth/forgot — Reset-Link anfordern. Verrät nie, ob die E-Mail existiert.
 router.post('/forgot',
-  zValidator('json', z.object({ email: z.string().email() })),
+  zValidator('json', z.object({ email: z.string().email(), captcha: z.string().optional().default('') })),
   async (c) => {
-    const { email } = c.req.valid('json');
+    const { email, captcha } = c.req.valid('json');
+    if (!(await captchaOk(captcha, clientIp(c)))) {
+      return c.json({ error: 'Sicherheitsprüfung fehlgeschlagen. Bitte lade die Seite neu.' }, 400);
+    }
     const user = await db.select().from(users)
       .where(sql`lower(${users.email}) = ${email.toLowerCase()}`).get();
     if (user) {

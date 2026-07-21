@@ -12,7 +12,6 @@ import React from 'react';
 const lz = (loader: () => Promise<Record<string, unknown>>, name: string) =>
   lazy(() => loader().then(m => ({ default: m[name] as React.ComponentType<any> }))); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const GatePage           = lz(() => import('./pages/GatePage.js'), 'GatePage');
 const AdminDashboard     = lz(() => import('./pages/admin/AdminDashboard.js'), 'AdminDashboard');
 const AdminPlaces        = lz(() => import('./pages/admin/AdminPlaces.js'), 'AdminPlaces');
 const AdminQuality       = lz(() => import('./pages/admin/AdminQuality.js'), 'AdminQuality');
@@ -150,8 +149,6 @@ export function App() {
     <Suspense fallback={PageFallback}>
       <Routes>
         {/* Öffentlich zugänglich (crawlbar) */}
-        <Route path="/anmelden" element={<GatePage />} />
-        <Route path="/gate"     element={<RedirectTo to="/anmelden" />} />
         <Route path="/legal"   element={<LegalPage />} />
         <Route path="/reset"   element={<ResetPasswordPage />} />
         <Route path="/e-mail-bestaetigen" element={<EmailVerifyPage />} />
