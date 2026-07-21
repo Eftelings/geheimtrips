@@ -14,6 +14,8 @@ interface AuthState {
 
   login:    (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string, handle: string, emailOptIn?: boolean, captcha?: string) => Promise<void>;
+  /** Anmelden mit Google. Gibt zurück, ob dabei ein neues Konto entstanden ist. */
+  loginWithGoogle: (credential: string) => Promise<boolean>;
   logout:   () => void;
   hydrate:  () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
@@ -47,6 +49,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user, token, loading: false });
     } catch (e) {
       set({ loading: false, error: e instanceof ApiError ? e.message : 'Registrierung fehlgeschlagen.' });
+      throw e;
+    }
+  },
+
+  loginWithGoogle: async (credential) => {
+    set({ loading: true, error: null });
+    try {
+      const { token, user, created } = await authApi.google(credential);
+      localStorage.setItem('gt_token', token);
+      set({ user, token, loading: false });
+      return created;
+    } catch (e) {
+      set({ loading: false, error: e instanceof ApiError ? e.message : 'Google-Anmeldung fehlgeschlagen.' });
       throw e;
     }
   },

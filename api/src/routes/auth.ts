@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import { SignJWT } from 'jose';
+import { SignJWT, jwtVerify, createRemoteJWKSet } from 'jose';
 import { randomBytes, createHash } from 'node:crypto';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
@@ -198,6 +198,73 @@ router.post('/register', jsonBody(registerSchema), async (c) => {
   const { passwordHash: _, ...safeUser } = user;
   return c.json({ token, user: safeUser }, 201);
 });
+
+/**
+ * POST /auth/google — Anmelden mit Google.
+ *
+ * Der Browser holt über Google Identity Services ein signiertes ID-Token; hier wird nur
+ * dessen Signatur gegen Googles öffentliche Schlüssel geprüft (plus Aussteller und
+ * Empfänger). Kein Client Secret, kein Redirect — die Client-ID ist öffentlich und steht
+ * ebenso im ausgelieferten Frontend, deshalb liegt sie hier als Vorgabe im Code und lässt
+ * sich per GOOGLE_CLIENT_ID überschreiben.
+ */
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
+  ?? '581781823367-7sr1ldvvacifaffdmhfip6i5os3iq36m.apps.googleusercontent.com';
+const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
+
+router.post('/google',
+  zValidator('json', z.object({ credential: z.string().min(20) })),
+  async (c) => {
+    const { credential } = c.req.valid('json');
+
+    let claims: { email?: string; email_verified?: boolean | string; name?: string; picture?: string };
+    try {
+      const { payload } = await jwtVerify(credential, googleKeys, {
+        issuer: ['https://accounts.google.com', 'accounts.google.com'],
+        audience: GOOGLE_CLIENT_ID,
+      });
+      claims = payload as typeof claims;
+    } catch {
+      return c.json({ error: 'Google-Anmeldung konnte nicht geprüft werden. Bitte versuch es erneut.' }, 401);
+    }
+
+    const email = (claims.email ?? '').toLowerCase().trim();
+    // Nur bestätigte Adressen: sonst könnte man sich über eine fremde Adresse einloggen.
+    const verified = claims.email_verified === true || claims.email_verified === 'true';
+    if (!email || !verified) {
+      return c.json({ error: 'Diese Google-Adresse ist nicht bestätigt.' }, 400);
+    }
+
+    // Bestehendes Konto mit derselben Adresse übernehmen — sonst entstünden zwei Konten
+    // zur selben Person. Die Adresse gilt hier als bewiesen (Google hat sie bestätigt).
+    const existing = await db.select().from(users)
+      .where(sql`lower(${users.email}) = ${email}`).get();
+    if (existing) {
+      if (existing.isBanned) return c.json({ error: 'Dieses Konto ist gesperrt.' }, 403);
+      // Wer sich per Google anmeldet, hat die Adresse belegt → offene Bestätigung erledigt.
+      if (!existing.emailVerified) {
+        await db.update(users).set({ emailVerified: true }).where(eq(users.id, existing.id));
+        existing.emailVerified = true;
+      }
+      const token = await makeToken(existing.id);
+      const { passwordHash: _, ...safeUser } = existing;
+      return c.json({ token, user: safeUser, created: false });
+    }
+
+    const name = (claims.name ?? '').trim() || email.split('@')[0];
+    const handle = await uniqueHandle(name);
+    const namingError = checkUserNaming(name, handle);
+    if (namingError) return c.json({ error: namingError }, 400);
+    // Zufälliges Passwort: das Konto wird über Google geöffnet. Wer später ein Passwort
+    // will, setzt es über „Passwort vergessen" — dafür ist die Adresse ja bestätigt.
+    const passwordHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+    const [user] = await db.insert(users)
+      .values({ email, passwordHash, name, handle, emailVerified: true, emailOptIn: false })
+      .returning();
+    const token = await makeToken(user.id);
+    const { passwordHash: _, ...safeUser } = user;
+    return c.json({ token, user: safeUser, created: true }, 201);
+  });
 
 // POST /auth/verify-email — Anmeldung per Token bestätigen (Link aus der Mail)
 router.post('/verify-email',

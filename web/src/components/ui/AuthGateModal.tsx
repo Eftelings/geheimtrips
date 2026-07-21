@@ -6,6 +6,7 @@ import { authApi } from '../../services/api.js';
 import { BrandMark } from './BrandMark.js';
 import { BrandLogo } from './BrandLogo.js';
 import { Turnstile, turnstileEnabled } from './Turnstile.js';
+import { GoogleSignIn, googleEnabled } from './GoogleSignIn.js';
 
 /**
  * Login-Lightbox: erscheint, wenn ein:e ausgeloggte:r Besucher:in eine Aktion auslöst,
@@ -15,7 +16,7 @@ import { Turnstile, turnstileEnabled } from './Turnstile.js';
  */
 export function AuthGateModal() {
   const { open, reason, closeGate } = useAuthGate();
-  const { login, register, loading, error, clearError } = useAuthStore();
+  const { login, register, loginWithGoogle, loading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
 
   const [tab, setTab]       = useState<'register' | 'login'>('register');
@@ -45,6 +46,15 @@ export function AuthGateModal() {
         closeGate();
         navigate('/onboarding');
       }
+    } catch { /* Fehler kommt aus dem Store */ }
+  }
+
+  async function googleLogin(credential: string) {
+    clearError();
+    try {
+      const created = await loginWithGoogle(credential);
+      closeGate();
+      if (created) navigate('/onboarding');   // frisches Konto → Willkommensstrecke
     } catch { /* Fehler kommt aus dem Store */ }
   }
 
@@ -131,6 +141,17 @@ export function AuthGateModal() {
                 </button>
               ))}
             </div>
+
+            {googleEnabled && (
+              <>
+                <GoogleSignIn onCredential={googleLogin} text={tab === 'register' ? 'signup_with' : 'signin_with'} />
+                <div className="flex items-center gap-3 my-4">
+                  <span className="flex-1 h-px bg-[var(--color-bg-soft)]" />
+                  <span className="text-[11px] font-semibold text-[var(--color-lavender-lt)]">oder mit E-Mail</span>
+                  <span className="flex-1 h-px bg-[var(--color-bg-soft)]" />
+                </div>
+              </>
+            )}
 
             <form onSubmit={submit} className="flex flex-col gap-3">
               {tab === 'register' && (

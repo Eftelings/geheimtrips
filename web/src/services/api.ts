@@ -60,6 +60,9 @@ export const authApi = {
                     post<{ ok: boolean }>('/auth/forgot', { email, captcha }),
   resetPassword:  (token: string, newPassword: string) =>
                     post<{ ok: boolean }>('/auth/reset', { token, newPassword }),
+  // Anmelden mit Google: das ID-Token aus dem Browser wird serverseitig geprüft.
+  google:         (credential: string) =>
+                    post<{ token: string; user: User; created: boolean }>('/auth/google', { credential }),
 };
 
 // ─── Places ────────────────────────────────────────────────────────────────────
