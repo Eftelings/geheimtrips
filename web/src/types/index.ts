@@ -9,9 +9,11 @@ export interface User {
   avatarUrl: string | null;
   avatarCropX: number;
   avatarCropY: number;
+  avatarZoom: number;
   coverUrl: string | null;
   coverCropX: number;
   coverCropY: number;
+  coverZoom: number;
   age: number | null;
   instagram: string | null;
   tiktok: string | null;

@@ -4,25 +4,27 @@ import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
 import { Avatar } from '../components/ui/Avatar.js';
-import { AvatarUpload } from '../components/ui/AvatarUpload.js';
 import { ImageFocusSheet } from '../components/ui/ImageFocusSheet.js';
 import { SocialLinks } from '../components/ui/SocialLinks.js';
+import { ProfileHeader } from '../components/ui/ProfileHeader.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { authApi, mediaApi, rankingsApi, friendsApi, placesApi, notificationsApi } from '../services/api.js';
 import { StatusTile, StatusSlider, MiniLeaderboard } from '../components/ui/StatusTiers.js';
-import { ProfileCounts } from '../components/ui/ProfileCounts.js';
 import type { MyRankStats, VisitedPlace } from '../services/api.js';
 import type { FriendRequest, Friend, Place } from '../types/index.js';
 
-export function ProfilePage() {
+/** `embedded`: im Entdecken-Overlay gerendert — dann bringt das Overlay den Rahmen mit. */
+export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const { user, updateUser, logout } = useAuthStore();
   const { savedIds, ratings, playVideos, setPlayVideos } = useAppStore();
-  const [editOpen, setEditOpen]         = useState(false);
+  // Was gerade bearbeitet wird — jeder Stift öffnet genau seinen Ausschnitt
+  const [editTarget, setEditTarget]     = useState<null | 'name' | 'bio' | 'socials' | 'visibility'>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '', facebook: user?.facebook ?? '', snapchat: user?.snapchat ?? '', age: user?.age != null ? String(user.age) : '' });
   const coverInputRef                   = useRef<HTMLInputElement>(null);
+  const avatarInputRef                  = useRef<HTMLInputElement>(null);
   const myPlacesRef                     = useRef<HTMLDivElement>(null);
   const [coverBusy, setCoverBusy]       = useState(false);
   // Nach dem Hochladen: Ausschnitt (Fokuspunkt) anpassen — rund fürs Avatar, quer fürs Titelbild
@@ -71,27 +73,27 @@ export function ProfilePage() {
     const { age, ...rest } = editData;
     await updateUser({ ...rest, age: age.trim() === '' ? null : Number(age) }).catch(() => {});
     setSaving(false);
-    setEditOpen(false);
+    setEditTarget(null);
   }
 
-  // Titelbild hochladen (Server optimiert zu WebP) → danach Ausschnitt anpassen
-  async function onCoverFile(e: React.ChangeEvent<HTMLInputElement>) {
+  // Bild hochladen (Server optimiert zu WebP) → danach Ausschnitt + Zoom anpassen
+  async function onImageFile(e: React.ChangeEvent<HTMLInputElement>, kind: 'cover' | 'avatar') {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
     setCoverBusy(true);
     try {
       const { url } = await mediaApi.upload(file);
-      setCropTarget({ kind: 'cover', url });
+      setCropTarget({ kind, url });
     } catch { /* still ok */ }
     setCoverBusy(false);
   }
 
-  // Ausschnitt (Fokuspunkt) übernehmen und Bild + Fokus speichern
-  async function saveCrop(cropX: number, cropY: number) {
+  // Ausschnitt (Fokuspunkt + Zoom) übernehmen und zusammen mit dem Bild speichern
+  async function saveCrop(cropX: number, cropY: number, zoom: number) {
     const t = cropTarget; if (!t) return;
-    if (t.kind === 'cover') await updateUser({ coverUrl: t.url, coverCropX: cropX, coverCropY: cropY }).catch(() => {});
-    else await updateUser({ avatarUrl: t.url, avatarCropX: cropX, avatarCropY: cropY }).catch(() => {});
+    if (t.kind === 'cover') await updateUser({ coverUrl: t.url, coverCropX: cropX, coverCropY: cropY, coverZoom: zoom }).catch(() => {});
+    else await updateUser({ avatarUrl: t.url, avatarCropX: cropX, avatarCropY: cropY, avatarZoom: zoom }).catch(() => {});
     setCropTarget(null);
   }
 
@@ -105,67 +107,71 @@ export function ProfilePage() {
     }
   }
 
-  return (
-    <AppShell title="Profil">
-      <div className="max-w-lg mx-auto">
-        {/* ── Titelbild (LinkedIn-Stil) ── */}
-        <div className="h-28 sm:h-36 relative overflow-hidden sm:rounded-b-3xl">
-          {user.coverUrl
-            ? <img src={user.coverUrl} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${user.coverCropX * 100}% ${user.coverCropY * 100}%` }} />
-            : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #4a3268, #34254c 55%, #251539)' }} />}
-          <button onClick={() => coverInputRef.current?.click()} disabled={coverBusy} title="Titelbild ändern"
-            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/40 backdrop-blur text-white flex items-center justify-center hover:bg-black/55 transition-colors">
-            <i className={`fa-solid ${coverBusy ? 'fa-circle-notch fa-spin' : 'fa-camera'} text-sm`} />
-          </button>
-          <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={onCoverFile} />
-        </div>
-
-        <div className="px-6">
-          {/* Avatar überlappt das Titelbild + Einstellungen */}
-          <div className="flex items-end justify-between -mt-11 mb-3">
-            <div className="rounded-full ring-4 ring-white">
-              <AvatarUpload name={user.name} src={user.avatarUrl} size={80}
-                cropX={user.avatarCropX} cropY={user.avatarCropY}
-                onUploaded={url => setCropTarget({ kind: 'avatar', url })} />
-            </div>
-            <button onClick={() => setSettingsOpen(true)} className="mb-1 text-[var(--color-lavender)] hover:text-[var(--color-aubergine)]">
-              <i className="fa-solid fa-gear text-lg" />
-            </button>
-          </div>
-          <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)]">{user.name}</h1>
-          <p className="text-sm text-[var(--color-lavender)]">@{user.handle}</p>
-          {rankInfo?.isLocalHero && (
-            <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(249,144,57,0.15)', color: '#F99039' }}
-              title="Top 25 % der Geheimtriper diesen Monat">
-              <i className="fa-solid fa-shield-halved" /> Local Hero
-            </span>
-          )}
-          {user.bio && <p className="text-sm text-[var(--color-body)] mt-2">{user.bio}</p>}
-          <SocialLinks user={user} className="mt-3 mb-4" />
-
-          {/* Zum Kopf gehören die drei Zahlen: besucht · erstellt · gemerkt */}
-          <ProfileCounts className="mb-6" items={[
+  const content = (
+    <>
+      <div className="max-w-lg mx-auto pb-12">
+        {/* ── Derselbe Kopf wie im oeffentlichen Blog — nur mit Stiften zum Bearbeiten ── */}
+        <ProfileHeader
+          name={user.name} isLocalHero={rankInfo?.isLocalHero}
+          coverUrl={user.coverUrl} coverCropX={user.coverCropX} coverCropY={user.coverCropY} coverZoom={user.coverZoom}
+          avatarUrl={user.avatarUrl} avatarCropX={user.avatarCropX} avatarCropY={user.avatarCropY} avatarZoom={user.avatarZoom}
+          counts={[
             { icon: 'fa-timeline', value: visited.length, label: 'besuchte Orte', onClick: () => navigate('/besucht') },
             { icon: 'fa-feather-pointed', value: myPlaces.length, label: 'erstellte Orte',
               onClick: () => myPlacesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
             { icon: 'fa-bookmark', value: savedIds.size, label: 'gemerkte Orte', onClick: () => navigate('/meine-orte') },
-          ]} />
+          ]}
+          edit={{
+            onCover: () => coverInputRef.current?.click(),
+            onAvatar: () => avatarInputRef.current?.click(),
+            onName: () => setEditTarget('name'),
+            onCounts: () => setEditTarget('visibility'),
+            onSettings: () => setSettingsOpen(true),
+            coverBusy,
+          }} />
+        <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={e => onImageFile(e, 'cover')} />
+        <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={e => onImageFile(e, 'avatar')} />
 
-        {/* Postfach — Benachrichtigungen liegen jetzt im Profil (lila hervorgehoben) */}
-        <button onClick={() => { setNotif(0); navigate('/notifications'); }}
-          className="w-full flex items-center gap-3 rounded-2xl p-3.5 mb-4 active:scale-[0.99] transition-transform text-white"
-          style={{ background: 'linear-gradient(135deg, #4a3268, #34254c)', boxShadow: '0 6px 20px rgba(52,37,76,0.30)' }}>
-          <span className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0 relative">
-            <i className="fa-regular fa-bell text-white text-lg" />
-            {notif > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-amber)] text-white text-[10px] font-bold flex items-center justify-center border-2 border-[#34254c]">{notif > 9 ? '9+' : notif}</span>}
-          </span>
-          <div className="flex-1 min-w-0 text-left">
-            <p className="font-semibold text-sm">Postfach</p>
-            <p className="text-xs text-white/70">{notif > 0 ? `${notif} neue Benachrichtigung${notif > 1 ? 'en' : ''}` : 'Keine neuen Nachrichten'}</p>
+        <div className="px-6 pt-4">
+          {/* Social-Buttons — wie im Blog unter dem Header, links neben dem Profilbild */}
+          <div className="flex items-center gap-2 mb-1.5 pr-28">
+            <SocialLinks user={user} />
+            <button onClick={() => setEditTarget('socials')} title="Social-Profile bearbeiten"
+              className="w-8 h-8 rounded-full bg-[var(--color-bg-soft)] text-[var(--color-lavender)] flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform">
+              <i className="fa-solid fa-pen text-[11px]" />
+            </button>
           </div>
-          <i className="fa-solid fa-chevron-right text-white/60" />
-        </button>
+          <p className="text-xs text-[var(--color-lavender)] mb-3">@{user.handle}</p>
+
+          {/* Persoenlicher Text */}
+          <div className="flex items-start gap-2 mb-4">
+            <p className={`flex-1 text-sm leading-relaxed ${user.bio ? 'text-[var(--color-body)]' : 'text-[var(--color-lavender-lt)] italic'}`}>
+              {user.bio || 'Noch kein Text ueber dich — tipp auf den Stift.'}
+            </p>
+            <button onClick={() => setEditTarget('bio')} title="Text bearbeiten"
+              className="w-8 h-8 rounded-full bg-[var(--color-bg-soft)] text-[var(--color-lavender)] flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform">
+              <i className="fa-solid fa-pen text-[11px]" />
+            </button>
+          </div>
+
+          {/* Wo im Blog "Freund:in hinzufuegen" und "Folgen" stehen: Postfach + Folgen-Freigabe */}
+          <div className="flex gap-3 mb-7">
+            <button onClick={() => { setNotif(0); navigate('/postfach'); }}
+              className="flex-1 flex items-center justify-center gap-2 font-bold py-3 rounded-xl text-sm text-white active:scale-[0.98] transition-transform"
+              style={{ background: 'linear-gradient(135deg, #4a3268, #34254c)', boxShadow: '0 6px 20px rgba(52,37,76,0.30)' }}>
+              <span className="relative flex-shrink-0">
+                <i className="fa-regular fa-bell" />
+                {notif > 0 && <span className="absolute -top-2 -right-2.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[var(--color-amber)] text-white text-[10px] font-bold flex items-center justify-center">{notif > 9 ? '9+' : notif}</span>}
+              </span>
+              Postfach
+            </button>
+            <button onClick={() => updateUser({ allowFollowers: !user.allowFollowers })}
+              title="Duerfen dir andere folgen?"
+              className={`flex-1 font-bold py-3 rounded-xl text-sm transition-colors ${user.allowFollowers ? 'bg-[var(--color-bg-soft)] text-[var(--color-aubergine)]' : 'bg-[var(--color-aubergine)] text-white'}`}>
+              <i className={`fa-solid ${user.allowFollowers ? 'fa-user-check' : 'fa-user-plus'} mr-2`} />
+              {user.allowFollowers ? 'Folgen erlaubt' : 'Folgen erlauben'}
+            </button>
+          </div>
 
         {/* Freundschaftsanfragen */}
         {requests.length > 0 && (
@@ -272,19 +278,15 @@ export function ProfilePage() {
         </div>
 
         {/* Neue Leute kennenlernen */}
-        <button onClick={() => navigate('/people')}
+        <button onClick={() => navigate('/leute')}
           className="w-full flex items-center gap-3 bg-white border-2 border-[var(--color-amber)]/30 text-[var(--color-aubergine)] font-semibold py-3 px-4 rounded-xl text-sm mb-3 active:scale-[0.98] transition-transform">
           <span className="w-8 h-8 rounded-xl bg-[var(--color-amber)]/15 flex items-center justify-center"><i className="fa-solid fa-user-group text-[var(--color-amber)]" /></span>
           <span className="flex-1 text-left">Neue Leute kennenlernen</span>
           <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)]" />
         </button>
 
-        {/* Edit Profile */}
-        <button onClick={() => setEditOpen(true)}
-          className="w-full flex items-center justify-center gap-2 bg-[var(--color-bg-soft)] text-[var(--color-aubergine)] font-semibold py-3 rounded-xl text-sm mb-6 active:scale-[0.98] transition-transform">
-          <i className="fa-solid fa-pen" />
-          Profil bearbeiten
-        </button>
+        {/* Kein Sammel-Knopf „Profil bearbeiten" mehr: jeder Stift oben bearbeitet direkt das,
+            was daneben steht — Bild, Name, Text, Social-Profile, Sichtbarkeit der Zahlen. */}
 
         {/* Meine erstellten Orte (inkl. „in Prüfung") */}
         {myPlaces.length > 0 && (
@@ -328,43 +330,75 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Edit Profile Sheet */}
-      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} title="Profil bearbeiten">
-        <div className="flex flex-col gap-4">
-          {[
-            { key: 'name' as const, label: 'Name', placeholder: 'Dein Name' },
-            { key: 'bio' as const, label: 'Bio', placeholder: 'Kurze Beschreibung…', multiline: true },
-            { key: 'instagram' as const, label: 'Instagram', placeholder: 'handle' },
-            { key: 'tiktok' as const,    label: 'TikTok',    placeholder: 'handle' },
-            { key: 'facebook' as const,  label: 'Facebook',  placeholder: 'seiten-name oder profil.id' },
-            { key: 'snapchat' as const,  label: 'Snapchat',  placeholder: 'username' },
-            { key: 'website' as const,   label: 'Website',   placeholder: 'https://…' },
-          ].map(f => (
-            <div key={f.key}>
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-1 block">{f.label}</label>
-              {f.multiline ? (
-                <textarea value={editData[f.key]} onChange={e => setEditData(d => ({ ...d, [f.key]: e.target.value }))}
-                  placeholder={f.placeholder} rows={3}
-                  className="w-full border border-[var(--color-bg-soft)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)] resize-none" />
-              ) : (
-                <input type="text" value={editData[f.key]} onChange={e => setEditData(d => ({ ...d, [f.key]: e.target.value }))}
-                  placeholder={f.placeholder}
-                  className="w-full border border-[var(--color-bg-soft)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)]" />
-              )}
-            </div>
-          ))}
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-1 block">Alter</label>
-            <input type="number" min={13} max={120} value={editData.age}
-              onChange={e => setEditData(d => ({ ...d, age: e.target.value }))}
-              placeholder="z.B. 28"
-              className="w-full border border-[var(--color-bg-soft)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)]" />
+      {/* Bearbeiten-Sheet — zeigt nur das, wozu der angetippte Stift gehoert */}
+      <BottomSheet open={editTarget !== null} onClose={() => setEditTarget(null)}
+        title={editTarget === 'name' ? 'Name & Alter'
+             : editTarget === 'bio' ? 'Ueber dich'
+             : editTarget === 'socials' ? 'Social-Profile'
+             : 'Im Blog sichtbar'}>
+        {editTarget === 'visibility' ? (
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-[var(--color-lavender)] mb-3">
+              Diese Zahlen sehen andere in deinem Blog. Was du hier ausschaltest, taucht dort gar nicht erst auf.
+            </p>
+            {[
+              { label: 'Besuchte Orte', icon: 'fa-timeline', key: 'visitedPublic' as const, val: user.visitedPublic },
+              { label: 'Erstellte Orte', icon: 'fa-feather-pointed', key: 'createdPublic' as const, val: user.createdPublic },
+              { label: 'Gemerkte Orte', icon: 'fa-bookmark', key: 'savedPublic' as const, val: user.savedPublic },
+            ].map(t => (
+              <div key={t.key} className="flex items-center justify-between py-2.5">
+                <span className="flex items-center gap-2.5 text-sm text-[var(--color-aubergine)] font-medium">
+                  <i className={`fa-solid ${t.icon} text-[var(--color-amber)] w-4 text-center`} />{t.label}
+                </span>
+                <button onClick={() => updateUser({ [t.key]: !t.val })}
+                  className={`w-12 h-6 rounded-full relative transition-colors ${t.val ? 'bg-[var(--color-amber)]' : 'bg-[var(--color-bg-soft)]'}`}>
+                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${t.val ? 'right-0.5' : 'left-0.5'}`} />
+                </button>
+              </div>
+            ))}
           </div>
-          <button onClick={saveProfile} disabled={saving}
-            className="w-full bg-[var(--color-amber)] text-white font-bold py-3 rounded-xl text-sm disabled:opacity-50">
-            {saving ? 'Speichern…' : 'Speichern'}
-          </button>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {(editTarget === 'name'
+              ? [{ key: 'name' as const, label: 'Name', placeholder: 'Dein Name' }]
+              : editTarget === 'bio'
+              ? [{ key: 'bio' as const, label: 'Ueber dich', placeholder: 'Kurze Beschreibung…', multiline: true }]
+              : [
+                  { key: 'instagram' as const, label: 'Instagram', placeholder: 'handle' },
+                  { key: 'tiktok' as const,    label: 'TikTok',    placeholder: 'handle' },
+                  { key: 'facebook' as const,  label: 'Facebook',  placeholder: 'seiten-name oder profil.id' },
+                  { key: 'snapchat' as const,  label: 'Snapchat',  placeholder: 'username' },
+                  { key: 'website' as const,   label: 'Website',   placeholder: 'https://…' },
+                ]
+            ).map(f => (
+              <div key={f.key}>
+                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-1 block">{f.label}</label>
+                {'multiline' in f && f.multiline ? (
+                  <textarea value={editData[f.key]} onChange={e => setEditData(d => ({ ...d, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder} rows={4}
+                    className="w-full border border-[var(--color-bg-soft)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)] resize-none" />
+                ) : (
+                  <input type="text" value={editData[f.key]} onChange={e => setEditData(d => ({ ...d, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    className="w-full border border-[var(--color-bg-soft)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)]" />
+                )}
+              </div>
+            ))}
+            {editTarget === 'name' && (
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-lavender)] mb-1 block">Alter</label>
+                <input type="number" min={13} max={120} value={editData.age}
+                  onChange={e => setEditData(d => ({ ...d, age: e.target.value }))}
+                  placeholder="z.B. 28"
+                  className="w-full border border-[var(--color-bg-soft)] rounded-xl px-3 py-2.5 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)]" />
+              </div>
+            )}
+            <button onClick={saveProfile} disabled={saving}
+              className="w-full bg-[var(--color-amber)] text-white font-bold py-3 rounded-xl text-sm disabled:opacity-50">
+              {saving ? 'Speichern…' : 'Speichern'}
+            </button>
+          </div>
+        )}
       </BottomSheet>
 
       {/* Settings Sheet */}
@@ -372,12 +406,9 @@ export function ProfilePage() {
         <div className="flex flex-col gap-5">
           {/* Toggles */}
           {[
+            // „Follower zulassen" und die drei Blog-Zahlen liegen jetzt direkt im Profil
+            // (Knopf neben dem Postfach bzw. Stift neben den Zahlen).
             { label: 'Profil sichtbar', key: 'profileVisible' as const, val: user.profileVisible },
-            { label: 'Follower zulassen', key: 'allowFollowers' as const, val: user.allowFollowers },
-            // Die drei Zahlen im Blog — jede einzeln freischaltbar
-            { label: 'Besuchte Orte im Blog zeigen', key: 'visitedPublic' as const, val: user.visitedPublic },
-            { label: 'Erstellte Orte im Blog zeigen', key: 'createdPublic' as const, val: user.createdPublic },
-            { label: 'Gemerkte Orte im Blog zeigen', key: 'savedPublic' as const, val: user.savedPublic },
             { label: 'Benachrichtigungen', key: 'notificationsEnabled' as const, val: user.notificationsEnabled },
             { label: 'Meet People aktivieren', key: 'meetPeopleEnabled' as const, val: user.meetPeopleEnabled },
           ].map(s => (
@@ -433,12 +464,14 @@ export function ProfilePage() {
           shape={cropTarget.kind === 'avatar' ? 'round' : 'cover'}
           initX={cropTarget.kind === 'avatar' ? user.avatarCropX : user.coverCropX}
           initY={cropTarget.kind === 'avatar' ? user.avatarCropY : user.coverCropY}
+          initZoom={cropTarget.kind === 'avatar' ? user.avatarZoom : user.coverZoom}
           onSave={saveCrop}
           onClose={() => setCropTarget(null)}
         />
       )}
 
-      <LegalFooter />
-    </AppShell>
+      {!embedded && <LegalFooter />}
+    </>
   );
+  return embedded ? content : <AppShell title="Profil">{content}</AppShell>;
 }

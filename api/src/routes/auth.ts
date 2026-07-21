@@ -81,6 +81,8 @@ await db.run(sql`ALTER TABLE users ADD COLUMN snapchat TEXT`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN allow_followers INTEGER NOT NULL DEFAULT 0`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN visited_public INTEGER NOT NULL DEFAULT 0`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN created_public INTEGER NOT NULL DEFAULT 1`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN avatar_zoom REAL NOT NULL DEFAULT 1`).catch(() => {});
+await db.run(sql`ALTER TABLE users ADD COLUMN cover_zoom REAL NOT NULL DEFAULT 1`).catch(() => {});
 await db.run(sql`ALTER TABLE users ADD COLUMN saved_public INTEGER NOT NULL DEFAULT 0`).catch(() => {});
 // Bild-Ausschnitt (Fokuspunkt 0–1) für Avatar + Titelbild
 await db.run(sql`ALTER TABLE users ADD COLUMN avatar_crop_x REAL NOT NULL DEFAULT 0.5`).catch(() => {});
@@ -229,6 +231,13 @@ router.patch('/me', requireAuth, async (c) => {
     if (key in body) {
       const n = Number(body[key]);
       if (Number.isFinite(n)) update[key] = Math.min(1, Math.max(0, n));
+    }
+  }
+  // Zoomstufe — 1 = formatfüllend, darüber wird ins Bild hineingezoomt
+  for (const key of ['avatarZoom', 'coverZoom'] as const) {
+    if (key in body) {
+      const n = Number(body[key]);
+      if (Number.isFinite(n)) update[key] = Math.min(4, Math.max(1, n));
     }
   }
   // Alter separat (Zahl/leer → null, plausibel begrenzt)

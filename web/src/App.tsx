@@ -91,6 +91,14 @@ function UserBlogRoute() {
   return <UserProfilePage />;
 }
 
+// /profil — das eigene Profil. Mobil dasselbe Prinzip wie beim Blog: es liegt auf dem
+// Entdecken-Overlay, herunterziehen zeigt die Karte darunter.
+function OwnProfileRoute() {
+  const isMobile = useIsMobile(1024);
+  if (isMobile) return <Navigate to="/" replace state={{ profileOverlay: true }} />;
+  return <ProfilePage />;
+}
+
 // Alte englische Route → deutsche Route, Query-String bleibt erhalten (z.B. ?edit=…)
 function RedirectTo({ to }: { to: string }) {
   const { search } = useLocation();
@@ -177,7 +185,7 @@ export function App() {
         <Route path="/rangliste" element={<RequireAuth><RankingPage /></RequireAuth>} />
         <Route path="/ranking"   element={<RedirectTo to="/rangliste" />} />
         <Route path="/awards"   element={<RequireAuth><AwardsPage /></RequireAuth>} />
-        <Route path="/profil"   element={<RequireAuth><ProfilePage /></RequireAuth>} />
+        <Route path="/profil"   element={<RequireAuth><OwnProfileRoute /></RequireAuth>} />
         <Route path="/profile"  element={<RedirectTo to="/profil" />} />
         <Route path="/postfach" element={<RequireAuth><NotificationInboxPage /></RequireAuth>} />
         <Route path="/notifications" element={<RedirectTo to="/postfach" />} />
