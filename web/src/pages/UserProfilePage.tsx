@@ -157,7 +157,7 @@ export function UserProfilePage({ userId, embedded, onUser, onShowOnMap }: Props
           {user.trips.length > 0 && (
             <div className="mb-7">
               <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Meine Trips</p>
-              <div className="flex gap-3 overflow-x-auto -mx-6 px-6 pb-1" style={{ scrollbarWidth: 'none' }}>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-6 px-6 pb-1">
                 {user.trips.map(t => (
                   <button key={t.id} onClick={() => navigate(`/trips/${t.id}`)}
                     className="relative flex-shrink-0 w-36 aspect-[3/4] rounded-2xl overflow-hidden shadow-[var(--shadow-card)] active:scale-95 transition-transform">

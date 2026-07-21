@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { LegalFooter } from '../components/layout/LegalFooter.js';
@@ -10,14 +10,14 @@ import { SocialLinks } from '../components/ui/SocialLinks.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { authApi, mediaApi, rankingsApi, friendsApi, placesApi, notificationsApi } from '../services/api.js';
-import { RankingCard } from './DiscoverPage.js';
-import type { MyRankStats } from '../services/api.js';
+import { StatusTile, StatusSlider, MiniLeaderboard } from '../components/ui/StatusTiers.js';
+import type { MyRankStats, VisitedPlace } from '../services/api.js';
 import type { FriendRequest, Friend, Place } from '../types/index.js';
 
 export function ProfilePage() {
   const navigate = useNavigate();
   const { user, updateUser, logout } = useAuthStore();
-  const { visitedIds, places, playVideos, setPlayVideos } = useAppStore();
+  const { savedIds, ratings, playVideos, setPlayVideos } = useAppStore();
   const [editOpen, setEditOpen]         = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '', facebook: user?.facebook ?? '', snapchat: user?.snapchat ?? '', age: user?.age != null ? String(user.age) : '' });
@@ -33,14 +33,27 @@ export function ProfilePage() {
   const [friends, setFriends]           = useState<Friend[]>([]);
   const [myPlaces, setMyPlaces]         = useState<Place[]>([]);
   const [notif, setNotif]               = useState(0);
+  const [visited, setVisited]           = useState<VisitedPlace[]>([]);
+  const [visitedView, setVisitedView]   = useState<'timeline' | 'favorites'>('timeline');
 
   useEffect(() => {
     rankingsApi.me().then(setRankInfo).catch(() => {});
     friendsApi.requests().then(setRequests).catch(() => {});
     friendsApi.list().then(setFriends).catch(() => {});
     placesApi.myCreated().then(setMyPlaces).catch(() => {});
+    placesApi.myVisited().then(setVisited).catch(() => {});
     notificationsApi.count().then(r => setNotif(r.count)).catch(() => {});
   }, []);
+
+  // Zeitstrahl: neueste Besuche zuerst. Lieblingsorte: eigene Reihenfolge, sonst nach Bewertung.
+  const byDate = useMemo(() =>
+    [...visited].sort((a, b) => (b.visitedAt ?? '').localeCompare(a.visitedAt ?? '')), [visited]);
+  const byRating = useMemo(() => [...visited].sort((a, b) => {
+    const pa = a.favoritePosition, pb = b.favoritePosition;
+    if (pa != null || pb != null) return (pa ?? 9e9) - (pb ?? 9e9);
+    return (ratings[b.id]?.stars ?? 0) - (ratings[a.id]?.stars ?? 0)
+        || (b.visitedAt ?? '').localeCompare(a.visitedAt ?? '');
+  }), [visited, ratings]);
 
   async function respondRequest(friendshipId: number, accept: boolean) {
     try {
@@ -50,11 +63,6 @@ export function ProfilePage() {
   }
 
   if (!user) return null;
-
-  const visitedPlaces = places.filter(p => visitedIds.has(p.id));
-  const avgStars = visitedPlaces.length
-    ? (visitedPlaces.reduce((s, p) => s + p.rating, 0) / visitedPlaces.length).toFixed(1)
-    : '—';
 
   async function saveProfile() {
     setSaving(true);
@@ -132,7 +140,27 @@ export function ProfilePage() {
             </span>
           )}
           {user.bio && <p className="text-sm text-[var(--color-body)] mt-2">{user.bio}</p>}
-          <SocialLinks user={user} className="mt-3 mb-6" />
+          <SocialLinks user={user} className="mt-3 mb-4" />
+
+          {/* Zum Kopf gehören die drei Zahlen: besucht · erstellt · gemerkt */}
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            {[
+              { label: 'Besucht', value: visited.length, icon: 'fa-flag-checkered' },
+              { label: 'Erstellt', value: myPlaces.length, icon: 'fa-feather-pointed' },
+              { label: 'Gemerkt', value: savedIds.size, to: '/meine-orte', icon: 'fa-bookmark' },
+            ].map(s => {
+              const cls = 'bg-white rounded-2xl py-3 text-center shadow-[var(--shadow-card)]';
+              const inner = (
+                <>
+                  <div className="font-display font-bold text-2xl text-[var(--color-aubergine)]">{s.value}</div>
+                  <div className="text-[11px] text-[var(--color-lavender)] uppercase tracking-wider">{s.label}</div>
+                </>
+              );
+              return s.to
+                ? <button key={s.label} onClick={() => navigate(s.to!)} className={`${cls} active:scale-95 transition-transform`}>{inner}</button>
+                : <div key={s.label} className={cls}>{inner}</div>;
+            })}
+          </div>
 
         {/* Postfach — Benachrichtigungen liegen jetzt im Profil (lila hervorgehoben) */}
         <button onClick={() => { setNotif(0); navigate('/notifications'); }}
@@ -177,29 +205,80 @@ export function ProfilePage() {
           </div>
         )}
 
-        {/* Stats — Besucht/Gemerkt führen zu den jeweiligen Seiten */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {[
-            { label: 'Besucht',   value: visitedIds.size, to: '/visited' as string | null },
-            { label: 'Gemerkt',   value: useAppStore.getState().savedIds.size, to: '/saved' as string | null },
-            { label: 'Ø Sterne',  value: avgStars, to: null },
-          ].map(s => {
-            const cls = 'bg-white rounded-2xl p-3 text-center shadow-[var(--shadow-card)]';
-            const inner = (
-              <>
-                <div className="font-display font-bold text-2xl text-[var(--color-aubergine)]">{s.value}</div>
-                <div className="text-[11px] text-[var(--color-lavender)] uppercase tracking-wider">{s.label}</div>
-              </>
-            );
-            return s.to
-              ? <button key={s.label} onClick={() => navigate(s.to!)} className={`${cls} active:scale-95 transition-transform`}>{inner}</button>
-              : <div key={s.label} className={cls}>{inner}</div>;
-          })}
+        {/* ── Dein Status: dieselbe Kachel und derselbe Slider wie auf der Prämien-Seite ── */}
+        {rankInfo && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)]">Dein Status</p>
+              <button onClick={() => navigate('/rangliste')} className="text-[11px] font-bold text-[var(--color-lavender)]">
+                Prämien <i className="fa-solid fa-chevron-right text-[9px]" />
+              </button>
+            </div>
+            <div className="mb-3"><StatusTile stats={rankInfo} compact /></div>
+            <StatusSlider tierKey={rankInfo.tierKey} />
+          </div>
+        )}
+
+        {/* ── Ranking (Top 5) ── */}
+        <div className="mb-6">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Ranking</p>
+          <MiniLeaderboard limit={5} myId={user.id}
+            onOpenUser={id => navigate(`/u/${id}`)} onOpenAll={() => navigate('/rangliste')} />
         </div>
 
-        {/* TripCounting — von der Entdecken-Seite ins Profil verlegt */}
+        {/* ── Zeitstrahl / Lieblingsorte — die besuchten Orte liegen jetzt hier ── */}
         <div className="mb-6">
-          <RankingCard onNavigate={navigate} />
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <div className="flex gap-1 p-1 bg-[var(--color-bg-soft)] rounded-2xl">
+              {([['timeline', 'fa-timeline', 'Zeitstrahl'], ['favorites', 'fa-heart', 'Lieblingsorte']] as const).map(([id, icon, label]) => (
+                <button key={id} onClick={() => setVisitedView(id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${visitedView === id ? 'bg-white text-[var(--color-aubergine)] shadow-sm' : 'text-[var(--color-lavender)]'}`}>
+                  <i className={`fa-solid ${icon}`} />{label}
+                </button>
+              ))}
+            </div>
+            {visited.length > 0 && (
+              <button onClick={() => navigate('/besucht')} className="text-[11px] font-bold text-[var(--color-lavender)] flex-shrink-0">
+                Alle <i className="fa-solid fa-chevron-right text-[9px]" />
+              </button>
+            )}
+          </div>
+          {visited.length === 0 ? (
+            <div className="text-center py-8 text-[var(--color-lavender-lt)]">
+              <i className="fa-solid fa-map-location-dot text-3xl mb-2 opacity-30 block" />
+              <p className="text-sm">Noch keine besuchten Orte.</p>
+            </div>
+          ) : (
+            /* Fenster für gut 5 Einträge — der Rest bleibt scrollbar erreichbar */
+            <div className="flex flex-col gap-2 overflow-y-auto overscroll-contain pr-1" style={{ maxHeight: 340 }}>
+              {(visitedView === 'timeline' ? byDate : byRating).map((p, i) => {
+                const d = p.visitedAt ? new Date(p.visitedAt) : null;
+                const stars = ratings[p.id]?.stars ?? 0;
+                return (
+                  <button key={p.id} onClick={() => navigate(`/ort/${p.id}`)}
+                    className="w-full flex items-center gap-3 bg-white rounded-2xl p-2.5 shadow-[var(--shadow-card)] flex-shrink-0 text-left active:scale-[0.99] transition-transform">
+                    {visitedView === 'favorites' && (
+                      <span className="font-display font-bold text-lg w-6 text-center flex-shrink-0"
+                        style={{ color: i < 3 ? 'var(--color-amber)' : 'var(--color-lavender-lt)' }}>{i + 1}</span>
+                    )}
+                    <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-[var(--color-bg-soft)]">
+                      <img src={p.hero} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-[var(--color-aubergine)] truncate">{p.name}</p>
+                      <p className="text-xs text-[var(--color-lavender)] truncate">{p.region}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {stars > 0 && <span className="text-[11px] text-[var(--color-amber)]">{'★'.repeat(stars)}</span>}
+                        {visitedView === 'timeline' && d && (
+                          <span className="text-[10px] text-[var(--color-lavender-lt)]">{d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: '2-digit' })}</span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Neue Leute kennenlernen */}
@@ -216,23 +295,6 @@ export function ProfilePage() {
           <i className="fa-solid fa-pen" />
           Profil bearbeiten
         </button>
-
-        {/* Visited places */}
-        {visitedPlaces.length > 0 && (
-          <div className="mb-6">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">Besuchte Orte</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {visitedPlaces.slice(0, 9).map(p => (
-                <div key={p.id} className="aspect-square rounded-xl overflow-hidden relative">
-                  <img src={p.hero} alt={p.name} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-1.5">
-                    <span className="text-white text-[9px] font-bold leading-tight">{p.name}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Meine erstellten Orte (inkl. „in Prüfung") */}
         {myPlaces.length > 0 && (

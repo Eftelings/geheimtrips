@@ -45,6 +45,11 @@
   ::-webkit-scrollbar-thumb { background: var(--color-lavender-lt); border-radius: 999px; }
 }
 
+/* Scrollbalken ausblenden — für Overlay-Inhalte (Blog, Artikel), die wie eine eigene
+   Seite wirken sollen. Bewusst ungelayert, sonst schlüge die Basis-Regel oben zu. */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
 /* ── Eingebettete Bilder im Fließtext (figure) — Format quer/hoch + Bildunterschrift ── */
 /* Bewusst ungelayert → schlägt die Tailwind-[&_img]-Utilities im Editor & auf der Ortsseite. */
 .gt-fig { margin: 0.75rem 0; }

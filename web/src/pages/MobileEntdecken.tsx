@@ -875,12 +875,10 @@ export function MobileEntdecken() {
         {/* Blog einer Person — liegt auf demselben Overlay. Am Griff herunterziehen zeigt die Karte,
             die über den Personenfilter schon auf ihre Orte gefiltert ist; noch weiter die Liste. */}
         {blogMode && blogUserId !== null && (
-          <div className="absolute inset-0 z-30 flex flex-col bg-white rounded-t-3xl overflow-hidden">
-            <div className="flex-shrink-0 flex justify-center pt-2.5 pb-1.5"
-              onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
-              <div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} />
-            </div>
-            <div className="flex-1 overflow-y-auto overscroll-contain"
+          <div className="absolute inset-0 z-30 bg-white rounded-t-3xl overflow-hidden">
+            {/* Das Titelbild beginnt ganz oben — Griff und Zurück liegen IM Bild (wie beim Ort),
+                sonst stünde eine weiße Leiste über dem Header. */}
+            <div className="h-full overflow-y-auto overscroll-contain no-scrollbar"
               style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}>
               <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
                 <BlogEmbed key={blogUserId} userId={blogUserId} embedded
@@ -888,9 +886,14 @@ export function MobileEntdecken() {
                   onShowOnMap={() => setSheetSnap(1)} />
               </Suspense>
             </div>
+            {/* Zieh-Griff über dem Bild — nimmt die Geste an, ohne Fläche zu belegen */}
+            <div className="absolute top-0 left-0 right-0 h-9 z-10 flex justify-center pt-2.5"
+              onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
+              <div className="w-10 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,.6)' }} />
+            </div>
             {/* Schließen: Blog weg, Karte bleibt auf diese Person gefiltert (Chip oben löst ihn) */}
             <button onClick={() => { setBlogUserId(null); setSheetSnap(1); }}
-              className="absolute left-4 top-9 w-9 h-9 rounded-full flex items-center justify-center text-white"
+              className="absolute left-4 top-4 z-20 w-9 h-9 rounded-full flex items-center justify-center text-white active:scale-90"
               style={{ background: 'rgba(0,0,0,0.38)', backdropFilter: 'blur(6px)' }} aria-label="Blog schließen">
               <i className="fa-solid fa-arrow-left" />
             </button>
