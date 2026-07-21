@@ -149,6 +149,14 @@ export const ratings = sqliteTable('ratings', {
 
 // ─── Trips ───────────────────────────────────────────────────────────────────
 
+// Folgen (Creator-Economy): follower folgt followee. Eindeutigkeit via UNIQUE-Index (Laufzeit-DDL).
+export const follows = sqliteTable('follows', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  followerId: integer('follower_id').notNull().references(() => users.id),
+  followeeId: integer('followee_id').notNull().references(() => users.id),
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+});
+
 export const trips = sqliteTable('trips', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   userId: integer('user_id').notNull().references(() => users.id),

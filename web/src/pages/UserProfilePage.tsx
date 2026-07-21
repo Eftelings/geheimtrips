@@ -35,6 +35,14 @@ export function UserProfilePage() {
     try { await friendsApi.accept(user.pendingRequestId); await load(); } catch { /* */ }
     setBusy(false);
   }
+  async function toggleFollow() {
+    if (!user) return;
+    const willFollow = !user.isFollowing;
+    // optimistisch (Button + Zähler), bei Fehler zurückrollen
+    setUser({ ...user, isFollowing: willFollow, followerCount: user.followerCount + (willFollow ? 1 : -1) });
+    try { await (willFollow ? usersApi.follow(user.id) : usersApi.unfollow(user.id)); }
+    catch (e) { setUser(u => u && { ...u, isFollowing: !willFollow, followerCount: u.followerCount + (willFollow ? -1 : 1) }); alert((e as Error).message ?? 'Fehler'); }
+  }
 
   if (loading) return (
     <AppShell showBack>
@@ -103,13 +111,25 @@ export function UserProfilePage() {
         <div className="px-6 pt-4">
           {/* Social-Buttons (unter dem Header) */}
           <SocialLinks user={user} className="mb-1.5" />
-          <p className="text-xs text-[var(--color-lavender)] mb-3">@{user.handle}</p>
+          <p className="text-xs text-[var(--color-lavender)] mb-3">
+            @{user.handle}
+            {user.allowFollowers && <> · <strong className="text-[var(--color-aubergine)]">{user.followerCount}</strong> Follower · <strong className="text-[var(--color-aubergine)]">{user.followingCount}</strong> folgt</>}
+          </p>
 
           {/* Persönlicher Text */}
           {user.bio && <p className="text-sm text-[var(--color-body)] leading-relaxed mb-4">{user.bio}</p>}
 
-          {/* Freund-Button */}
-          <div className="flex gap-3 mb-7">{friendButton()}</div>
+          {/* Freund- + Folgen-Button */}
+          <div className="flex gap-3 mb-7">
+            {friendButton()}
+            {user.allowFollowers && user.friendStatus !== 'self' && (
+              <button onClick={toggleFollow}
+                className={`flex-1 font-bold py-3 rounded-xl text-sm transition-colors ${user.isFollowing ? 'bg-[var(--color-bg-soft)] text-[var(--color-aubergine)]' : 'bg-[var(--color-aubergine)] text-white'}`}>
+                <i className={`fa-solid ${user.isFollowing ? 'fa-user-check' : 'fa-user-plus'} mr-2`} />
+                {user.isFollowing ? 'Folge ich' : 'Folgen'}
+              </button>
+            )}
+          </div>
 
           {/* Trips — horizontaler Slider mit hochformatigen Kacheln (nur veröffentlichte) */}
           {user.trips.length > 0 && (

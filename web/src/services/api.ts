@@ -413,10 +413,13 @@ export interface PublicUser {
   instagram: string | null; tiktok: string | null; website: string | null; facebook: string | null; snapchat: string | null;
   allowFollowers: boolean; visitedPublic: boolean;
   isLocalHero: boolean; placeCount: number; visitedCount: number;
+  followerCount: number; followingCount: number; isFollowing: boolean;
   friendStatus: FriendStatus; pendingRequestId: number | null;
   places: Place[];
   trips: Trip[];
 }
 export const usersApi = {
-  get: (id: number) => get<PublicUser>(`/users/${id}`),
+  get:      (id: number) => get<PublicUser>(`/users/${id}`),
+  follow:   (id: number) => post<{ ok: boolean; isFollowing: boolean }>(`/users/${id}/follow`, {}),
+  unfollow: (id: number) => del<{ ok: boolean; isFollowing: boolean }>(`/users/${id}/follow`),
 };

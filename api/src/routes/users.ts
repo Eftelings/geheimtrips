@@ -1,13 +1,22 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { users, places, friendships, visitedPlaces, trips } from '../db/schema.js';
-import { eq, and, or } from 'drizzle-orm';
+import { users, places, friendships, visitedPlaces, trips, follows } from '../db/schema.js';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { hydrate } from './places.js';
 import { expandTrips } from './trips.js';
 import { isUserLocalHero } from '../lib/ranking.js';
 
 const router = new Hono();
+
+// Follows-Tabelle zur Laufzeit anlegen (kein Migrationsschritt nötig); ein Paar nur einmal.
+await db.run(sql`CREATE TABLE IF NOT EXISTS follows (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  follower_id INTEGER NOT NULL,
+  followee_id INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(follower_id, followee_id)
+)`).catch(() => {});
 
 // GET /users/:id — öffentliches Profil einer realen Nutzer:in + mein Freundschaftsstatus
 router.get('/:id', requireAuth, async (c) => {
@@ -40,6 +49,12 @@ router.get('/:id', requireAuth, async (c) => {
   const tripRows       = await db.select().from(trips).where(and(eq(trips.userId, id), eq(trips.published, true))).all();
   const publishedTrips = await expandTrips(tripRows);
 
+  // Follower / Folge ich dieser Person?
+  const followerRows  = await db.select({ id: follows.id }).from(follows).where(eq(follows.followeeId, id)).all();
+  const followingRows = await db.select({ id: follows.id }).from(follows).where(eq(follows.followerId, id)).all();
+  const iFollow = id === me.id ? false : !!(await db.select({ id: follows.id }).from(follows)
+    .where(and(eq(follows.followerId, me.id), eq(follows.followeeId, id))).get());
+
   return c.json({
     id: u.id, name: u.name, handle: u.handle, avatarUrl: u.avatarUrl, coverUrl: u.coverUrl, bio: u.bio,
     avatarCropX: u.avatarCropX, avatarCropY: u.avatarCropY, coverCropX: u.coverCropX, coverCropY: u.coverCropY,
@@ -49,10 +64,33 @@ router.get('/:id', requireAuth, async (c) => {
     isLocalHero: await isUserLocalHero(u.id),
     placeCount: placeRows.length,       // Beigetragene Orte
     visitedCount: visitedRows.length,   // Besuchte Orte
+    followerCount: followerRows.length,
+    followingCount: followingRows.length,
+    isFollowing: iFollow,
     friendStatus, pendingRequestId,
     places: placeRows.map(hydrate),
     trips: publishedTrips,
   });
+});
+
+// POST /users/:id/follow — folgen (nur wenn die Person Follower zulässt)
+router.post('/:id/follow', requireAuth, async (c) => {
+  const me = c.get('user');
+  const id = Number(c.req.param('id'));
+  if (id === me.id) return c.json({ error: 'Du kannst dir nicht selbst folgen.' }, 400);
+  const target = await db.select({ id: users.id, allow: users.allowFollowers }).from(users).where(eq(users.id, id)).get();
+  if (!target) return c.json({ error: 'Profil nicht gefunden.' }, 404);
+  if (!target.allow) return c.json({ error: 'Diese Person lässt kein Folgen zu.' }, 403);
+  await db.run(sql`INSERT OR IGNORE INTO follows (follower_id, followee_id) VALUES (${me.id}, ${id})`).catch(() => {});
+  return c.json({ ok: true, isFollowing: true });
+});
+
+// DELETE /users/:id/follow — entfolgen
+router.delete('/:id/follow', requireAuth, async (c) => {
+  const me = c.get('user');
+  const id = Number(c.req.param('id'));
+  await db.delete(follows).where(and(eq(follows.followerId, me.id), eq(follows.followeeId, id)));
+  return c.json({ ok: true, isFollowing: false });
 });
 
 export default router;
