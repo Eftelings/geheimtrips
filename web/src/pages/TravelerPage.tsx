@@ -41,6 +41,14 @@ export function TravelerPage() {
   return (
     <AppShell title="Traveler">
       <div className="px-6 pt-5 max-w-lg mx-auto pb-10">
+        {/* Neue Leute kennenlernen — gehört hierher, nicht ins eigene Profil */}
+        <button onClick={() => navigate('/leute')}
+          className="w-full flex items-center gap-3 bg-white border-2 border-[var(--color-amber)]/30 text-[var(--color-aubergine)] font-semibold py-3 px-4 rounded-xl text-sm mb-5 active:scale-[0.98] transition-transform">
+          <span className="w-8 h-8 rounded-xl bg-[var(--color-amber)]/15 flex items-center justify-center"><i className="fa-solid fa-user-plus text-[var(--color-amber)]" /></span>
+          <span className="flex-1 text-left">Neue Leute kennenlernen</span>
+          <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)]" />
+        </button>
+
         {loading ? (
           <div className="flex justify-center py-16 text-[var(--color-lavender-lt)]">
             <i className="fa-solid fa-circle-notch fa-spin text-2xl" />

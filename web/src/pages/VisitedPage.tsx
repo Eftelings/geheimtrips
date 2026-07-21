@@ -218,7 +218,7 @@ export function VisitedPage() {
         {/* View-Umschalter */}
         {visited.length > 0 && (
           <div className="flex gap-1 p-1 bg-[var(--color-bg-soft)] rounded-2xl mb-5 w-fit">
-            {([['timeline','fa-timeline','Zeitstrahl'],['favorites','fa-heart','Lieblingsorte']] as const).map(([id, icon, label]) => (
+            {([['timeline','fa-person-walking-luggage','Zeitstrahl'],['favorites','fa-heart','Lieblingsorte']] as const).map(([id, icon, label]) => (
               <button key={id} onClick={() => setView(id)}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${view === id ? 'bg-white text-[var(--color-aubergine)] shadow-sm' : 'text-[var(--color-lavender)]'}`}>
                 <i className={`fa-solid ${icon}`} />{label}

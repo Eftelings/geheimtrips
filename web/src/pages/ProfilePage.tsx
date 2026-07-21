@@ -7,10 +7,11 @@ import { Avatar } from '../components/ui/Avatar.js';
 import { ImageFocusSheet } from '../components/ui/ImageFocusSheet.js';
 import { SocialLinks } from '../components/ui/SocialLinks.js';
 import { ProfileHeader } from '../components/ui/ProfileHeader.js';
+import { SlideToConfirm } from '../components/ui/SlideToConfirm.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 import { useAppStore } from '../store/useAppStore.js';
 import { authApi, mediaApi, rankingsApi, friendsApi, placesApi, notificationsApi } from '../services/api.js';
-import { StatusTile, StatusSlider, MiniLeaderboard } from '../components/ui/StatusTiers.js';
+import { StatusSlider, MiniLeaderboard } from '../components/ui/StatusTiers.js';
 import type { MyRankStats, VisitedPlace } from '../services/api.js';
 import type { FriendRequest, Friend, Place } from '../types/index.js';
 
@@ -22,6 +23,8 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
   // Was gerade bearbeitet wird — jeder Stift öffnet genau seinen Ausschnitt
   const [editTarget, setEditTarget]     = useState<null | 'name' | 'bio' | 'socials' | 'visibility'>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Folgen abschalten kostet alle Follower — deshalb erst nach bewusstem Schieben
+  const [followOffOpen, setFollowOffOpen] = useState(false);
   const [editData, setEditData]         = useState({ name: user?.name ?? '', bio: user?.bio ?? '', instagram: user?.instagram ?? '', tiktok: user?.tiktok ?? '', website: user?.website ?? '', facebook: user?.facebook ?? '', snapchat: user?.snapchat ?? '', age: user?.age != null ? String(user.age) : '' });
   const coverInputRef                   = useRef<HTMLInputElement>(null);
   const avatarInputRef                  = useRef<HTMLInputElement>(null);
@@ -116,7 +119,7 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
           coverUrl={user.coverUrl} coverCropX={user.coverCropX} coverCropY={user.coverCropY} coverZoom={user.coverZoom}
           avatarUrl={user.avatarUrl} avatarCropX={user.avatarCropX} avatarCropY={user.avatarCropY} avatarZoom={user.avatarZoom}
           counts={[
-            { icon: 'fa-timeline', value: visited.length, label: 'besuchte Orte', onClick: () => navigate('/besucht') },
+            { icon: 'fa-person-walking-luggage', value: visited.length, label: 'besuchte Orte', onClick: () => navigate('/besucht') },
             { icon: 'fa-feather-pointed', value: myPlaces.length, label: 'erstellte Orte',
               onClick: () => myPlacesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
             { icon: 'fa-bookmark', value: savedIds.size, label: 'gemerkte Orte', onClick: () => navigate('/meine-orte') },
@@ -165,7 +168,7 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
               </span>
               Postfach
             </button>
-            <button onClick={() => updateUser({ allowFollowers: !user.allowFollowers })}
+            <button onClick={() => (user.allowFollowers ? setFollowOffOpen(true) : updateUser({ allowFollowers: true }))}
               title="Duerfen dir andere folgen?"
               className={`flex-1 font-bold py-3 rounded-xl text-sm transition-colors ${user.allowFollowers ? 'bg-[var(--color-bg-soft)] text-[var(--color-aubergine)]' : 'bg-[var(--color-aubergine)] text-white'}`}>
               <i className={`fa-solid ${user.allowFollowers ? 'fa-user-check' : 'fa-user-plus'} mr-2`} />
@@ -210,7 +213,7 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
                 Prämien <i className="fa-solid fa-chevron-right text-[9px]" />
               </button>
             </div>
-            <div className="mb-3"><StatusTile stats={rankInfo} compact /></div>
+            {/* Ohne die breite Info-Kachel: der Slider zeigt Stufe und Boni ohnehin. */}
             <StatusSlider tierKey={rankInfo.tierKey} />
           </div>
         )}
@@ -226,7 +229,7 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3 gap-2">
             <div className="flex gap-1 p-1 bg-[var(--color-bg-soft)] rounded-2xl">
-              {([['timeline', 'fa-timeline', 'Zeitstrahl'], ['favorites', 'fa-heart', 'Lieblingsorte']] as const).map(([id, icon, label]) => (
+              {([['timeline', 'fa-person-walking-luggage', 'Zeitstrahl'], ['favorites', 'fa-heart', 'Lieblingsorte']] as const).map(([id, icon, label]) => (
                 <button key={id} onClick={() => setVisitedView(id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${visitedView === id ? 'bg-white text-[var(--color-aubergine)] shadow-sm' : 'text-[var(--color-lavender)]'}`}>
                   <i className={`fa-solid ${icon}`} />{label}
@@ -276,14 +279,6 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
             </div>
           )}
         </div>
-
-        {/* Neue Leute kennenlernen */}
-        <button onClick={() => navigate('/leute')}
-          className="w-full flex items-center gap-3 bg-white border-2 border-[var(--color-amber)]/30 text-[var(--color-aubergine)] font-semibold py-3 px-4 rounded-xl text-sm mb-3 active:scale-[0.98] transition-transform">
-          <span className="w-8 h-8 rounded-xl bg-[var(--color-amber)]/15 flex items-center justify-center"><i className="fa-solid fa-user-group text-[var(--color-amber)]" /></span>
-          <span className="flex-1 text-left">Neue Leute kennenlernen</span>
-          <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)]" />
-        </button>
 
         {/* Kein Sammel-Knopf „Profil bearbeiten" mehr: jeder Stift oben bearbeitet direkt das,
             was daneben steht — Bild, Name, Text, Social-Profile, Sichtbarkeit der Zahlen. */}
@@ -342,7 +337,7 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
               Diese Zahlen sehen andere in deinem Blog. Was du hier ausschaltest, taucht dort gar nicht erst auf.
             </p>
             {[
-              { label: 'Besuchte Orte', icon: 'fa-timeline', key: 'visitedPublic' as const, val: user.visitedPublic },
+              { label: 'Besuchte Orte', icon: 'fa-person-walking-luggage', key: 'visitedPublic' as const, val: user.visitedPublic },
               { label: 'Erstellte Orte', icon: 'fa-feather-pointed', key: 'createdPublic' as const, val: user.createdPublic },
               { label: 'Gemerkte Orte', icon: 'fa-bookmark', key: 'savedPublic' as const, val: user.savedPublic },
             ].map(t => (
@@ -364,10 +359,10 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
               : editTarget === 'bio'
               ? [{ key: 'bio' as const, label: 'Ueber dich', placeholder: 'Kurze Beschreibung…', multiline: true }]
               : [
-                  { key: 'instagram' as const, label: 'Instagram', placeholder: 'handle' },
-                  { key: 'tiktok' as const,    label: 'TikTok',    placeholder: 'handle' },
-                  { key: 'facebook' as const,  label: 'Facebook',  placeholder: 'seiten-name oder profil.id' },
-                  { key: 'snapchat' as const,  label: 'Snapchat',  placeholder: 'username' },
+                  { key: 'instagram' as const, label: 'Instagram', placeholder: 'Profil' },
+                  { key: 'tiktok' as const,    label: 'TikTok',    placeholder: 'Profil' },
+                  { key: 'facebook' as const,  label: 'Facebook',  placeholder: 'Profil oder Seite' },
+                  { key: 'snapchat' as const,  label: 'Snapchat',  placeholder: 'Profil' },
                   { key: 'website' as const,   label: 'Website',   placeholder: 'https://…' },
                 ]
             ).map(f => (
@@ -399,6 +394,23 @@ export function ProfilePage({ embedded }: { embedded?: boolean } = {}) {
             </button>
           </div>
         )}
+      </BottomSheet>
+
+      {/* Folgen abschalten — mit Warnung und Schieberegler */}
+      <BottomSheet open={followOffOpen} onClose={() => setFollowOffOpen(false)} title="Folgen wirklich ausschalten?">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: 'rgba(224,88,88,0.08)' }}>
+            <i className="fa-solid fa-triangle-exclamation mt-0.5" style={{ color: '#e05858' }} />
+            <p className="text-sm text-[var(--color-body)] leading-relaxed">
+              Wenn du das Folgen ausschaltest, <strong className="text-[var(--color-aubergine)]">verlierst du alle deine Follower</strong>.
+              Schaltest du es später wieder ein, müssen dir alle erneut folgen.
+            </p>
+          </div>
+          <SlideToConfirm label="Zum Ausschalten schieben" doneLabel="Ausgeschaltet"
+            onConfirm={async () => { await updateUser({ allowFollowers: false }).catch(() => {}); setFollowOffOpen(false); }} />
+          <button onClick={() => setFollowOffOpen(false)}
+            className="w-full text-[var(--color-lavender)] font-semibold py-2 text-sm">Abbrechen</button>
+        </div>
       </BottomSheet>
 
       {/* Settings Sheet */}

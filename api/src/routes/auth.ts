@@ -245,6 +245,11 @@ router.patch('/me', requireAuth, async (c) => {
     const n = body.age == null || body.age === '' ? null : Number(body.age);
     update.age = n != null && Number.isFinite(n) && n >= 13 && n <= 120 ? Math.floor(n) : null;
   }
+  // Folgen abschalten heißt: die bestehenden Follower fallen weg. Das ist im Profil so
+  // angekündigt (Schieberegler mit Warnung) — also hier auch wirklich ausführen.
+  if (update.allowFollowers === false) {
+    await db.run(sql`DELETE FROM follows WHERE followee_id = ${user.id}`).catch(() => {});
+  }
   const [updated] = await db.update(users).set(update).where(eq(users.id, user.id)).returning();
   const { passwordHash: _, ...safeUser } = updated;
   return c.json({ user: safeUser });

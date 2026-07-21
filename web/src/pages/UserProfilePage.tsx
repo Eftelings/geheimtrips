@@ -92,7 +92,7 @@ export function UserProfilePage({ userId, embedded, onUser }: Props = {}) {
           avatarUrl={user.avatarUrl} avatarCropX={user.avatarCropX} avatarCropY={user.avatarCropY} avatarZoom={user.avatarZoom}
           /* Nur die Zahlen, die diese Person freigegeben hat */
           counts={[
-            ...(user.visitedPublic ? [{ icon: 'fa-timeline', value: user.visitedCount, label: 'besuchte Orte' }] : []),
+            ...(user.visitedPublic ? [{ icon: 'fa-person-walking-luggage', value: user.visitedCount, label: 'besuchte Orte' }] : []),
             ...(user.createdPublic ? [{ icon: 'fa-feather-pointed', value: user.placeCount, label: 'erstellte Orte' }] : []),
             ...(user.savedPublic ? [{ icon: 'fa-bookmark', value: user.savedCount, label: 'gemerkte Orte' }] : []),
           ]} />
