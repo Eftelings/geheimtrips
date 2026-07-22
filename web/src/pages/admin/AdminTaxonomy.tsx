@@ -73,11 +73,24 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (v: string) => Promise
   );
 }
 
+type Tile = 'kategorien' | 'merkmale' | 'vibes';
+type Sort = 'count' | 'alpha';
+
+const TILES: { id: Tile; label: string; icon: string; hint: string }[] = [
+  { id: 'kategorien', label: 'Hauptkategorien', icon: 'fa-folder-tree', hint: 'Gruppen und ihre Typ-Tags' },
+  { id: 'merkmale',   label: 'Merkmale',        icon: 'fa-tags',        hint: 'Was einen Ort auszeichnet' },
+  { id: 'vibes',      label: 'Vibes',           icon: 'fa-wand-magic-sparkles', hint: 'Stimmung eines Orts' },
+];
+
 export function AdminTaxonomy() {
   const [data, setData] = useState<TaxAll | null>(null);
   const [error, setError] = useState('');
   const [mergeTag, setMergeTag] = useState<string | null>(null);
   const [mergeTarget, setMergeTarget] = useState('');
+  const [tile, setTile] = useState<Tile>('kategorien');
+  const [sort, setSort] = useState<Sort>('count');
+  const [search, setSearch] = useState('');
+  const [note, setNote] = useState('');
 
   const load = () => adminApi.taxAll().then(setData).catch(e => setError(e.message));
   useEffect(() => { load(); }, []);
@@ -86,6 +99,27 @@ export function AdminTaxonomy() {
     setError('');
     try { await fn(); await load(); }
     catch (e) { setError((e as Error).message || 'Aktion fehlgeschlagen.'); }
+  }
+
+  /** Merkmale bzw. Vibes der gewaehlten Kachel — gefiltert und sortiert. */
+  const terms = useMemo(() => {
+    const list = tile === 'merkmale' ? data?.merkmale ?? [] : tile === 'vibes' ? data?.vibes ?? [] : [];
+    const q = search.trim().toLowerCase();
+    const hit = q ? list.filter(t => t.label.toLowerCase().includes(q)) : list;
+    return [...hit].sort((a, b) => sort === 'alpha'
+      ? a.label.localeCompare(b.label, 'de')
+      : (b.usage - a.usage) || a.label.localeCompare(b.label, 'de'));
+  }, [data, tile, sort, search]);
+
+  async function cleanupUnused(kind: 'merkmal' | 'vibe') {
+    const list = kind === 'merkmal' ? data?.merkmale ?? [] : data?.vibes ?? [];
+    const unused = list.filter(t => t.usage === 0).length;
+    if (!unused) { setNote('Es gibt nichts Unbenutztes.'); return; }
+    if (!confirm(`${unused} unbenutzte Eintraege loeschen? Was an Orten haengt, bleibt.`)) return;
+    await run(async () => {
+      const r = await adminApi.taxCleanup(kind);
+      setNote(`${r.deleted} geloescht, ${r.kept} behalten.`);
+    });
   }
 
   const tagsByGroup = useMemo(() => {
@@ -104,12 +138,37 @@ export function AdminTaxonomy() {
 
   return (
     <AdminLayout title="Kategorien & Merkmale">
-      <div className="max-w-3xl space-y-8">
+      <div className="max-w-3xl space-y-6">
+        {/* Drei Kacheln — je eine Welt, immer nur eine sichtbar */}
+        <div className="grid grid-cols-3 gap-3">
+          {TILES.map(t => {
+            const n = t.id === 'kategorien' ? data.groups.length
+                    : t.id === 'merkmale' ? data.merkmale.length : data.vibes.length;
+            return (
+              <button key={t.id} onClick={() => { setTile(t.id); setSearch(''); setNote(''); }}
+                className={`text-left rounded-2xl p-4 border transition-colors ${
+                  tile === t.id ? 'bg-white/10 border-[var(--color-amber)]/50' : 'bg-white/5 border-white/8 hover:bg-white/8'}`}>
+                <i className={`fa-solid ${t.icon} mb-2 text-lg`}
+                  style={{ color: tile === t.id ? 'var(--color-amber)' : '#8A6FB3' }} />
+                <div className="font-bold text-white text-sm">{t.label}</div>
+                <div className="text-[11px] text-white/40">{n} · {t.hint}</div>
+              </button>
+            );
+          })}
+        </div>
+
         <p className="text-xs text-white/50 leading-relaxed">
           Das ist die <strong className="text-white/80">Live-Taxonomie</strong> — genau das Vokabular, das Typ-Auswahl,
           Filter und der Fragen-Block nutzen. Kategorien und Tags umbenennen ist gefahrlos (Orte merken sich den Slug);
           Merkmale/Vibes umbenennen zieht die betroffenen Orte automatisch mit. Die <strong className="text-white/80">Fragen</strong> liegen jetzt in einem eigenen Bereich.
         </p>
+
+        {note && (
+          <div className="rounded-xl px-4 py-2.5 text-xs bg-white/5 border border-white/10 text-white/70 flex items-center justify-between">
+            <span>{note}</span>
+            <button onClick={() => setNote('')} className="text-white/40 hover:text-white">✕</button>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-xl px-4 py-3 text-sm bg-red-500/10 text-red-300 border border-red-500/20">
@@ -118,6 +177,7 @@ export function AdminTaxonomy() {
         )}
 
         {/* ── Hauptkategorien + Typ-Tags ───────────────────────────────── */}
+        {tile === 'kategorien' && (
         <section>
           <h2 className="text-sm font-bold text-white/80 mb-3">Hauptkategorien &amp; Typ-Tags</h2>
           <div className="space-y-4">
@@ -197,35 +257,73 @@ export function AdminTaxonomy() {
           </div>
           <AddRow label="Hauptkategorie hinzufügen" onAdd={v => run(() => adminApi.taxAddGroup(v))} />
         </section>
+        )}
 
-        {/* ── Merkmale / Vibes ─────────────────────────────────────────── */}
-        {([['merkmal', 'Merkmale', data.merkmale], ['vibe', 'Vibes', data.vibes]] as const).map(([kind, title, list]) => (
-          <section key={kind}>
-            <h2 className="text-sm font-bold text-white/80 mb-1">{title} <span className="text-white/30 font-normal">({list.length})</span></h2>
-            <p className="text-[11px] text-white/35 mb-3">
-              {kind === 'merkmal'
-                ? 'Was einen Ort auszeichnet (z. B. Altstadt, Szeneviertel, Platz). Umbenennen zieht die genutzten Orte mit; die Zahl zeigt, wie oft es verwendet wird.'
-                : 'Stimmung — nur Adjektive (z. B. nostalgisch, lebhaft).'}
-            </p>
-            <div className="rounded-xl bg-white/[0.03] border border-white/5 p-3.5">
-              {list.length === 0 ? <p className="text-xs text-white/25">— noch keine —</p> : (
-                <div className="flex flex-wrap gap-x-6 gap-y-2">
-                  {list.map(t => (
-                    <div key={t.slug} className="flex items-center gap-1.5 text-sm">
-                      <span className="text-white/80">
-                        <InlineEdit value={t.label} onSave={v => run(() => adminApi.taxRenameTerm(kind, t.slug, v))} />
-                      </span>
-                      <span className="text-[11px] text-white/25">{t.usage}</span>
-                      {!t.isApproved && (
-                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-[var(--color-amber)]/20 text-[var(--color-amber)]">neu</span>
-                      )}
-                    </div>
+        {/* ── Merkmale bzw. Vibes: eine Liste, sortierbar ───────────────── */}
+        {tile !== 'kategorien' && (() => {
+          const kind: 'merkmal' | 'vibe' = tile === 'merkmale' ? 'merkmal' : 'vibe';
+          return (
+            <section>
+              <p className="text-[11px] text-white/35 mb-3">
+                {kind === 'merkmal'
+                  ? 'Was einen Ort auszeichnet (z. B. Altstadt, Szeneviertel, Platz). Umbenennen zieht die genutzten Orte mit.'
+                  : 'Stimmung — nur Adjektive (z. B. nostalgisch, lebhaft).'}
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Suche…"
+                  className="flex-1 min-w-[150px] bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--color-amber)]" />
+                <div className="flex gap-1 p-1 bg-white/5 rounded-xl">
+                  {([['count', 'Häufigkeit'], ['alpha', 'A–Z']] as [Sort, string][]).map(([id, label]) => (
+                    <button key={id} onClick={() => setSort(id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        sort === id ? 'bg-[var(--color-amber)] text-black' : 'text-white/50 hover:text-white/80'}`}>
+                      {label}
+                    </button>
                   ))}
                 </div>
-              )}
-            </div>
-          </section>
-        ))}
+                <button onClick={() => cleanupUnused(kind)}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-white/5 text-white/60 hover:bg-red-500/20 hover:text-red-300 transition-colors">
+                  <i className="fa-solid fa-broom mr-1.5" />Unbenutzte löschen
+                </button>
+              </div>
+
+              <div className="rounded-xl bg-white/[0.03] border border-white/5 divide-y divide-white/5">
+                {terms.length === 0 ? (
+                  <p className="text-xs text-white/25 px-4 py-6 text-center">Nichts gefunden.</p>
+                ) : terms.map(t => (
+                  <div key={t.slug} className="flex items-center gap-3 px-3.5 py-2">
+                    <span className="w-10 text-right text-[11px] tabular-nums flex-shrink-0"
+                      style={{ color: t.usage > 0 ? 'var(--color-amber)' : 'rgba(255,255,255,0.2)' }}>
+                      {t.usage}×
+                    </span>
+                    <span className="text-white/85 text-sm flex-1 min-w-0">
+                      <InlineEdit value={t.label} onSave={v => run(() => adminApi.taxRenameTerm(kind, t.slug, v))} />
+                    </span>
+                    {!t.isApproved && (
+                      <button onClick={() => run(() => kind === 'merkmal' ? adminApi.taxApproveMerkmal(t.slug) : adminApi.taxApproveVibe(t.slug))}
+                        title="Freigeben"
+                        className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-[var(--color-amber)]/20 text-[var(--color-amber)] hover:bg-[var(--color-amber)]/35">
+                        neu — freigeben
+                      </button>
+                    )}
+                    <button disabled={t.usage > 0}
+                      onClick={() => { if (confirm(`„${t.label}" löschen?`)) run(() => kind === 'merkmal' ? adminApi.taxDeleteMerkmal(t.slug) : adminApi.taxDeleteVibe(t.slug)); }}
+                      title={t.usage > 0 ? 'Wird noch von Orten genutzt' : 'Löschen'}
+                      className="text-[11px] text-white/40 hover:text-red-400 px-1.5 disabled:opacity-20 disabled:hover:text-white/40">
+                      <i className="fa-solid fa-trash" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-white/35 mt-2">
+                Die Zahl links sagt, an wie vielen Orten der Eintrag hängt. Was benutzt wird, lässt sich nicht
+                löschen — umbenennen geht immer.
+              </p>
+            </section>
+          );
+        })()}
+
       </div>
     </AdminLayout>
   );
