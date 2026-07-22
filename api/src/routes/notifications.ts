@@ -92,9 +92,16 @@ router.get('/count', requireAuth, async (c) => {
   `).catch(() => [{ n: 0 }]) as { n: number }[];
   const notifCount = Number(nRows[0]?.n ?? 0);
 
+  // Ungelesene Direktnachrichten zaehlen mit — der Punkt am Postfach meint beide Reiter.
+  const mRows = await db.all(sql`
+    SELECT count(*) AS n FROM messages WHERE to_user_id = ${me.id} AND read_at IS NULL
+  `).catch(() => [{ n: 0 }]) as { n: number }[];
+  const messageCount = Number(mRows[0]?.n ?? 0);
+
   return c.json({
-    count: ratingCount + likeCount + requestCount + questionCount + changeCount + notifCount,
-    ratings: ratingCount, likes: likeCount, requests: requestCount, questions: questionCount, changes: changeCount, events: notifCount,
+    count: ratingCount + likeCount + requestCount + questionCount + changeCount + notifCount + messageCount,
+    ratings: ratingCount, likes: likeCount, requests: requestCount, questions: questionCount,
+    changes: changeCount, events: notifCount, messages: messageCount,
   });
 });
 

@@ -43,6 +43,7 @@ const MapPage            = lz(() => import('./pages/MapPage.js'), 'MapPage');
 const AwardsPage         = lz(() => import('./pages/AwardsPage.js'), 'AwardsPage');
 const ProfilePage        = lz(() => import('./pages/ProfilePage.js'), 'ProfilePage');
 const NotificationInboxPage = lz(() => import('./pages/NotificationInboxPage.js'), 'NotificationInboxPage');
+const ChatPage           = lz(() => import('./pages/ChatPage.js'), 'ChatPage');
 const MeetPeoplePage     = lz(() => import('./pages/MeetPeoplePage.js'), 'MeetPeoplePage');
 const LegalPage          = lz(() => import('./pages/LegalPage.js'), 'LegalPage');
 const ResetPasswordPage  = lz(() => import('./pages/ResetPasswordPage.js'), 'ResetPasswordPage');
@@ -180,6 +181,7 @@ export function App() {
         <Route path="/profil"   element={<RequireAuth><OwnProfileRoute /></RequireAuth>} />
         <Route path="/profile"  element={<RedirectTo to="/profil" />} />
         <Route path="/postfach" element={<RequireAuth><NotificationInboxPage /></RequireAuth>} />
+        <Route path="/postfach/:id" element={<RequireAuth><ChatPage /></RequireAuth>} />
         <Route path="/notifications" element={<RedirectTo to="/postfach" />} />
         <Route path="/leute"    element={<RequireAuth><MeetPeoplePage /></RequireAuth>} />
         <Route path="/people"   element={<RedirectTo to="/leute" />} />

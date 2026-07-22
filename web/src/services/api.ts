@@ -252,7 +252,7 @@ export interface InboxItem {
 }
 
 export const notificationsApi = {
-  count:   () => get<{ count: number; ratings: number; likes: number; requests: number; questions?: number; changes?: number; events?: number }>('/notifications/count'),
+  count:   () => get<{ count: number; ratings: number; likes: number; requests: number; questions?: number; changes?: number; events?: number; messages?: number }>('/notifications/count'),
   list:    () => get<InboxItem[]>('/notifications/list'),
   seen:    () => post<{ ok: boolean }>('/notifications/seen'),
   dismiss: (id: string) => post<{ ok: boolean }>('/notifications/dismiss', { id }),
@@ -419,6 +419,30 @@ export const taxonomyApi = {
   suggestions: (tagSlug: string) => get<{ merkmale: TaxTerm[]; vibes: TaxTerm[] }>(`/taxonomy/tag/${tagSlug}/suggestions`),
   resolve:     (tag: string, merkmale: string[], vibes: string[]) =>
                  post<{ tag: string; merkmale: string[]; vibes: string[] }>('/taxonomy/resolve', { tag, merkmale, vibes }),
+};
+
+
+// ─── Direktnachrichten zwischen Freund:innen ───────────────────────────────────
+export interface ChatPartner {
+  id: number; name: string; handle: string;
+  avatarUrl: string | null; avatarCropX: number; avatarCropY: number;
+}
+export interface ChatMessage {
+  id: number; text: string | null; placeId: string | null; createdAt: string; fromMe: boolean;
+}
+export interface Conversation {
+  user: ChatPartner;
+  unread: number;
+  last: { id: number; text: string | null; placeId: string | null; createdAt: string; fromMe: boolean };
+}
+
+export const messagesApi = {
+  conversations: ()             => get<Conversation[]>('/messages'),
+  unread:        ()             => get<{ count: number }>('/messages/unread'),
+  thread:        (userId: number) =>
+                   get<{ partner: ChatPartner | null; messages: ChatMessage[]; places: Record<string, Place> }>(`/messages/${userId}`),
+  send:          (userId: number, body: { text?: string; placeId?: string }) =>
+                   post<{ ok: boolean }>(`/messages/${userId}`, body),
 };
 
 // ─── Öffentliche Profile (reale Nutzer:innen) ──────────────────────────────────

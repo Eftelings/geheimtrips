@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
-import { notificationsApi, type InboxItem } from '../services/api.js';
+import { notificationsApi, messagesApi, type InboxItem, type Conversation } from '../services/api.js';
+import { Avatar } from '../components/ui/Avatar.js';
 
 const META: Record<InboxItem['type'], { icon: string; color: string; bg: string; label: string }> = {
   friend_request: { icon: 'fa-user-plus',      color: '#8A6FB3', bg: '#F1ECF4', label: 'Freundschaft' },
@@ -100,11 +101,53 @@ function SwipeRow({ it, onOpen, onDismiss }: { it: InboxItem; onOpen: () => void
   );
 }
 
+/** Eine Gesprächszeile — Bild, Name, letzte Nachricht, Zeit, ungelesen. */
+function ChatRow({ c, onOpen }: { c: Conversation; onOpen: () => void }) {
+  const when = new Date(c.last.createdAt);
+  const today = new Date().toDateString() === when.toDateString();
+  const label = today
+    ? when.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+    : when.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  // Ein verschickter Ort hat oft keinen Text — dann sagen wir, was drin steckt.
+  const preview = c.last.text || (c.last.placeId ? 'Ort geteilt' : '');
+  return (
+    <button onClick={onOpen}
+      className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl bg-white shadow-[var(--shadow-card)] text-left active:scale-[0.99] transition-transform">
+      <Avatar name={c.user.name} src={c.user.avatarUrl} size={48}
+        cropX={c.user.avatarCropX} cropY={c.user.avatarCropY} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2">
+          <p className="font-semibold text-[var(--color-aubergine)] truncate flex-1">{c.user.name}</p>
+          <span className={`text-[11px] flex-shrink-0 ${c.unread ? 'text-[var(--color-amber)] font-bold' : 'text-[var(--color-lavender-lt)]'}`}>{label}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <p className={`text-sm truncate flex-1 ${c.unread ? 'text-[var(--color-aubergine)] font-medium' : 'text-[var(--color-lavender)]'}`}>
+            {c.last.fromMe && <span className="text-[var(--color-lavender-lt)]">Du: </span>}
+            {c.last.placeId && <i className="fa-solid fa-map-pin text-[10px] mr-1 text-[var(--color-amber)]" />}
+            {preview}
+          </p>
+          {c.unread > 0 && (
+            <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full text-white text-[11px] font-bold flex items-center justify-center"
+              style={{ background: 'var(--color-amber)' }}>
+              {c.unread > 9 ? '9+' : c.unread}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export function NotificationInboxPage() {
   const navigate = useNavigate();
+  // Standardmäßig die Nachrichten — Meldungen holt man sich, wenn man sie braucht.
+  const [tab, setTab] = useState<'nachrichten' | 'meldungen'>('nachrichten');
   const [items, setItems] = useState<InboxItem[] | null>(null);
+  const [chats, setChats] = useState<Conversation[] | null>(null);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
+    messagesApi.conversations().then(setChats).catch(() => setChats([]));
     notificationsApi.list().then(setItems).catch(() => setItems([]));
     notificationsApi.seen().catch(() => {});
   }, []);
@@ -114,34 +157,90 @@ export function NotificationInboxPage() {
     notificationsApi.dismiss(it.id).catch(() => {});
   }
 
+  const unreadChats = (chats ?? []).reduce((n, c) => n + (c.unread > 0 ? 1 : 0), 0);
+  const q = search.trim().toLowerCase();
+  const shownChats = (chats ?? []).filter(c => !q || c.user.name.toLowerCase().includes(q));
+
   return (
     <AppShell title="Postfach" showBack>
       <div className="px-5 py-6 max-w-2xl mx-auto">
-        <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] mb-1" style={{ letterSpacing: '-0.02em' }}>
+        <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] mb-4" style={{ letterSpacing: '-0.02em' }}>
           Dein <em className="italic text-[var(--color-amber)]">Postfach</em>
         </h1>
-        {items && items.length > 0 && (
-          <p className="text-[12px] text-[var(--color-lavender-lt)] mb-4">
-            <i className="fa-solid fa-arrow-left-long mr-1" />Nach links wischen zum Löschen
-          </p>
-        )}
 
-        {items === null ? (
-          <div className="flex justify-center py-16 text-[var(--color-lavender)] mt-4">
+        {/* Umschalter: Nachrichten von Freund:innen ODER Meldungen zum System */}
+        <div className="flex gap-1 p-1 bg-[var(--color-bg-soft)] rounded-2xl mb-4">
+          {([
+            ['nachrichten', 'Nachrichten', unreadChats],
+            ['meldungen', 'Meldungen', (items ?? []).length],
+          ] as const).map(([id, label, count]) => (
+            <button key={id} onClick={() => setTab(id)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold transition-all ${
+                tab === id ? 'bg-white text-[var(--color-aubergine)] shadow-sm' : 'text-[var(--color-lavender)]'}`}>
+              {label}
+              {count > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
+                  style={{ background: 'var(--color-amber)' }}>{count > 9 ? '9+' : count}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'nachrichten' ? (
+          chats === null ? (
+            <div className="flex justify-center py-16 text-[var(--color-lavender)]">
+              <i className="fa-solid fa-circle-notch fa-spin text-3xl" />
+            </div>
+          ) : chats.length === 0 ? (
+            <div className="text-center py-16 text-[var(--color-lavender)]">
+              <i className="fa-regular fa-comments text-5xl mb-4 opacity-30" />
+              <p className="font-semibold mb-1">Noch keine Nachrichten</p>
+              <p className="text-sm">Schick einem Freund oder einer Freundin einen Geheimtrip — der Verlauf erscheint dann hier.</p>
+              <button onClick={() => navigate('/traveler')}
+                className="mt-4 bg-[var(--color-amber)] text-white font-bold px-5 py-2.5 rounded-full text-sm shadow-[var(--shadow-amber)]">
+                Zu deinen Travelern
+              </button>
+            </div>
+          ) : (
+            <>
+              {chats.length > 4 && (
+                <div className="relative mb-3">
+                  <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-lavender-lt)] text-sm" />
+                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Suchen…"
+                    className="w-full bg-white border border-[var(--color-bg-soft)] rounded-2xl pl-10 pr-4 h-11 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)]" />
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                {shownChats.map(c => (
+                  <ChatRow key={c.user.id} c={c} onOpen={() => navigate(`/postfach/${c.user.id}`)} />
+                ))}
+                {shownChats.length === 0 && (
+                  <p className="text-center text-sm text-[var(--color-lavender)] py-8">Niemand gefunden.</p>
+                )}
+              </div>
+            </>
+          )
+        ) : items === null ? (
+          <div className="flex justify-center py-16 text-[var(--color-lavender)]">
             <i className="fa-solid fa-circle-notch fa-spin text-3xl" />
           </div>
         ) : items.length === 0 ? (
-          <div className="text-center py-16 text-[var(--color-lavender)] mt-4">
+          <div className="text-center py-16 text-[var(--color-lavender)]">
             <i className="fa-regular fa-bell text-5xl mb-4 opacity-30" />
             <p className="font-semibold mb-1">Alles erledigt</p>
-            <p className="text-sm">Neue Freundschaftsanfragen, Fragen und Änderungswünsche zu deinen Orten erscheinen hier.</p>
+            <p className="text-sm">Offene Bewertungen, Fragen und Änderungswünsche zu deinen Orten erscheinen hier.</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2.5">
-            {items.map(it => (
-              <SwipeRow key={it.id} it={it} onOpen={() => navigate(it.link)} onDismiss={() => dismiss(it)} />
-            ))}
-          </div>
+          <>
+            <p className="text-[12px] text-[var(--color-lavender-lt)] mb-3">
+              <i className="fa-solid fa-arrow-left-long mr-1" />Nach links wischen zum Löschen
+            </p>
+            <div className="flex flex-col gap-2.5">
+              {items.map(it => (
+                <SwipeRow key={it.id} it={it} onOpen={() => navigate(it.link)} onDismiss={() => dismiss(it)} />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </AppShell>

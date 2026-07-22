@@ -8,6 +8,7 @@ import { EFFECTIVE_SPEED_KMH } from '../../utils/geo.js';
 import { formatDuration } from '../../services/routeService.js';
 import { TagBadge } from './TagBadge.js';
 import { PlaceImage } from './PlaceImage.js';
+import { SendPlaceSheet } from './SendPlaceSheet.js';
 
 const isVid = (u: string) => /\.(mp4|webm|mov|m4v|ogg)(\?|#|$)/i.test(u);
 
@@ -78,6 +79,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
   const scrollRef = useRef<HTMLDivElement>(null);
   const shownAt = useRef(Date.now());
   const [toast, setToast] = useState<string | null>(null);
+  const [sendOpen, setSendOpen] = useState(false);   // „Ort weitergeben"-Blatt
 
   // Neuer Feed (z.B. „Weggewischte zurückholen", oder Orte luden erst nach) → wieder vorne
   // anfangen. Ohne das zeigte der alte Index ins Leere und der Swipe bliebe leer.
@@ -189,13 +191,9 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
       showToast(liked ? '' : 'Schönes Foto! ❤');
     }, 'Melde dich an, um Fotos zu liken.');
   };
-  const share = () => {
-    if (!card) return;
-    const url = `${location.origin}/ort/${card.id}`;
-    // Zähler erst hochsetzen, wenn wirklich geteilt wurde — der Teilen-Dialog lässt sich abbrechen.
-    if (navigator.share) navigator.share({ title: card.name, text: card.short, url }).then(() => sharePlace(card.id)).catch(() => {});
-    else navigator.clipboard?.writeText(url).then(() => { showToast('Link kopiert'); sharePlace(card.id); }).catch(() => {});
-  };
+  // Weitergeben führt jetzt über ein Blatt: erst die Freund:innen (direkt ins Postfach),
+  // darunter der System-Dialog für einen Link.
+  const share = () => { if (card) gate(() => setSendOpen(true), 'Melde dich an, um Orte weiterzugeben.'); };
 
   function down(e: React.PointerEvent) {
     // Taps auf echte Bedienelemente (Teilen/Herz/Details) sind kein Zieh-Start.
@@ -325,6 +323,13 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
     <div className="h-full relative select-none overflow-hidden" style={{ background: 'var(--color-bg)', overscrollBehavior: 'none' }}>
       {toast && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-[var(--color-aubergine)] text-white text-xs font-bold px-3.5 py-2 rounded-full shadow-lg pointer-events-none">{toast}</div>
+      )}
+
+      {/* Ort weitergeben — Freund:innen zuerst, Link darunter */}
+      {sendOpen && card && (
+        <SendPlaceSheet placeId={card.id} placeName={card.name} shortText={card.short}
+          onClose={() => setSendOpen(false)}
+          onShared={() => { sharePlace(card.id); setSendOpen(false); }} />
       )}
 
       {/* Scroll-Ebene: ohne Artikel füllt das Bild das ganze Overlay, mit Artikel wird es zum Hero
