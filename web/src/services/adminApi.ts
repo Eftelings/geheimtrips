@@ -39,6 +39,14 @@ export interface AdminPlace {
   authorId: number | null; vibe: string[]; gallery: string[]; tips: string[];
   parking: 'free' | 'paid' | 'limited' | null;
   createdAt: string;
+  submittedBy?: number | null;
+  tagSlug?: string | null;
+  tagSlugs?: string[];
+  /** Alle Beitraege zu diesem Ort — der Hauptbeitrag (id 0) steht vorn. */
+  articles?: {
+    id: number; isMain: boolean; status: 'pending' | 'approved' | 'rejected';
+    authorId: number | null; authorName: string;
+  }[];
 }
 
 export interface AdminReport {

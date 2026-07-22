@@ -1,193 +1,78 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from './AdminLayout.js';
-import { adminApi, type AdminPlace, type AdminAuthor } from '../../services/adminApi.js';
+import { adminApi, type AdminPlace } from '../../services/adminApi.js';
+import { placesApi } from '../../services/api.js';
+import { ArticleSheet } from '../../components/ui/ArticleSheet.js';
+import { useTaxVocab, tagInfoFrom } from '../../data/taxVocab.js';
 
-const CATEGORIES = ['natur','kultur','genuss','aktiv','mystisch','wasser'];
-const CATEGORY_LABELS: Record<string,string> = { natur:'Natur', kultur:'Kultur', genuss:'Genuss', aktiv:'Aktiv', mystisch:'Mystisch', wasser:'Am Wasser' };
-
-function PlaceForm({ place, authors, onSave, onCancel }: {
-  place?: AdminPlace | null;
-  authors: AdminAuthor[];
-  onSave: (data: object, isNew: boolean) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const isNew = !place;
-  const [f, setF] = useState({
-    id: place?.id ?? '', name: place?.name ?? '', region: place?.region ?? '',
-    category: place?.category ?? 'natur', categoryLabel: place?.categoryLabel ?? 'Natur',
-    short: place?.short ?? '', long: place?.long ?? '', hero: place?.hero ?? '',
-    cost: place?.cost ?? 1, costLabel: place?.costLabel ?? '€',
-    distanceMin: place?.distanceMin ?? 30, distanceLabel: place?.distanceLabel ?? '30 Min',
-    lat: place?.lat ?? null, lng: place?.lng ?? null,
-    authorId: place?.authorId ?? null,
-    vibe: (place?.vibe ?? []).join(', '),
-    gallery: (place?.gallery ?? []).join('\n'),
-    tips: (place?.tips ?? []).join('\n'),
-    parking: place?.parking ?? '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true); setError('');
-    try {
-      await onSave({
-        ...f,
-        vibe:    f.vibe.split(',').map(s => s.trim()).filter(Boolean),
-        gallery: f.gallery.split('\n').map(s => s.trim()).filter(Boolean),
-        tips:    f.tips.split('\n').map(s => s.trim()).filter(Boolean),
-        parking: f.parking || null,
-      }, isNew);
-    } catch (e: any) { setError(e.message); }
-    setSaving(false);
-  }
-
-  const field = (label: string, key: keyof typeof f, opts?: { textarea?: boolean; type?: string; required?: boolean }) => (
-    <div key={key}>
-      <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1">{label}</label>
-      {opts?.textarea ? (
-        <textarea value={f[key] as string} onChange={e => setF(p => ({ ...p, [key]: e.target.value }))}
-          rows={3} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-amber)] resize-none" />
-      ) : (
-        <input type={opts?.type ?? 'text'} value={f[key] as string} required={opts?.required}
-          onChange={e => setF(p => ({ ...p, [key]: opts?.type === 'number' ? Number(e.target.value) : e.target.value }))}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-amber)]" />
-      )}
-    </div>
-  );
-
-  return (
-    <form onSubmit={submit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
-      <div className="grid grid-cols-2 gap-4">
-        {isNew && field('ID (URL-Slug)', 'id', { required: true })}
-        {field('Name', 'name', { required: true })}
-        {field('Region', 'region', { required: true })}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1">Kategorie</label>
-          <select value={f.category} onChange={e => setF(p => ({ ...p, category: e.target.value, categoryLabel: CATEGORY_LABELS[e.target.value] }))}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none">
-            {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1">Autor</label>
-          <select value={f.authorId ?? ''} onChange={e => setF(p => ({ ...p, authorId: e.target.value ? Number(e.target.value) : null }))}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none">
-            <option value="">— kein Autor —</option>
-            {authors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {field('Kurzbeschreibung', 'short', { required: true })}
-      {field('Langbeschreibung', 'long', { textarea: true })}
-      {field('Hero-Bild URL', 'hero', { required: true })}
-
-      <div className="grid grid-cols-4 gap-3">
-        <div>
-          <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1">Kosten (1-3)</label>
-          <select value={f.cost} onChange={e => {
-            const v = Number(e.target.value);
-            const labels: Record<number,string> = {1:'€',2:'€€',3:'€€€'};
-            setF(p => ({ ...p, cost: v, costLabel: labels[v] }));
-          }} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none">
-            <option value={1}>€ Kostenlos/günstig</option>
-            <option value={2}>€€ Moderat</option>
-            <option value={3}>€€€ Teurer</option>
-          </select>
-        </div>
-        {field('Distanz (Min)', 'distanceMin', { type: 'number' })}
-        {field('Distanz Label', 'distanceLabel')}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {field('Latitude', 'lat', { type: 'number' })}
-        {field('Longitude', 'lng', { type: 'number' })}
-      </div>
-
-      {field('Vibes (komma-getrennt)', 'vibe')}
-      {field('Galerie-URLs (eine pro Zeile)', 'gallery', { textarea: true })}
-      {field('Tipps (eine pro Zeile)', 'tips', { textarea: true })}
-
-      <div>
-        <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1">
-          Parkmöglichkeiten
-        </label>
-        <select value={f.parking} onChange={e => setF(p => ({ ...p, parking: e.target.value }))}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-amber)]">
-          <option value="">— nicht angegeben —</option>
-          <option value="free">Kostenlos</option>
-          <option value="paid">Kostenpflichtig</option>
-          <option value="limited">Begrenzt / schwierig</option>
-        </select>
-      </div>
-
-      {error && <p className="text-red-400 text-xs">{error}</p>}
-      <div className="flex gap-3 pt-2">
-        <button type="submit" disabled={saving}
-          className="flex-1 bg-[var(--color-amber)] text-black font-bold py-2.5 rounded-xl text-sm disabled:opacity-50">
-          {saving ? 'Speichern…' : isNew ? 'Ort erstellen' : 'Änderungen speichern'}
-        </button>
-        <button type="button" onClick={onCancel}
-          className="px-4 py-2.5 bg-white/5 text-white/60 rounded-xl text-sm hover:bg-white/10">
-          Abbrechen
-        </button>
-      </div>
-    </form>
-  );
-}
-
+/**
+ * Alle Orte auf einen Blick. Bearbeitet wird nicht in einem verkürzten Formular,
+ * sondern immer durch den vollständigen Ablauf: der Hauptbeitrag über den
+ * Einreichen-Assistenten, zusätzliche Beiträge über dasselbe Formular, das auch
+ * ihre Autor:innen benutzen.
+ */
 export function AdminPlaces() {
   const navigate = useNavigate();
+  const vocab = useTaxVocab();
   const [places, setPlaces]   = useState<AdminPlace[]>([]);
-  const [authors, setAuthors] = useState<AdminAuthor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<AdminPlace | null | 'new'>(null);
   const [search, setSearch]   = useState('');
-  const [confirm, setConfirm] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ kind: 'place'; id: string; name: string } | { kind: 'article'; id: number; name: string } | null>(null);
+  // Welcher Beitrag je Ort im Dropdown gewählt ist (0 = Hauptbeitrag)
+  const [pick, setPick] = useState<Record<string, number>>({});
+  // Zusatzbeitrag im selben Formular bearbeiten, das auch die Autor:innen nutzen
+  const [editArticle, setEditArticle] = useState<{
+    placeId: string; placeName: string;
+    article: { id: number; short: string; long: string; triviaText: string; highlightsJson: string };
+  } | null>(null);
 
   async function load() {
-    const [p, a] = await Promise.all([adminApi.places(), adminApi.authors()]);
-    setPlaces(p); setAuthors(a); setLoading(false);
+    setLoading(true);
+    const p = await adminApi.places().catch(() => [] as AdminPlace[]);
+    setPlaces(p); setLoading(false);
   }
-
   useEffect(() => { load(); }, []);
 
-  async function handleSave(data: object, isNew: boolean) {
-    if (isNew) await adminApi.createPlace(data);
-    else       await adminApi.updatePlace((editing as AdminPlace).id, data);
-    setEditing(null);
-    load();
+  async function removePlace(id: string) {
+    try { await adminApi.deletePlace(id); }
+    catch (e) { alert(`Löschen fehlgeschlagen: ${(e as Error).message}`); }
+    finally { setConfirm(null); load(); }
+  }
+  async function removeArticle(id: number) {
+    try { await placesApi.deleteArticle(id); }
+    catch (e) { alert(`Löschen fehlgeschlagen: ${(e as Error).message}`); }
+    finally { setConfirm(null); load(); }
   }
 
-  async function handleDelete(id: string) {
-    try {
-      await adminApi.deletePlace(id);
-    } catch (e) {
-      alert(`Löschen fehlgeschlagen: ${(e as Error).message}`);
-    } finally {
-      setConfirm(null);
-      load();
-    }
+  /** Beitrag bearbeiten — Hauptbeitrag im Assistenten, Zusatzbeitrag im kurzen Formular. */
+  async function edit(p: AdminPlace, articleId: number) {
+    if (articleId === 0) { navigate(`/einreichen?edit=${p.id}`); return; }
+    // Die Felder stehen nicht in der Liste — frisch vom Ort holen.
+    const fresh = await placesApi.get(p.id).catch(() => null);
+    const found = fresh?.articles?.find(a => a.id === articleId);
+    if (!found) { alert('Dieser Beitrag ist gerade nicht abrufbar (vielleicht noch in Prüfung).'); return; }
+    setEditArticle({
+      placeId: p.id, placeName: p.name,
+      article: { id: found.id, short: found.short, long: found.long, triviaText: found.triviaText, highlightsJson: found.highlightsJson },
+    });
   }
 
   const filtered = places.filter(p =>
-    !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.region.toLowerCase().includes(search.toLowerCase())
+    !search || p.name.toLowerCase().includes(search.toLowerCase())
+    || p.region.toLowerCase().includes(search.toLowerCase())
+    || p.id.toLowerCase().includes(search.toLowerCase())
   );
+
+  const th = 'px-4 py-3 text-left text-xs font-semibold text-white/40 uppercase tracking-wider whitespace-nowrap';
 
   return (
     <AdminLayout title={`Orte (${places.length})`}>
       <div className="flex items-center gap-3 mb-5">
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Suche…"
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Suche nach Name, Region oder ID…"
           className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--color-amber)]" />
-        <button onClick={() => setEditing('new')}
-          className="bg-[var(--color-amber)] text-black font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2">
+        <button onClick={() => navigate('/einreichen')}
+          className="bg-[var(--color-amber)] text-black font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2 whitespace-nowrap">
           <i className="fa-solid fa-plus" /> Ort hinzufügen
         </button>
       </div>
@@ -197,50 +82,85 @@ export function AdminPlaces() {
           <i className="fa-solid fa-circle-notch fa-spin text-3xl" />
         </div>
       ) : (
-        <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white/5 border border-white/8 rounded-2xl overflow-x-auto">
+          <table className="w-full text-sm min-w-[880px]">
             <thead>
               <tr className="border-b border-white/8">
-                {['Bild','Name','Region','Kat.','Kosten','Bewertung','Aktionen'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-white/40 uppercase tracking-wider">{h}</th>
+                {['Bild', 'Name', 'Koordinaten', 'Region', 'Kategorien', 'Bewertung', 'Autor', ''].map((h, i) => (
+                  <th key={i} className={th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => (
-                <tr key={p.id} className="border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors">
-                  <td className="px-4 py-3 w-12">
-                    <img src={p.hero} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-white/90">{p.name}</div>
-                    <div className="text-xs text-white/30 font-mono">{p.id}</div>
-                  </td>
-                  <td className="px-4 py-3 text-white/60 text-xs">{p.region}</td>
-                  <td className="px-4 py-3">
-                    <span className="bg-white/10 text-white/70 text-[10px] px-2 py-0.5 rounded-full">{p.categoryLabel}</span>
-                  </td>
-                  <td className="px-4 py-3 text-white/60 text-xs">{p.costLabel}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-[var(--color-amber)] text-xs font-semibold">★ {p.rating}</span>
-                    <span className="text-white/30 text-xs ml-1">({p.reviews})</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1.5">
-                      {/* Bearbeiten = vollständig durch den Wizard (wie beim Einreichen) */}
-                      <button onClick={() => navigate(`/submit?edit=${p.id}`)}
-                        title="Bearbeiten – vollständig durch alle Schritte wie beim Einreichen"
-                        className="p-1.5 bg-[var(--color-amber)]/15 hover:bg-[var(--color-amber)]/30 rounded-lg text-[var(--color-amber)] transition-colors">
-                        <i className="fa-solid fa-pen text-xs" />
+              {filtered.map(p => {
+                const sel = pick[p.id] ?? 0;
+                const articles = p.articles ?? [];
+                const tags = p.tagSlugs?.length ? p.tagSlugs : (p.tagSlug ? [p.tagSlug] : []);
+                const labels = tags.map(t => tagInfoFrom(vocab, t)?.label ?? t);
+                return (
+                  <tr key={p.id} className="border-b border-white/5 last:border-0 hover:bg-white/3 transition-colors align-top">
+                    <td className="px-4 py-3 w-12">
+                      <img src={p.hero} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => navigate(`/ort/${p.id}`)}
+                        className="font-medium text-white/90 hover:text-[var(--color-amber)] transition-colors text-left">
+                        {p.name}
                       </button>
-                      <button onClick={() => setConfirm(p.id)}
-                        className="p-1.5 bg-white/5 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition-colors">
-                        <i className="fa-solid fa-trash text-xs" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      <div className="text-xs text-white/30 font-mono">{p.id}</div>
+                    </td>
+                    <td className="px-4 py-3 text-white/50 text-xs font-mono whitespace-nowrap">
+                      {p.lat != null && p.lng != null
+                        ? `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`
+                        : <span className="text-red-400/70">fehlt</span>}
+                    </td>
+                    <td className="px-4 py-3 text-white/60 text-xs">{p.region}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1 max-w-[220px]">
+                        {labels.length === 0 && <span className="text-white/30 text-xs">—</span>}
+                        {labels.map(l => (
+                          <span key={l} className="bg-white/10 text-white/70 text-[10px] px-2 py-0.5 rounded-full">{l}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-[var(--color-amber)] text-xs font-semibold">★ {p.rating}</span>
+                      <span className="text-white/30 text-xs ml-1">({p.reviews})</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {/* Dropdown über alle Beiträge — die Auswahl bestimmt, was bearbeitet
+                          oder gelöscht wird. Der Hauptbeitrag gehört der entdeckenden Person. */}
+                      <select value={sel} onChange={e => setPick(s => ({ ...s, [p.id]: Number(e.target.value) }))}
+                        className="bg-black/25 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white/80 outline-none focus:border-[var(--color-amber)] max-w-[190px]">
+                        {articles.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.authorName}{a.isMain ? ' (Hauptbeitrag)' : a.status !== 'approved' ? ` (${a.status === 'pending' ? 'in Prüfung' : 'abgelehnt'})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {articles.length > 1 && (
+                        <div className="text-[10px] text-white/30 mt-1">{articles.length} Beiträge</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1.5">
+                        <button onClick={() => edit(p, sel)}
+                          title={sel === 0 ? 'Hauptbeitrag im Assistenten bearbeiten' : 'Beitrag bearbeiten'}
+                          className="p-1.5 bg-[var(--color-amber)]/15 hover:bg-[var(--color-amber)]/30 rounded-lg text-[var(--color-amber)] transition-colors">
+                          <i className="fa-solid fa-pen text-xs" />
+                        </button>
+                        <button onClick={() => setConfirm(sel === 0
+                          ? { kind: 'place', id: p.id, name: p.name }
+                          : { kind: 'article', id: sel, name: `${articles.find(a => a.id === sel)?.authorName ?? 'Beitrag'} · ${p.name}` })}
+                          title={sel === 0 ? 'Ort löschen' : 'Diesen Beitrag löschen'}
+                          className="p-1.5 bg-white/5 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition-colors">
+                          <i className="fa-solid fa-trash text-xs" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {filtered.length === 0 && (
@@ -249,35 +169,29 @@ export function AdminPlaces() {
         </div>
       )}
 
-      {/* Edit/Create Overlay */}
-      {editing !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#1a1228] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
-              <h2 className="font-bold text-white">{editing === 'new' ? 'Neuer Ort' : `Bearbeiten: ${(editing as AdminPlace).name}`}</h2>
-              <button onClick={() => setEditing(null)} className="text-white/40 hover:text-white text-lg">✕</button>
-            </div>
-            <div className="p-6">
-              <PlaceForm
-                place={editing === 'new' ? null : editing as AdminPlace}
-                authors={authors}
-                onSave={handleSave}
-                onCancel={() => setEditing(null)}
-              />
-            </div>
-          </div>
-        </div>
+      {/* Zusatzbeitrag bearbeiten — dasselbe Formular wie für die Autor:innen */}
+      {editArticle && (
+        <ArticleSheet placeId={editArticle.placeId} placeName={editArticle.placeName}
+          existing={editArticle.article}
+          onClose={() => setEditArticle(null)}
+          onSaved={() => { setEditArticle(null); load(); }} />
       )}
 
-      {/* Delete Confirm */}
+      {/* Löschen bestätigen */}
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-[#1a1228] border border-white/10 rounded-2xl p-6 w-80 shadow-2xl text-center">
             <i className="fa-solid fa-triangle-exclamation text-red-400 text-3xl mb-3" />
-            <p className="text-white font-semibold mb-1">Ort löschen?</p>
-            <p className="text-white/50 text-sm mb-4">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+            <p className="text-white font-semibold mb-1">
+              {confirm.kind === 'place' ? 'Ort löschen?' : 'Beitrag löschen?'}
+            </p>
+            <p className="text-white/50 text-sm mb-4">
+              {confirm.kind === 'place'
+                ? 'Der Ort und alle Beiträge dazu verschwinden. Das lässt sich nicht rückgängig machen.'
+                : `„${confirm.name}" wird entfernt. Der Ort selbst bleibt bestehen.`}
+            </p>
             <div className="flex gap-3">
-              <button onClick={() => handleDelete(confirm)}
+              <button onClick={() => (confirm.kind === 'place' ? removePlace(confirm.id) : removeArticle(confirm.id))}
                 className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-red-600">
                 Löschen
               </button>

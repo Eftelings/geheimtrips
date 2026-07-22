@@ -6,7 +6,7 @@ import {
   businessClaims, businessProfiles, perks, categories,
   placeContributions, photoLikes, favoritePlaces, placeArticles,
 } from '../db/schema.js';
-import { eq, desc, count, sql, asc } from 'drizzle-orm';
+import { eq, desc, count, sql, asc, inArray } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
 import { zValidator } from '@hono/zod-validator';
@@ -423,11 +423,32 @@ router.get('/stats', async (c) => {
 
 router.get('/places', async (c) => {
   const all = await db.select().from(places).orderBy(desc(places.createdAt)).all();
+
+  // Beiträge je Ort — der Hauptbeitrag ist der Ort selbst, deshalb steht er vorn.
+  const extraRows = await db.select({
+    id: placeArticles.id, placeId: placeArticles.placeId, status: placeArticles.status,
+    userId: users.id, name: users.name,
+  }).from(placeArticles).innerJoin(users, eq(users.id, placeArticles.userId)).all();
+  const submitterIds = [...new Set(all.map(p => p.submittedBy).filter((x): x is number => x != null))];
+  const submitters = submitterIds.length
+    ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, submitterIds)).all()
+    : [];
+  const nameById = new Map(submitters.map(u => [u.id, u.name]));
+
   return c.json(all.map(p => ({
     ...p,
     vibe: JSON.parse(p.vibeJson ?? '[]'),
     gallery: JSON.parse(p.galleryJson ?? '[]'),
     tips: JSON.parse(p.tipsJson ?? '[]'),
+    tagSlugs: JSON.parse(p.tagSlugsJson ?? '[]'),
+    articles: [
+      { id: 0, isMain: true, status: 'approved',
+        authorId: p.submittedBy ?? null,
+        authorName: (p.submittedBy != null ? nameById.get(p.submittedBy) : null) ?? 'Redaktion' },
+      ...extraRows.filter(r => r.placeId === p.id).map(r => ({
+        id: r.id, isMain: false, status: r.status, authorId: r.userId, authorName: r.name,
+      })),
+    ],
   })));
 });
 
