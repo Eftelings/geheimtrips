@@ -29,6 +29,9 @@ export interface AdminStats {
 export interface AdminUser {
   id: number; email: string; name: string; handle: string;
   isAdmin: boolean; isBanned: boolean; createdAt: string; profileVisible: boolean;
+  allowFollowers: boolean;
+  /** Kennzahlen fuer die Liste — serverseitig gezaehlt. */
+  placeCount: number; ratingCount: number; followerCount: number; friendCount: number;
 }
 
 export interface AdminPlace {

@@ -597,9 +597,35 @@ router.get('/users', async (c) => {
   const all = await db.select({
     id: users.id, email: users.email, name: users.name, handle: users.handle,
     isAdmin: users.isAdmin, isBanned: users.isBanned, createdAt: users.createdAt,
-    profileVisible: users.profileVisible,
+    profileVisible: users.profileVisible, allowFollowers: users.allowFollowers,
   }).from(users).orderBy(desc(users.createdAt)).all();
-  return c.json(all);
+
+  // Kennzahlen je Person in vier Sammelabfragen statt vier Abfragen PRO Person.
+  const tally = async (sqlText: ReturnType<typeof sql>) => {
+    const rows = await db.run(sqlText).then(r => r.rows ?? []).catch(() => []);
+    const m = new Map<number, number>();
+    for (const r of rows as unknown as { id: number; n: number }[]) m.set(Number(r.id), Number(r.n));
+    return m;
+  };
+  const [placeCounts, ratingCounts, followerCounts, friendCounts] = await Promise.all([
+    tally(sql`SELECT submitted_by AS id, COUNT(*) AS n FROM places WHERE submitted_by IS NOT NULL GROUP BY submitted_by`),
+    tally(sql`SELECT user_id AS id, COUNT(*) AS n FROM ratings GROUP BY user_id`),
+    tally(sql`SELECT followee_id AS id, COUNT(*) AS n FROM follows GROUP BY followee_id`),
+    // Freundschaften zählen für beide Seiten — deshalb beide Spalten zusammenwerfen.
+    tally(sql`SELECT id, COUNT(*) AS n FROM (
+                SELECT requester_id AS id FROM friendships WHERE status = 'accepted'
+                UNION ALL
+                SELECT addressee_id AS id FROM friendships WHERE status = 'accepted'
+              ) GROUP BY id`),
+  ]);
+
+  return c.json(all.map(u => ({
+    ...u,
+    placeCount:    placeCounts.get(u.id) ?? 0,
+    ratingCount:   ratingCounts.get(u.id) ?? 0,
+    followerCount: followerCounts.get(u.id) ?? 0,
+    friendCount:   friendCounts.get(u.id) ?? 0,
+  })));
 });
 
 router.patch('/users/:id', zValidator('json', z.object({

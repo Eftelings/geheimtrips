@@ -59,12 +59,12 @@ export function AdminUsers() {
           <i className="fa-solid fa-circle-notch fa-spin text-3xl" />
         </div>
       ) : (
-        <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white/5 border border-white/8 rounded-2xl overflow-x-auto">
+          <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-white/8">
-                {['Name / Handle','E-Mail','Registriert','Admin','Gesperrt','Aktionen'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-white/40 uppercase tracking-wider">{h}</th>
+                {['Name / Handle','E-Mail','Registriert','Orte','Bewertungen','Follower','Freunde','Admin','Gesperrt',''].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-white/40 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -78,9 +78,18 @@ export function AdminUsers() {
                       <div className="text-xs text-white/30">@{u.handle}</div>
                     </td>
                     <td className="px-4 py-3 text-white/50 text-xs">{u.email}</td>
-                    <td className="px-4 py-3 text-white/40 text-xs">
+                    <td className="px-4 py-3 text-white/40 text-xs whitespace-nowrap">
                       {u.createdAt ? new Date(u.createdAt).toLocaleDateString('de') : '—'}
                     </td>
+                    <td className="px-4 py-3 text-white/70 text-xs tabular-nums">{u.placeCount}</td>
+                    <td className="px-4 py-3 text-white/70 text-xs tabular-nums">{u.ratingCount}</td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      {/* Ohne Follower-Freigabe ist die Zahl bedeutungslos — dann sagen wir das. */}
+                      {u.allowFollowers
+                        ? <span className="text-white/70 tabular-nums">{u.followerCount}</span>
+                        : <span className="text-white/25" title="Diese Person lässt kein Folgen zu">aus</span>}
+                    </td>
+                    <td className="px-4 py-3 text-white/70 text-xs tabular-nums">{u.friendCount}</td>
                     <td className="px-4 py-3">
                       <Toggle on={!!u.isAdmin} disabled={isSelf}
                         onChange={() => toggle(u, 'isAdmin')}
