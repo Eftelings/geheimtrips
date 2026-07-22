@@ -119,6 +119,54 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
       requestAnimationFrame(() => requestAnimationFrame(() => setEnter(false)));
     }, 240);
   };
+  /**
+   * Zug am ARTIKEL (nicht am Bild): steht der Text schon ganz oben und man zieht nach unten,
+   * gehoert die Geste dem Overlay. Ohne das federt der Scroll-Container mit und schiebt den
+   * Inhalt schneller nach unten als das Overlay — oben klafft dann ein weisser Rand.
+   * Der Listener haengt von Hand mit passive:false: an React-Handlern verpufft preventDefault.
+   */
+  const pull = useRef({ startY: 0, active: false, atTop: false });
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !articleOpen) return;
+    const onStart = (e: TouchEvent) => {
+      // Auf dem Bild hat der Kartenstapel eigene Gesten (Artikel schliessen) — Finger weg.
+      if ((e.target as HTMLElement).closest('[data-swipe-card]')) { pull.current.atTop = false; return; }
+      pull.current = { startY: e.touches[0].clientY, active: false, atTop: el.scrollTop <= 0 };
+    };
+    const onMove = (e: TouchEvent) => {
+      const p = pull.current;
+      const y = e.touches[0].clientY;
+      if (!p.active) {
+        if (!p.atTop) return;
+        if (el.scrollTop > 0) { p.startY = y; return; }
+        if (y <= p.startY) { p.startY = y; return; }
+        e.preventDefault();
+        if (y - p.startY < 3) return;
+        p.active = true;
+      }
+      e.preventDefault();
+      onPullDown?.(Math.max(0, y - p.startY));
+    };
+    const onEnd = (e: TouchEvent) => {
+      const p = pull.current;
+      if (!p.active) return;
+      p.active = false;
+      const y = e.changedTouches[0]?.clientY ?? p.startY;
+      onPullDownEnd?.(Math.max(0, y - p.startY));
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [articleOpen, onPullDown, onPullDownEnd]);
+
   const openArticle = () => {
     if (!card || articleOpen) return;
     discoverApi.swipe(card.id, 'click', Date.now() - shownAt.current).catch(() => {});
@@ -281,7 +329,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
 
       {/* Scroll-Ebene: ohne Artikel füllt das Bild das ganze Overlay, mit Artikel wird es zum Hero
           und der Artikel liegt DARUNTER — dieselbe Seite, kein zweites Overlay. */}
-      <div ref={scrollRef} className="absolute inset-0" style={{ overflowY: articleOpen ? 'auto' : 'hidden', overscrollBehavior: 'contain', background: articleOpen ? undefined : '#000' }}>
+      <div ref={scrollRef} className="absolute inset-0" style={{ overflowY: articleOpen ? 'auto' : 'hidden', overscrollBehavior: 'none', background: articleOpen ? undefined : '#000' }}>
 
       {/* Der nächste Ort liegt schon bereit — beim Wegfliegen sieht man ihn statt des hellen
           Sheet-Hintergrunds. Steht vor der Karte im DOM, beide positioniert → Karte liegt darüber. */}
@@ -293,7 +341,7 @@ export function SwipeDeck({ places, onCardChange, articleOpen, article, onOpenAr
       )}
 
       {/* Das Bild. touchAction:none, sonst fängt iOS Safari die vertikalen Wische selbst ab. */}
-      <div className="relative overflow-hidden bg-black cursor-grab active:cursor-grabbing"
+      <div data-swipe-card className="relative overflow-hidden bg-black cursor-grab active:cursor-grabbing"
         style={{ height: articleOpen ? HERO_H : '100%', transform: `translate(${dx}px, ${dragY}px) rotate(${rot}deg)`, touchAction: 'none', transition: cardTransition }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
         {cur?.video

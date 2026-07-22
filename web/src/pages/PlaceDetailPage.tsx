@@ -1380,6 +1380,12 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, o
 
   const isSaved      = savedIds.has(place.id);
   const isVisited    = visitedIds.has(place.id);
+  // Wer den Beitrag geschrieben hat: kuratierte Entdecker:in oder die einreichende Person.
+  const byline = place.author
+    ? { name: place.author.name, avatarUrl: place.author.avatarUrl, color: place.author.avatarColor, to: `/author/${place.author.id}` }
+    : place.submitter
+    ? { name: place.submitter.name, avatarUrl: place.submitter.avatarUrl, color: '#71587A', to: `/u/${place.submitter.id}` }
+    : null;
   // Bearbeiten erlaubt: Ersteller:in solange ungeprüft – oder Admin
   const isOwnerPending = place.isUserSubmitted && !!user && user.id === place.submittedBy;
   // Fragen beantworten darf die/der Ersteller:in (auch nach Freigabe) sowie Admins
@@ -1949,70 +1955,97 @@ async function handleVerifyToggle() {
       ══════════════════════════════════════════════════════════════════════ */}
       <div style={{ background: '#FBF9FC' }}>
 
-        {/* ── Row 1: Navigation bar ─────────────────────────────────────────── */}
-        {/* flex-wrap: lieber in eine zweite Zeile umbrechen als den Artikel breiter schieben (Mobil) */}
-        <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 flex flex-wrap items-center gap-3">
-          {/* Back button — im Overlay nicht nötig (Sheet runterziehen führt zurück) */}
-          {!embedded && (
-            <button onClick={goBack}
-              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
-              style={{ background: '#F1ECF4' }}>
-              <i className="fa-solid fa-arrow-left text-sm" style={{ color: '#34254c' }} />
-            </button>
-          )}
+        {/* ── Row 1: Autor:in + Aktionen ────────────────────────────────────── */}
+        {/* Zwei Gruppen statt lauter Einzelknoepfe: reicht die Zeile nicht, rutscht die
+            rechte Gruppe als Ganzes in die naechste Zeile und bleibt rechtsbuendig.
+            Vorher brach die Zeile mitten in den Knoepfen um — das sah aus wie ein Versatz,
+            sobald „Bewerten" dazukam. */}
+        <div className="max-w-7xl mx-auto px-4 pt-4 pb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              {/* Back button — im Overlay nicht nötig (Sheet runterziehen führt zurück) */}
+              {!embedded && (
+                <button onClick={goBack}
+                  className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
+                  style={{ background: '#F1ECF4' }}>
+                  <i className="fa-solid fa-arrow-left text-sm" style={{ color: '#34254c' }} />
+                </button>
+              )}
 
-          {/* „Ich war hier": grüner Status-Button (besucht) oder Toggle */}
-          {isVisited ? (
-            <button onClick={() => showToast('Du hast diesen Ort besucht ✓')} title="Besucht"
-              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95"
-              style={{ background: 'var(--color-success)', color: 'white' }}>
-              <i className="fa-solid fa-check text-sm" />
-            </button>
-          ) : (
-            <VisitedToggle isVisited={isVisited} gpsLoading={gpsLoading} onToggle={handleVerifyToggle} />
-          )}
+              {/* Wer den Text geschrieben hat — wie die Autorenzeile in einem Magazin */}
+              {byline && (
+                <button onClick={() => gate(() => navigate(byline.to), 'Melde dich an, um das Profil zu sehen.')}
+                  title={`Profil von ${byline.name}`}
+                  className="w-9 h-9 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold text-white transition-all hover:scale-105 active:scale-95"
+                  style={{ background: byline.color }}>
+                  {byline.avatarUrl
+                    ? <img src={byline.avatarUrl} alt={byline.name} className="w-full h-full object-cover" />
+                    : byline.name[0]}
+                </button>
+              )}
 
-          {/* Bewerten — nur wer schon da war, kann bewerten (sonst nimmt der Knopf unnötig Breite). */}
-          {isVisited && (
-            <button onClick={startRating}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold flex-shrink-0 transition-all hover:brightness-110 active:scale-95"
-              style={{ background: 'var(--color-amber)', color: 'white' }}>
-              <i className="fa-solid fa-star text-[11px]" /> Bewerten
-            </button>
-          )}
+              {/* „Ich war hier": grüner Status-Button (besucht) oder Toggle */}
+              {isVisited ? (
+                <button onClick={() => showToast('Du hast diesen Ort besucht ✓')} title="Besucht"
+                  className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95"
+                  style={{ background: 'var(--color-success)', color: 'white' }}>
+                  <i className="fa-solid fa-check text-sm" />
+                </button>
+              ) : (
+                <VisitedToggle isVisited={isVisited} gpsLoading={gpsLoading} onToggle={handleVerifyToggle} />
+              )}
 
-          {/* Foto/Video hinzufügen */}
-          <button onClick={() => gate(() => fileInputRef.current?.click(), 'Melde dich an, um Fotos zu diesem Ort hinzuzufügen.')} title="Foto oder Video hinzufügen"
-            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
-            style={{ background: '#F1ECF4', color: '#71587A' }}>
-            <i className="fa-solid fa-camera text-sm" />
-          </button>
+              {/* Bewerten — nur wer schon da war, kann bewerten (sonst nimmt der Knopf unnötig Breite). */}
+              {isVisited && (
+                <button onClick={startRating}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold flex-shrink-0 transition-all hover:brightness-110 active:scale-95"
+                  style={{ background: 'var(--color-amber)', color: 'white' }}>
+                  <i className="fa-solid fa-star text-[11px]" /> Bewerten
+                </button>
+              )}
 
-          {/* Right: Navigation + Trip + share + save */}
-          <div className="ml-auto flex items-center gap-2">
-            {place.lat != null && place.lng != null && (
-              <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`, '_blank', 'noopener')} title="Route in der Navi-App öffnen"
+              {/* Foto/Video hinzufügen */}
+              <button onClick={() => gate(() => fileInputRef.current?.click(), 'Melde dich an, um Fotos zu diesem Ort hinzuzufügen.')} title="Foto oder Video hinzufügen"
+                className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 active:scale-95"
+                style={{ background: '#F1ECF4', color: '#71587A' }}>
+                <i className="fa-solid fa-camera text-sm" />
+              </button>
+            </div>
+
+            {/* Rechts: Navigation + Trip + Merken. Teilen entfällt hier — der Knopf im Bild
+                oben erledigt das bereits. */}
+            <div className="ml-auto flex items-center gap-2">
+              {place.lat != null && place.lng != null && (
+                <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`, '_blank', 'noopener')} title="Route in der Navi-App öffnen"
+                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+                  style={{ background: '#F1ECF4', color: '#71587A' }}>
+                  <i className="fa-solid fa-diamond-turn-right text-sm" />
+                </button>
+              )}
+              <button onClick={() => gate(() => setAddTripOpen(true), 'Melde dich an, um Orte zu einem Trip hinzuzufügen.')} title="Zu Trip hinzufügen"
                 className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
                 style={{ background: '#F1ECF4', color: '#71587A' }}>
-                <i className="fa-solid fa-diamond-turn-right text-sm" />
+                <i className="fa-solid fa-route text-sm" />
               </button>
-            )}
-            <button onClick={() => gate(() => setAddTripOpen(true), 'Melde dich an, um Orte zu einem Trip hinzuzufügen.')} title="Zu Trip hinzufügen"
-              className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
-              style={{ background: '#F1ECF4', color: '#71587A' }}>
-              <i className="fa-solid fa-route text-sm" />
-            </button>
-            <button onClick={() => navigator.share?.({ title: place.name, url: window.location.href }).catch(() => {})}
-              className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
-              style={{ background: '#F1ECF4', color: '#71587A' }}>
-              <i className="fa-solid fa-share-nodes text-sm" />
-            </button>
-            <button onClick={() => gate(() => toggleSave(place.id), 'Melde dich an, um diesen Geheimtrip zu speichern.')}
-              className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
-              style={{ background: isSaved ? 'var(--color-amber)' : '#F1ECF4', color: isSaved ? 'white' : '#71587A' }}>
-              <i className={`${isSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark text-sm`} />
-            </button>
+              <button onClick={() => gate(() => toggleSave(place.id), 'Melde dich an, um diesen Geheimtrip zu speichern.')}
+                className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+                style={{ background: isSaved ? 'var(--color-amber)' : '#F1ECF4', color: isSaved ? 'white' : '#71587A' }}>
+                <i className={`${isSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark text-sm`} />
+              </button>
+            </div>
           </div>
+
+          {/* Dezente Autorenzeile unter dem Bild der Erstellerin — macht beim Wechsel
+              zwischen mehreren Beitraegen sichtbar, von wem der Text stammt. */}
+          {byline && (
+            <p className="text-[11px] mt-1.5" style={{ color: '#b9a8c4' }}>
+              geschrieben von{' '}
+              <button onClick={() => gate(() => navigate(byline.to), 'Melde dich an, um das Profil zu sehen.')}
+                className="font-semibold" style={{ color: '#71587A' }}>
+                {byline.name}
+              </button>
+            </p>
+          )}
         </div>
 
         {/* ── Galerie: mobil Swipe-Slider, ab sm 3-Panel-Mosaik ─── */}
