@@ -24,18 +24,30 @@ export function TravelerPage() {
     ]).then(([f, fr]) => { setFollowing(f); setFriends(fr); }).finally(() => setLoading(false));
   }, []);
 
-  const Row = ({ id, name, handle, avatarUrl, cropX, cropY }: {
-    id: number; name: string; handle: string; avatarUrl: string | null; cropX?: number; cropY?: number;
+  /** `chat`: bei Freund:innen führt ein zweiter Knopf direkt in den Nachrichtenverlauf. */
+  const Row = ({ id, name, handle, avatarUrl, cropX, cropY, chat }: {
+    id: number; name: string; handle: string; avatarUrl: string | null;
+    cropX?: number; cropY?: number; chat?: boolean;
   }) => (
-    <button onClick={() => navigate(`/u/${id}`)}
-      className="w-full flex items-center gap-3 bg-white rounded-2xl p-2.5 shadow-[var(--shadow-card)] active:scale-[0.99] transition-transform text-left">
-      <Avatar name={name} src={avatarUrl} size={44} cropX={cropX} cropY={cropY} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-[var(--color-aubergine)] truncate">{name}</p>
-        <p className="text-xs text-[var(--color-lavender)] truncate">@{handle}</p>
-      </div>
-      <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)] text-sm" />
-    </button>
+    <div className="w-full flex items-center gap-2 bg-white rounded-2xl p-2.5 shadow-[var(--shadow-card)]">
+      <button onClick={() => navigate(`/u/${id}`)}
+        className="flex items-center gap-3 flex-1 min-w-0 text-left active:scale-[0.99] transition-transform">
+        <Avatar name={name} src={avatarUrl} size={44} cropX={cropX} cropY={cropY} />
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-[var(--color-aubergine)] truncate">{name}</span>
+          <span className="block text-xs text-[var(--color-lavender)] truncate">@{handle}</span>
+        </span>
+      </button>
+      {chat ? (
+        <button onClick={() => navigate(`/postfach/${id}`)} title={`${name} schreiben`} aria-label={`${name} schreiben`}
+          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform"
+          style={{ background: 'var(--color-bg-soft)', color: 'var(--color-aubergine)' }}>
+          <i className="fa-regular fa-comment-dots" />
+        </button>
+      ) : (
+        <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)] text-sm mr-1" />
+      )}
+    </div>
   );
 
   return (
@@ -75,8 +87,11 @@ export function TravelerPage() {
             )}
 
             {/* Freund:innen */}
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-amber)] mb-1">
               Freunde ({friends.length})
+            </p>
+            <p className="text-[11px] text-[var(--color-lavender)] mb-3">
+              Auf die Sprechblase tippen, um zu schreiben — auf den Namen, um das Blog zu sehen.
             </p>
             {friends.length === 0 ? (
               <div className="text-center py-8 text-[var(--color-lavender-lt)]">
@@ -86,7 +101,7 @@ export function TravelerPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 {friends.map(f => (
-                  <Row key={f.id} id={f.id} name={f.name} handle={f.handle} avatarUrl={f.avatarUrl} />
+                  <Row key={f.id} id={f.id} name={f.name} handle={f.handle} avatarUrl={f.avatarUrl} chat />
                 ))}
               </div>
             )}

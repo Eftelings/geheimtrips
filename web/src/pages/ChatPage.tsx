@@ -25,6 +25,28 @@ export function ChatPage() {
   }
   useEffect(() => { load(); }, [other]); // eslint-disable-line
 
+  /**
+   * Solange der Verlauf offen UND das Fenster sichtbar ist, alle 6 Sekunden nachsehen.
+   * Kein Dauerlauf im Hintergrund: liegt das Telefon in der Tasche, ruht die Abfrage.
+   * Eine echte Live-Verbindung waere sparsamer, braucht aber einen eigenen Kanal.
+   */
+  useEffect(() => {
+    let timer = 0;
+    const tick = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const d = await messagesApi.thread(other).catch(() => null);
+      if (!d) return;
+      // Nur eingreifen, wenn wirklich etwas dazugekommen ist — sonst flackert die Liste.
+      setMessages(prev => (prev && d.messages.length === prev.length ? prev : d.messages));
+      setPlaces(d.places);
+    };
+    const start = () => { window.clearInterval(timer); timer = window.setInterval(tick, 6000); };
+    const onVis = () => { if (document.visibilityState === 'visible') { tick(); start(); } else window.clearInterval(timer); };
+    start();
+    document.addEventListener('visibilitychange', onVis);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVis); };
+  }, [other]);
+
   async function send() {
     const text = draft.trim();
     if (!text || busy) return;
