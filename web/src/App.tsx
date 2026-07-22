@@ -6,6 +6,7 @@ import { useAuthGate } from './store/useAuthGate.js';
 import { AuthGateModal } from './components/ui/AuthGateModal.js';
 import { CookieConsent } from './components/ui/CookieConsent.js';
 import { useIsMobile } from './hooks/useIsMobile.js';
+import { useMessageSocket } from './store/useMessageSocket.js';
 import React from 'react';
 
 // Routen lazy laden → kleineres Initial-Bundle (v.a. mobil). Named exports → default mappen.
@@ -124,6 +125,16 @@ export function App() {
   // „Besucht"-Häkchen mit dem Backend abgleichen, sobald jemand eingeloggt ist (auch nach
   // Kontowechsel) — sonst zeigt der lokal gespiegelte Stand veraltete Häkchen.
   useEffect(() => { if (user) loadVisited(); }, [user, loadVisited]);
+
+  // Live-Kanal für Nachrichten: genau eine Verbindung für die ganze App, solange
+  // jemand angemeldet ist. Beim Abmelden wird sie geschlossen.
+  const connectSocket    = useMessageSocket(s => s.connect);
+  const disconnectSocket = useMessageSocket(s => s.disconnect);
+  useEffect(() => {
+    if (!user) { disconnectSocket(); return; }
+    connectSocket();
+    return () => disconnectSocket();
+  }, [user, connectSocket, disconnectSocket]);
 
   useEffect(() => {
     hydrate();

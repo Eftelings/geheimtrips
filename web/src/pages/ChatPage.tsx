@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { messagesApi, type ChatMessage, type ChatPartner } from '../services/api.js';
+import { useMessageSocket } from '../store/useMessageSocket.js';
 import type { Place } from '../types/index.js';
 
 /** Verlauf mit einer Person — Text und verschickte Orte in einem Strang. */
@@ -26,26 +27,15 @@ export function ChatPage() {
   useEffect(() => { load(); }, [other]); // eslint-disable-line
 
   /**
-   * Solange der Verlauf offen UND das Fenster sichtbar ist, alle 6 Sekunden nachsehen.
-   * Kein Dauerlauf im Hintergrund: liegt das Telefon in der Tasche, ruht die Abfrage.
-   * Eine echte Live-Verbindung waere sparsamer, braucht aber einen eigenen Kanal.
+   * Live statt Nachfragen: Der Server meldet neue Nachrichten über den offenen Kanal.
+   * Betrifft sie diesen Verlauf, laden wir ihn neu — damit sind Ortskacheln und die
+   * Lesebestätigung gleich mit dabei, ohne die Antwort hier nachzubauen.
    */
-  useEffect(() => {
-    let timer = 0;
-    const tick = async () => {
-      if (document.visibilityState !== 'visible') return;
-      const d = await messagesApi.thread(other).catch(() => null);
-      if (!d) return;
-      // Nur eingreifen, wenn wirklich etwas dazugekommen ist — sonst flackert die Liste.
-      setMessages(prev => (prev && d.messages.length === prev.length ? prev : d.messages));
-      setPlaces(d.places);
-    };
-    const start = () => { window.clearInterval(timer); timer = window.setInterval(tick, 6000); };
-    const onVis = () => { if (document.visibilityState === 'visible') { tick(); start(); } else window.clearInterval(timer); };
-    start();
-    document.addEventListener('visibilitychange', onVis);
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVis); };
-  }, [other]);
+  useEffect(() => useMessageSocket.getState().subscribe(ev => {
+    if (ev.type !== 'message') return;
+    if (ev.from !== other && ev.to !== other) return;
+    load(true);
+  }), [other]); // eslint-disable-line
 
   async function send() {
     const text = draft.trim();

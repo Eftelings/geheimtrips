@@ -5,6 +5,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { WebSocketServer } from 'ws';
+import { handleMessageConnection } from './lib/messageSocket.js';
 import type { Server } from 'http';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -188,14 +189,22 @@ const httpServer = serve({ fetch: app.fetch, port: PORT }, () => {
   console.log(`Geheimtrips API läuft auf Port ${PORT}`);
 }) as Server;
 
-// ── WebSocket-Server (Geheimquiz) — am selben HTTP-Server, Pfad /api/game/ws ───
+// ── WebSocket-Server — am selben HTTP-Server, zwei Pfade ──────────────────────
+//    /api/game/ws     → Geheimquiz (Spielrunden)
+//    /api/messages/ws → Direktnachrichten (Live statt Nachfragen im Sekundentakt)
 const wss = new WebSocketServer({ noServer: true });
+const wssMessages = new WebSocketServer({ noServer: true });
 wss.on('connection', (ws) => handleGameConnection(ws));
+wssMessages.on('connection', (ws, request) => {
+  void handleMessageConnection(ws, request.url ?? '/');
+});
 
 httpServer.on('upgrade', (request, socket, head) => {
   const { pathname } = new URL(request.url ?? '/', 'http://localhost');
   if (pathname.startsWith('/api/game/ws')) {
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+  } else if (pathname.startsWith('/api/messages/ws')) {
+    wssMessages.handleUpgrade(request, socket, head, (ws) => wssMessages.emit('connection', ws, request));
   } else {
     socket.destroy();
   }

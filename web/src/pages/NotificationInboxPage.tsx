@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell.js';
 import { notificationsApi, messagesApi, type InboxItem, type Conversation } from '../services/api.js';
 import { Avatar } from '../components/ui/Avatar.js';
+import { useMessageSocket } from '../store/useMessageSocket.js';
 
 const META: Record<InboxItem['type'], { icon: string; color: string; bg: string; label: string }> = {
   friend_request: { icon: 'fa-user-plus',      color: '#8A6FB3', bg: '#F1ECF4', label: 'Freundschaft' },
@@ -151,6 +152,12 @@ export function NotificationInboxPage() {
     notificationsApi.list().then(setItems).catch(() => setItems([]));
     notificationsApi.seen().catch(() => {});
   }, []);
+
+  // Neue Nachricht ueber den Live-Kanal → Gespraechsliste frisch holen. Die Liste ist
+  // klein, das ist billiger als sie im Client nachzubauen (Sortierung, Zaehler, Vorschau).
+  useEffect(() => useMessageSocket.getState().subscribe(ev => {
+    if (ev.type === 'message') messagesApi.conversations().then(setChats).catch(() => {});
+  }), []);
 
   function dismiss(it: InboxItem) {
     setItems(prev => (prev ?? []).filter(x => x.id !== it.id));

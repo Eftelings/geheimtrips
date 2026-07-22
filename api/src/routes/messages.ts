@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { hydrate } from './places.js';
+import { pushToUser } from '../lib/messageSocket.js';
 
 /**
  * Direktnachrichten zwischen Freund:innen — getrennt von den Meldungen (Reviews,
@@ -94,8 +95,11 @@ router.get('/:userId', requireAuth, async (c) => {
             OR (from_user_id = ${other} AND to_user_id = ${me.id})
          ORDER BY id`).catch(() => []);
 
+  const unread = rows.some(r => r.from_user_id === other);
   await db.run(sql`UPDATE messages SET read_at = datetime('now')
     WHERE to_user_id = ${me.id} AND from_user_id = ${other} AND read_at IS NULL`).catch(() => {});
+  // Das Gegenueber darf wissen, dass gelesen wurde — sonst bliebe sein Zaehler stehen.
+  if (unread) pushToUser(other, { type: 'read', by: me.id });
 
   // Verschickte Orte gleich mitliefern, damit die Kachel im Verlauf sofort steht
   const placeIds = [...new Set(rows.map(r => r.place_id).filter((x): x is string => !!x))];
@@ -140,6 +144,22 @@ router.post('/:userId', requireAuth,
     }
     await db.run(sql`INSERT INTO messages (from_user_id, to_user_id, text, place_id)
       VALUES (${me.id}, ${other}, ${text?.trim() || null}, ${placeId ?? null})`);
+
+    // Frisch geschriebene Zeile holen und beiden Seiten zustellen: der Empfaengerin,
+    // damit sie es sofort sieht — und den eigenen weiteren Geraeten, damit dort
+    // derselbe Stand steht.
+    const row = await db.all<{ id: number; text: string | null; place_id: string | null; created_at: string }>(
+      sql`SELECT id, text, place_id, created_at FROM messages
+          WHERE from_user_id = ${me.id} AND to_user_id = ${other} ORDER BY id DESC LIMIT 1`).catch(() => []);
+    const fresh = row[0];
+    if (fresh) {
+      const event = {
+        type: 'message' as const, from: me.id, to: other,
+        message: { id: fresh.id, text: fresh.text, placeId: fresh.place_id, createdAt: fresh.created_at },
+      };
+      pushToUser(other, event);
+      pushToUser(me.id, event);
+    }
     return c.json({ ok: true }, 201);
   });
 
