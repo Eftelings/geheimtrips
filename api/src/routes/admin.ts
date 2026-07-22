@@ -4,7 +4,7 @@ import {
   users, places, authors, visitedPlaces, savedPlaces,
   ratings, placeMedia, takedownReports, trips, tripPlaces,
   businessClaims, businessProfiles, perks, categories,
-  placeContributions, photoLikes, favoritePlaces,
+  placeContributions, photoLikes, favoritePlaces, placeArticles,
 } from '../db/schema.js';
 import { eq, desc, count, sql, asc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
@@ -13,6 +13,42 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { mailStatus, verifyMail, sendMail } from '../lib/mailer.js';
+
+// ── Zusätzliche Beiträge zu Orten: Liste + Freigabe ───────────────────────────
+const articleRouter = new Hono();
+
+/** GET /admin/articles?status=pending — Beiträge zur Prüfung (Standard: offene). */
+articleRouter.get('/', async (c) => {
+  const status = c.req.query('status') ?? 'pending';
+  const rows = await db.select({
+    id: placeArticles.id, placeId: placeArticles.placeId, status: placeArticles.status,
+    short: placeArticles.short, long: placeArticles.long,
+    triviaText: placeArticles.triviaText, highlightsJson: placeArticles.highlightsJson,
+    createdAt: placeArticles.createdAt, reviewNote: placeArticles.reviewNote,
+    placeName: places.name, placeRegion: places.region,
+    authorId: users.id, authorName: users.name, authorHandle: users.handle,
+  }).from(placeArticles)
+    .innerJoin(places, eq(places.id, placeArticles.placeId))
+    .innerJoin(users, eq(users.id, placeArticles.userId))
+    .where(eq(placeArticles.status, status))
+    .orderBy(desc(placeArticles.id)).all();
+  return c.json(rows);
+});
+
+/** POST /admin/articles/:id/review — freigeben oder ablehnen. */
+articleRouter.post('/:id/review',
+  zValidator('json', z.object({
+    status: z.enum(['approved', 'rejected']),
+    note: z.string().max(500).optional(),
+  })),
+  async (c) => {
+    const id = Number(c.req.param('id'));
+    const { status, note } = c.req.valid('json');
+    await db.update(placeArticles)
+      .set({ status, reviewNote: note ?? null, updatedAt: sql`(datetime('now'))` })
+      .where(eq(placeArticles.id, id));
+    return c.json({ ok: true, status });
+  });
 
 // ── Runtime migration + Seed: Perks-Tabelle mit zwei Dummy-Vorteilen ───────────
 db.run(sql`
@@ -94,6 +130,9 @@ const router = new Hono();
 
 // All admin routes require auth + admin role
 router.use('*', requireAuth, requireAdmin);
+
+// Zusätzliche Beiträge zu Orten (Prüfung) — Definition steht oben.
+router.route('/articles', articleRouter);
 
 // ─── E-Mail-Versand (SMTP) Diagnose ─────────────────────────────────────────────
 // Zeigt den (maskierten) SMTP-Status und prüft Verbindung + Login.

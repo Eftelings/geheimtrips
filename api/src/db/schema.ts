@@ -252,6 +252,27 @@ export const placeMedia = sqliteTable('place_media', {
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
 
+/**
+ * Zusätzliche Beiträge zu einem Ort. Die entdeckende Person bleibt Hauptinhaberin —
+ * ihr Text steht weiterhin in `places` selbst. Hier liegen nur die Beiträge anderer,
+ * und auch nur die vier Felder, die sich je Beitrag unterscheiden dürfen. Alles andere
+ * (Tags, Öffnungszeiten, Lage, Bewertungen, Fragen) gehört dem Ort, nicht dem Beitrag.
+ */
+export const placeArticles = sqliteTable('place_articles', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  placeId: text('place_id').notNull().references(() => places.id),
+  userId: integer('user_id').notNull().references(() => users.id),
+  short: text('short').notNull(),
+  long: text('long').notNull(),
+  triviaText: text('trivia_text').notNull().default(''),
+  highlightsJson: text('highlights_json').notNull().default('[]'),
+  // pending → in Prüfung, approved → öffentlich, rejected → abgelehnt
+  status: text('status').notNull().default('pending'),
+  reviewNote: text('review_note'),
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at').default(sql`(datetime('now'))`),
+});
+
 // ─── Business Profiles & Claims ──────────────────────────────────────────────
 
 export const businessProfiles = sqliteTable('business_profiles', {

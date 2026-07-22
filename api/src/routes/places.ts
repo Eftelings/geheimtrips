@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { places, savedPlaces, visitedPlaces, ratings, placeMedia, authors, businessClaims, placeContributions, users, photoLikes, favoritePlaces } from '../db/schema.js';
+import { places, savedPlaces, visitedPlaces, ratings, placeMedia, authors, businessClaims, placeContributions, users, photoLikes, favoritePlaces, placeArticles, follows } from '../db/schema.js';
 import { isUserLocalHero, W_REVIEW } from '../lib/ranking.js';
 import { eq, and, inArray, sql, count, asc } from 'drizzle-orm';
 import { requireAuth, requireVerified, JWT_SECRET } from '../middleware/auth.js';
@@ -493,6 +493,104 @@ router.patch('/:id', requireAuth,
 );
 
 // GET /places/:id — single place with author + approved business claim
+// ─── Zusätzliche Beiträge zu einem Ort ───────────────────────────────────────
+// Tabelle zur Laufzeit anlegen (kein Migrationsschritt nötig). Eine Person schreibt
+// höchstens einen Beitrag je Ort — das erzwingt der UNIQUE-Index.
+await db.run(sql`CREATE TABLE IF NOT EXISTS place_articles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  place_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  short TEXT NOT NULL,
+  long TEXT NOT NULL,
+  trivia_text TEXT NOT NULL DEFAULT '',
+  highlights_json TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'pending',
+  review_note TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(place_id, user_id)
+)`).catch(() => {});
+
+const articleBody = z.object({
+  short: z.string().min(10).max(400),
+  long: z.string().min(50),
+  trivia: z.string().max(1200).optional().default(''),
+  highlights: z.array(z.object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    photos: z.array(z.string()).optional(),
+  })).optional(),
+});
+
+/** Text eines Beitrags aufbereiten — dieselbe Behandlung wie beim Einreichen eines Orts. */
+async function buildArticleFields(body: z.infer<typeof articleBody>) {
+  const [short, long, highlightsJson] = await Promise.all([
+    proofreadSafe(cleanPlainText(body.short)),
+    proofreadLong(cleanRichText(body.long)),
+    buildHighlightsJson(body.highlights),
+  ]);
+  return { short, long, triviaText: cleanPlainText(body.trivia ?? ''), highlightsJson };
+}
+
+/**
+ * POST /places/:id/articles — eigenen Beitrag zu einem bestehenden Ort schreiben.
+ * Voraussetzung: Follower zugelassen UND den Ort als besucht bestätigt. Der Beitrag geht
+ * in die Prüfung, wie ein neu eingereichter Ort.
+ */
+router.post('/:id/articles', requireAuth, requireVerified, zValidator('json', articleBody), async (c) => {
+  const user = c.get('user');
+  const placeId = c.req.param('id');
+  const place = await db.select({ id: places.id, submittedBy: places.submittedBy, name: places.name })
+    .from(places).where(eq(places.id, placeId)).get();
+  if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
+  if (place.submittedBy === user.id) {
+    return c.json({ error: 'Das ist dein eigener Ort — bearbeite ihn direkt.' }, 400);
+  }
+  if (!user.allowFollowers) {
+    return c.json({ error: 'Eigene Beiträge kann schreiben, wer in den Einstellungen Folgen erlaubt.' }, 403);
+  }
+  const visited = await db.select({ id: visitedPlaces.id }).from(visitedPlaces)
+    .where(and(eq(visitedPlaces.userId, user.id), eq(visitedPlaces.placeId, placeId))).get();
+  if (!visited) return c.json({ error: 'Schreiben kann nur, wer schon dort war.' }, 403);
+  const existing = await db.select({ id: placeArticles.id }).from(placeArticles)
+    .where(and(eq(placeArticles.placeId, placeId), eq(placeArticles.userId, user.id))).get();
+  if (existing) return c.json({ error: 'Du hast zu diesem Ort schon einen Beitrag.' }, 409);
+
+  const fields = await buildArticleFields(c.req.valid('json'));
+  const [row] = await db.insert(placeArticles)
+    .values({ placeId, userId: user.id, ...fields, status: 'pending' })
+    .returning();
+  return c.json({ ok: true, article: row }, 201);
+});
+
+/** PATCH /places/articles/:articleId — eigenen Beitrag ändern (geht erneut in die Prüfung). */
+router.patch('/articles/:articleId', requireAuth, zValidator('json', articleBody), async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('articleId'));
+  const row = await db.select().from(placeArticles).where(eq(placeArticles.id, id)).get();
+  if (!row) return c.json({ error: 'Beitrag nicht gefunden.' }, 404);
+  if (row.userId !== user.id && !user.isAdmin) return c.json({ error: 'Nicht erlaubt.' }, 403);
+  const fields = await buildArticleFields(c.req.valid('json'));
+  // Geänderter Text ist ungeprüfter Text — also zurück in die Prüfung.
+  const status = user.isAdmin ? row.status : 'pending';
+  await db.update(placeArticles)
+    .set({ ...fields, status, updatedAt: sql`(datetime('now'))` })
+    .where(eq(placeArticles.id, id));
+  return c.json({ ok: true, status });
+});
+
+/** DELETE /places/articles/:articleId — eigenen Beitrag entfernen. */
+router.delete('/articles/:articleId', requireAuth, async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('articleId'));
+  const row = await db.select({ userId: placeArticles.userId }).from(placeArticles)
+    .where(eq(placeArticles.id, id)).get();
+  if (!row) return c.json({ error: 'Beitrag nicht gefunden.' }, 404);
+  if (row.userId !== user.id && !user.isAdmin) return c.json({ error: 'Nicht erlaubt.' }, 403);
+  await db.delete(placeArticles).where(eq(placeArticles.id, id));
+  return c.json({ ok: true });
+});
+
 router.get('/:id', async (c) => {
   const place = await db.select().from(places).where(eq(places.id, c.req.param('id'))).get();
   if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
@@ -500,12 +598,13 @@ router.get('/:id', async (c) => {
   // Aufruf zählen (best-effort, blockiert die Antwort nicht) — eigene Aufrufe der/des
   // Ersteller:in zählen nicht, sonst wäre die Zahl für sie:ihn irreführend.
   const authHeader = c.req.header('Authorization');
+  // Wer ruft ab? Bestimmt sowohl die Aufruf-Zählung als auch die Reihenfolge der Beiträge.
+  let viewerId: number | null = null;
+  if (authHeader?.startsWith('Bearer ')) {
+    try { viewerId = ((await jwtVerify(authHeader.slice(7), JWT_SECRET)).payload as { userId?: number }).userId ?? null; }
+    catch { /* anonym/ungültig → trotzdem zählen */ }
+  }
   void (async () => {
-    let viewerId: number | null = null;
-    if (authHeader?.startsWith('Bearer ')) {
-      try { viewerId = ((await jwtVerify(authHeader.slice(7), JWT_SECRET)).payload as { userId?: number }).userId ?? null; }
-      catch { /* anonym/ungültig → trotzdem zählen */ }
-    }
     if (viewerId !== place.submittedBy) {
       await db.run(sql`UPDATE places SET views = COALESCE(views, 0) + 1 WHERE id = ${place.id}`).catch(() => {});
     }
@@ -566,7 +665,69 @@ router.get('/:id', async (c) => {
     }
   }
 
-  return c.json({ ...hydrate(place), author, submitter, media, approvedClaim, photoLikes: photoLikesMap, captions, photoAuthors });
+  /**
+   * Zusätzliche Beiträge — die Reihenfolge hängt von der abrufenden Person ab, deshalb
+   * wird sie hier serverseitig gebildet: erst Beiträge von Personen, denen ich folge
+   * (neueste zuerst), dann der Hauptbeitrag, dann alle übrigen. Ohne Login sieht jede
+   * Person zuerst den Hauptbeitrag.
+   */
+  const articleRows = await db.select({
+    id: placeArticles.id, userId: placeArticles.userId,
+    short: placeArticles.short, long: placeArticles.long,
+    triviaText: placeArticles.triviaText, highlightsJson: placeArticles.highlightsJson,
+    createdAt: placeArticles.createdAt,
+    authorName: users.name, authorHandle: users.handle, authorAvatar: users.avatarUrl,
+  }).from(placeArticles)
+    .innerJoin(users, eq(users.id, placeArticles.userId))
+    .where(and(eq(placeArticles.placeId, place.id), eq(placeArticles.status, 'approved')))
+    .all();
+
+  let followedIds: number[] = [];
+  if (viewerId && articleRows.length) {
+    const rows = await db.select({ id: follows.followeeId }).from(follows)
+      .where(eq(follows.followerId, viewerId)).all().catch(() => []);
+    followedIds = rows.map(r => r.id);
+  }
+
+  // Bilder je Beitrag: die der schreibenden Person zuerst, dahinter die übrigen.
+  const orderPhotos = (authorId: number) => [
+    ...media.filter(m => m.userId === authorId).map(m => m.url),
+    ...media.filter(m => m.userId !== authorId).map(m => m.url),
+  ];
+
+  const mainArticle = {
+    id: 0, userId: place.submittedBy ?? null, isMain: true,
+    short: place.short, long: place.long,
+    triviaText: '', highlightsJson: place.highlightsJson,
+    author: submitter ? { id: submitter.id, name: submitter.name, handle: submitter.handle, avatarUrl: submitter.avatarUrl }
+          : author   ? { id: author.id, name: author.name, handle: author.handle, avatarUrl: author.avatarUrl }
+          : null,
+    photos: media.map(m => m.url),
+  };
+  const extras = articleRows.map(r => ({
+    id: r.id, userId: r.userId, isMain: false,
+    short: r.short, long: r.long, triviaText: r.triviaText, highlightsJson: r.highlightsJson,
+    author: { id: r.userId, name: r.authorName, handle: r.authorHandle, avatarUrl: r.authorAvatar },
+    photos: orderPhotos(r.userId),
+    createdAt: r.createdAt,
+  }));
+  const followed = extras
+    .filter(a => followedIds.includes(a.userId))
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  const rest = extras.filter(a => !followedIds.includes(a.userId));
+  const articles = [...followed, mainArticle, ...rest];
+
+  // Habe ich hier schon einen Beitrag (auch einen ungeprüften)?
+  const myArticle = viewerId
+    ? await db.select({ id: placeArticles.id, status: placeArticles.status }).from(placeArticles)
+        .where(and(eq(placeArticles.placeId, place.id), eq(placeArticles.userId, viewerId))).get()
+    : undefined;
+
+  return c.json({
+    ...hydrate(place), author, submitter, media, approvedClaim,
+    photoLikes: photoLikesMap, captions, photoAuthors,
+    articles, myArticle: myArticle ?? null,
+  });
 });
 
 // POST /places/:id/save — save a place (auth required)
