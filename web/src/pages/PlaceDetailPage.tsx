@@ -19,7 +19,8 @@ import { useRequireAuth } from '../hooks/useRequireAuth.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { ReviewFlow } from '../components/ui/ReviewFlow.js';
 import type { ReviewSection } from '../components/ui/ReviewFlow.js';
-import type { Place, Transport } from '../types/index.js';
+import type { Place, Transport, PlaceHighlight, PlaceArticle } from '../types/index.js';
+import { SwipeTabs } from '../components/ui/SwipeTabs.js';
 import { isOpenNow, HOUR_DAYS } from '../data/detailQuestions.js';
 import type { WeekHours } from '../data/detailQuestions.js';
 import { distanceKm, geocodeSuggestions } from '../services/geoService.js';
@@ -999,6 +1000,8 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, o
   // State
   const [place, setPlace]              = useState<Place | null>(places.find(p => p.id === id) ?? null);
   const [storyExpanded, setStoryExpanded] = useState(false);
+  // Welcher Beitrag gerade gelesen wird (0 = der vom Server zuerst gereihte)
+  const [articleIdx, setArticleIdx] = useState(0);
   const [qaSearch, setQaSearch]        = useState('');
   const [qaShowAll, setQaShowAll]      = useState(false);
   const [openQaId, setOpenQaId]        = useState<number | null>(null);
@@ -1095,10 +1098,16 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, o
       .map(url => ({ url, cat: 'alle' as PhotoCat }));
     const all = [...base, ...uploadedPhotos];
     // Sort by likes descending; stable sort preserves hero-first when likes are equal
-    return [...all]
+    const sorted = [...all]
       .sort((a, b) => (photoLikes[b.url] ?? 0) - (photoLikes[a.url] ?? 0))
       .map(p => ({ ...p, caption: place.captions?.[p.url], author: authorFor(p.url) }));
-  }, [place, uploadedPhotos, photoLikes]);
+    // Beim Beitrag einer anderen Person stehen deren Bilder vorn — der Server liefert
+    // die passende Reihenfolge je Beitrag mit, hier wird nur danach umsortiert.
+    const order = place.articles?.length ? place.articles[Math.min(articleIdx, place.articles.length - 1)]?.photos : null;
+    if (!order?.length) return sorted;
+    const rank = new Map(order.map((u, i) => [u, i]));
+    return [...sorted].sort((a, b) => (rank.get(a.url) ?? 1e6) - (rank.get(b.url) ?? 1e6));
+  }, [place, uploadedPhotos, photoLikes, articleIdx]);
 
 
   // Ähnliche Orte: Score aus gemeinsamen Tags (stark), Merkmalen, Vibe. Kein Treffer → leer → Abschnitt versteckt.
@@ -1380,8 +1389,20 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, o
 
   const isSaved      = savedIds.has(place.id);
   const isVisited    = visitedIds.has(place.id);
-  // Wer den Beitrag geschrieben hat: kuratierte Entdecker:in oder die einreichende Person.
-  const byline = place.author
+  /**
+   * Mehrere Beiträge zum selben Ort: Kurzbeschreibung, Text, Trivia und Highlights
+   * gehören dem Beitrag, alles andere dem Ort. Die Reihenfolge kommt fertig vom Server
+   * (Beiträge gefolgter Personen zuerst), hier wird nur geblättert.
+   */
+  const articles   = place.articles?.length ? place.articles : null;
+  const artIdx     = articles ? Math.min(articleIdx, articles.length - 1) : 0;
+  const art        = articles ? articles[artIdx] : null;
+  const artShort   = art ? art.short : place.short;
+
+  // Wer den Beitrag geschrieben hat: der gewählte Beitrag, sonst der Ort selbst.
+  const byline = art?.author
+    ? { name: art.author.name, avatarUrl: art.author.avatarUrl, color: '#71587A', to: `/u/${art.author.id}` }
+    : place.author
     ? { name: place.author.name, avatarUrl: place.author.avatarUrl, color: place.author.avatarColor, to: `/author/${place.author.id}` }
     : place.submitter
     ? { name: place.submitter.name, avatarUrl: place.submitter.avatarUrl, color: '#71587A', to: `/u/${place.submitter.id}` }
@@ -1447,10 +1468,11 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, o
   // „Das Besondere" speist sich jetzt aus der Kurz-Besonderheit (Schritt 3 / place.short);
   // Fallback auf die alte highlight-Antwort für ältere Datensätze.
   const legacyHighlight = typeof answers.highlight === 'string' ? stripHtml(answers.highlight) : '';
-  const highlight = (place.short ?? '').trim()
+  const highlight = (artShort ?? '').trim()
     || ((legacyHighlight.length > 1 && !/Was macht diesen Ort/i.test(legacyHighlight)) ? legacyHighlight : '');
   const triviaType = typeof answers.trivia_type === 'string' ? answers.trivia_type : '';
   const triviaText = typeof answers.trivia_text === 'string' ? stripHtml(answers.trivia_text) : '';
+
 
   // Derive parking display from submission-form answer (UNIVERSAL_QUESTIONS parking answer)
   // or fall back to the community-editable place.parking column
@@ -1702,6 +1724,115 @@ async function handleVerifyToggle() {
   const GALLERY_H = 'clamp(260px, 46vh, 480px)';
 
   // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * Der Beitragsteil — als Funktion, damit beim Wischen auch die Nachbarkacheln ihren
+   * eigenen Text zeigen und nicht ins Leere laufen. `a === null` heißt: der Ort selbst.
+   */
+  const renderArticle = (a: PlaceArticle | null) => {
+    const aLong    = a ? a.long : place.long;
+    const aTrivia  = a && !a.isMain ? a.triviaText : triviaText;
+    const aHighlights = a && !a.isMain
+      ? (() => { try { return JSON.parse(a.highlightsJson) as PlaceHighlight[]; } catch { return []; } })()
+      : (place.highlights ?? []);
+    const aTeaser = ((a ? a.short : place.short) ?? '').trim()
+      || ((legacyHighlight.length > 1 && !/Was macht diesen Ort/i.test(legacyHighlight)) ? legacyHighlight : '');
+    return (
+    <>
+              {/* Das Besondere — der USP-Teaser. Im Overlay (embedded) ausgeblendet: hat man beim Swipen schon gesehen. */}
+              {aTeaser && !embedded && (
+                <section className="rounded-2xl p-4 order-first lg:order-none"
+                  style={{ background: 'linear-gradient(135deg, #FFF4EB, #FFEAD6)' }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-amber)] mb-1">Das Besondere</p>
+                  <p className="text-[15px] text-[var(--color-aubergine)] leading-snug font-medium">{aTeaser}</p>
+                </section>
+              )}
+
+              {/* Aufrufzahl steht bewusst NICHT mehr auf dem Ort — sie liegt jetzt in „Meine Orte". */}
+
+              {/* Story — im Overlay ohne Überschrift & immer voll ausgeklappt */}
+              {aLong && (
+                <section>
+                  {!embedded && <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">Über diesen Ort</p>}
+                  <div
+                    className={`text-[15px] text-[var(--color-body)] leading-relaxed prose prose-sm max-w-none [&_img]:rounded-2xl [&_img]:w-full [&_img]:my-4 [&_img]:shadow-[var(--shadow-card)] [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline [&_a.gt-place]:cursor-pointer ${!embedded && !storyExpanded && isLongStory ? 'line-clamp-5' : ''}`}
+                    onClick={e => {
+                      const a = (e.target as HTMLElement).closest?.('a.gt-place') as HTMLElement | null;
+                      if (a) { e.preventDefault(); const pid = a.getAttribute('data-place-id'); if (pid) openPlace(pid); }
+                    }}
+                    // eslint-disable-next-line react/no-danger
+                    dangerouslySetInnerHTML={{ __html: aLong }}
+                  />
+                  {!embedded && isLongStory && (
+                    <button onClick={() => setStoryExpanded(v => !v)}
+                      className="mt-2.5 text-[var(--color-aubergine)] font-semibold text-sm flex items-center gap-1.5 hover:underline">
+                      {storyExpanded ? 'Weniger anzeigen' : 'Mehr lesen'}
+                      <i className={`fa-solid fa-chevron-${storyExpanded ? 'up' : 'down'} text-xs`} />
+                    </button>
+                  )}
+                  {/* Karte mit den im Text verlinkten Orten — nur wenn die Autor:in sie aktiviert hat */}
+                  {linkedInStory.length > 0 && attrs.showLinkedMap !== false && (
+                    <div className="mt-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-2">
+                        Orte in diesem Text
+                      </p>
+                      <LinkedPlacesMap linked={linkedInStory} onOpen={openPlace} />
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* Must-see-Highlights — „Das solltest du sehen" (nur Erlebnis-Orte) */}
+              {aHighlights.length > 0 && (
+                <section>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">
+                    <i className="fa-solid fa-star mr-1.5" />Das solltest du sehen
+                  </p>
+                  <div className="flex flex-col gap-4">
+                    {aHighlights.map((h, i) => (
+                      <div key={i} className="rounded-2xl overflow-hidden border border-[var(--color-bg-soft)] bg-white shadow-[var(--shadow-card)]">
+                        {h.photos.length > 0 && (
+                          h.photos.length === 1 ? (
+                            <img src={h.photos[0]} alt={h.title} loading="lazy" decoding="async" className="w-full aspect-[16/10] object-cover" />
+                          ) : (
+                            <div className="flex overflow-x-auto scrollbar-none snap-x" style={{ scrollbarWidth: 'none' }}>
+                              {h.photos.map((src, j) => (
+                                <img key={j} src={src} alt="" loading="lazy" decoding="async" className="h-44 w-auto flex-shrink-0 object-cover snap-start" />
+                              ))}
+                            </div>
+                          )
+                        )}
+                        <div className="p-3.5">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[11px] font-bold" style={{ background: 'var(--color-amber)' }}>{i + 1}</span>
+                            <h3 className="font-display font-bold text-[var(--color-aubergine)]">{h.title}</h3>
+                          </div>
+                          {h.description && <p className="text-[14px] text-[var(--color-body)] leading-relaxed">{h.description}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Trivia — optionaler heller-Lila Block mit typ-spezifischem Icon */}
+              {aTrivia && (
+                <section className="rounded-2xl p-4 flex items-start gap-3" style={{ background: '#F1ECF4' }}>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#E2D7EB' }}>
+                    <i className={`fa-solid ${TRIVIA_ICONS[triviaType] ?? 'fa-circle-info'} text-sm`} style={{ color: '#71587A' }} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: '#71587A' }}>
+                      {triviaType || 'Wusstest du schon?'}
+                    </p>
+                    <p className="text-[15px] leading-snug" style={{ color: '#4A3D5C' }}>{aTrivia}</p>
+                  </div>
+                </section>
+              )}
+
+    </>
+    );
+  };
+
   return (
     <AppShell noHeader bare={embedded}>
 
@@ -2468,96 +2599,20 @@ async function handleVerifyToggle() {
               )}
             </div>
 
-            {/* Das Besondere — der USP-Teaser. Im Overlay (embedded) ausgeblendet: hat man beim Swipen schon gesehen. */}
-            {highlight && !embedded && (
-              <section className="rounded-2xl p-4 order-first lg:order-none"
-                style={{ background: 'linear-gradient(135deg, #FFF4EB, #FFEAD6)' }}>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-amber)] mb-1">Das Besondere</p>
-                <p className="text-[15px] text-[var(--color-aubergine)] leading-snug font-medium">{highlight}</p>
-              </section>
-            )}
-
-            {/* Aufrufzahl steht bewusst NICHT mehr auf dem Ort — sie liegt jetzt in „Meine Orte". */}
-
-            {/* Story — im Overlay ohne Überschrift & immer voll ausgeklappt */}
-            {place.long && (
-              <section>
-                {!embedded && <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">Über diesen Ort</p>}
-                <div
-                  className={`text-[15px] text-[var(--color-body)] leading-relaxed prose prose-sm max-w-none [&_img]:rounded-2xl [&_img]:w-full [&_img]:my-4 [&_img]:shadow-[var(--shadow-card)] [&_a.gt-place]:text-[#C96442] [&_a.gt-place]:font-semibold [&_a.gt-place]:no-underline [&_a.gt-place]:cursor-pointer ${!embedded && !storyExpanded && isLongStory ? 'line-clamp-5' : ''}`}
-                  onClick={e => {
-                    const a = (e.target as HTMLElement).closest?.('a.gt-place') as HTMLElement | null;
-                    if (a) { e.preventDefault(); const pid = a.getAttribute('data-place-id'); if (pid) openPlace(pid); }
-                  }}
-                  // eslint-disable-next-line react/no-danger
-                  dangerouslySetInnerHTML={{ __html: place.long }}
-                />
-                {!embedded && isLongStory && (
-                  <button onClick={() => setStoryExpanded(v => !v)}
-                    className="mt-2.5 text-[var(--color-aubergine)] font-semibold text-sm flex items-center gap-1.5 hover:underline">
-                    {storyExpanded ? 'Weniger anzeigen' : 'Mehr lesen'}
-                    <i className={`fa-solid fa-chevron-${storyExpanded ? 'up' : 'down'} text-xs`} />
-                  </button>
-                )}
-                {/* Karte mit den im Text verlinkten Orten — nur wenn die Autor:in sie aktiviert hat */}
-                {linkedInStory.length > 0 && attrs.showLinkedMap !== false && (
-                  <div className="mt-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-2">
-                      Orte in diesem Text
-                    </p>
-                    <LinkedPlacesMap linked={linkedInStory} onOpen={openPlace} />
+            {/* ── Beitrag: wischbar, wenn mehrere Personen über den Ort geschrieben haben ──
+                 Kurzbeschreibung, Text, Highlights und Trivia gehören zum Beitrag; Karte,
+                 Öffnungszeiten, Tipps und Bewertungen bleiben stehen — die gehören dem Ort. */}
+            {articles && articles.length > 1 ? (
+              <SwipeTabs hideTabs tabs={articles.map(a => ({ key: String(a.id) }))}
+                index={artIdx} onIndex={setArticleIdx}>
+                {articles.map(a => (
+                  <div key={a.id} className="flex flex-col gap-6">
+                    {renderArticle(a)}
                   </div>
-                )}
-              </section>
-            )}
+                ))}
+              </SwipeTabs>
+            ) : renderArticle(art)}
 
-            {/* Must-see-Highlights — „Das solltest du sehen" (nur Erlebnis-Orte) */}
-            {Array.isArray(place.highlights) && place.highlights.length > 0 && (
-              <section>
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-amber)] mb-3">
-                  <i className="fa-solid fa-star mr-1.5" />Das solltest du sehen
-                </p>
-                <div className="flex flex-col gap-4">
-                  {place.highlights.map((h, i) => (
-                    <div key={i} className="rounded-2xl overflow-hidden border border-[var(--color-bg-soft)] bg-white shadow-[var(--shadow-card)]">
-                      {h.photos.length > 0 && (
-                        h.photos.length === 1 ? (
-                          <img src={h.photos[0]} alt={h.title} loading="lazy" decoding="async" className="w-full aspect-[16/10] object-cover" />
-                        ) : (
-                          <div className="flex overflow-x-auto scrollbar-none snap-x" style={{ scrollbarWidth: 'none' }}>
-                            {h.photos.map((src, j) => (
-                              <img key={j} src={src} alt="" loading="lazy" decoding="async" className="h-44 w-auto flex-shrink-0 object-cover snap-start" />
-                            ))}
-                          </div>
-                        )
-                      )}
-                      <div className="p-3.5">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[11px] font-bold" style={{ background: 'var(--color-amber)' }}>{i + 1}</span>
-                          <h3 className="font-display font-bold text-[var(--color-aubergine)]">{h.title}</h3>
-                        </div>
-                        {h.description && <p className="text-[14px] text-[var(--color-body)] leading-relaxed">{h.description}</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Trivia — optionaler heller-Lila Block mit typ-spezifischem Icon */}
-            {triviaText && (
-              <section className="rounded-2xl p-4 flex items-start gap-3" style={{ background: '#F1ECF4' }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#E2D7EB' }}>
-                  <i className={`fa-solid ${TRIVIA_ICONS[triviaType] ?? 'fa-circle-info'} text-sm`} style={{ color: '#71587A' }} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: '#71587A' }}>
-                    {triviaType || 'Wusstest du schon?'}
-                  </p>
-                  <p className="text-[15px] leading-snug" style={{ color: '#4A3D5C' }}>{triviaText}</p>
-                </div>
-              </section>
-            )}
 
             {/* Tips */}
             {place.tips.length > 0 && (

@@ -65,6 +65,10 @@ export interface Place {
   gallery: string[];
   tips: string[];
   highlights?: PlaceHighlight[];   // Must-sees bei Erlebnis-Orten (Freizeitpark, Museum …)
+  /** Beiträge zu diesem Ort, bereits passend zur abrufenden Person sortiert. */
+  articles?: PlaceArticle[];
+  /** Mein eigener Beitrag zu diesem Ort — auch, solange er noch in Prüfung ist. */
+  myArticle?: { id: number; status: 'pending' | 'approved' | 'rejected' } | null;
   attributes: Record<string, unknown>;
   authorId: number | null;
   author?: Author | null;
@@ -121,6 +125,23 @@ export const CATEGORIES: CategoryDef[] = [
 ];
 
 // ─── Authors ──────────────────────────────────────────────────────────────────
+
+/**
+ * Ein Beitrag zu einem Ort. `isMain` kennzeichnet den Text der entdeckenden Person —
+ * der liegt weiterhin im Ort selbst, nicht in der Beitragstabelle.
+ */
+export interface PlaceArticle {
+  id: number;                 // 0 = Hauptbeitrag
+  userId: number | null;
+  isMain: boolean;
+  short: string;
+  long: string;
+  triviaText: string;
+  highlightsJson: string;
+  author: { id: number; name: string; handle: string; avatarUrl: string | null } | null;
+  photos: string[];           // Bilder in der Reihenfolge dieses Beitrags (eigene zuerst)
+  createdAt?: string;
+}
 
 export interface Author {
   id: number;

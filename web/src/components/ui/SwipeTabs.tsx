@@ -5,12 +5,15 @@ import { useRef, useState, type ReactNode } from 'react';
  * Kachel — wischbar nach links/rechts. Hält die Profilseite kurz, statt drei Blöcke
  * untereinander zu stapeln.
  */
-export function SwipeTabs({ tabs, index, onIndex, right, children }: {
-  tabs: { key: string; label: string; icon?: string }[];
+export function SwipeTabs({ tabs, index, onIndex, right, hideTabs, children }: {
+  /** Ohne Reiterleiste (hideTabs) reicht der Schlüssel — die Beschriftung entfällt dann. */
+  tabs: { key: string; label?: string; icon?: string }[];
   index: number;
   onIndex: (i: number) => void;
   /** Platz rechts neben den Umschaltern — z.B. der Öffentlich-Schalter der aktiven Kategorie. */
   right?: ReactNode;
+  /** Ohne Reiterleiste: nur wischen und die Punkte darunter (z.B. Beiträge zu einem Ort). */
+  hideTabs?: boolean;
   children: ReactNode[];
 }) {
   const [dx, setDx] = useState(0);
@@ -46,6 +49,7 @@ export function SwipeTabs({ tabs, index, onIndex, right, children }: {
 
   return (
     <div>
+      {!hideTabs && (
       <div className="flex items-center gap-2 mb-3">
         {/* Die Leiste nimmt den ganzen Rest der Zeile — jeder Reiter bekommt gleich viel Platz,
             damit auch „Lieblingsorte" neben dem Schalter noch hineinpasst. */}
@@ -61,6 +65,7 @@ export function SwipeTabs({ tabs, index, onIndex, right, children }: {
         </div>
         {right}
       </div>
+      )}
 
       <div ref={viewRef} className="overflow-hidden" onTouchStart={start} onTouchMove={move} onTouchEnd={end}>
         <div className="flex items-start"
