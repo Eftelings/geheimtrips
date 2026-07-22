@@ -28,6 +28,29 @@ export function catalogForTag(tag: string): SubmitQuestion[] {
   return out;
 }
 
+/**
+ * ALLE Fragen, die es ueberhaupt gibt — unabhaengig vom Typ. `detailQuestions` liefert je
+ * nach Tag unterschiedliche Baende (Gastro bekommt Speisekarte, Eintritts-Orte Ticketpreise),
+ * deshalb wird hier ueber je einen Vertreter jeder Sorte vereinigt.
+ *
+ * Gedacht fuers Admin-Board: dort soll je Tag die vollstaendige Liste stehen, mit Schaltern
+ * nur dort an, wo die Frage standardmaessig gilt.
+ */
+export function allQuestions(): SubmitQuestion[] {
+  const seen = new Set<string>();
+  const out: SubmitQuestion[] = [];
+  // 'restaurant' = Gastro, 'kunstmuseum' = Eintritt, '' = weder noch
+  for (const q of [
+    ...detailQuestions(['restaurant']),
+    ...detailQuestions(['kunstmuseum']),
+    ...detailQuestions(['']),
+    ...UNIVERSAL_DETAIL_QUESTIONS,
+  ]) {
+    if (!seen.has(q.id)) { seen.add(q.id); out.push(q); }
+  }
+  return out;
+}
+
 export type QuestionConfig = Record<string, Record<string, boolean>>;
 
 /** Gilt die Frage für DIESEN einen Tag? Override sticht, sonst Katalog-Zugehörigkeit. */

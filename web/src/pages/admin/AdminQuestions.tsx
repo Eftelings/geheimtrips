@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from './AdminLayout.js';
 import { useTaxVocab } from '../../data/taxVocab.js';
-import { catalogForTag, enabledForTag } from '../../data/questionCatalog.js';
+import { allQuestions, catalogForTag, enabledForTag } from '../../data/questionCatalog.js';
 import type { QuestionConfig } from '../../data/questionCatalog.js';
 import { adminApi } from '../../services/adminApi.js';
 
@@ -29,7 +29,11 @@ function TagRow({ tag, label, config, setConfig }: {
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const questions = useMemo(() => catalogForTag(tag), [tag]);
+  // Alle Fragen, die es gibt — nicht nur die, die fuer diesen Typ standardmaessig gelten.
+  // Sonst haette jeder Tag eine andere Zeilenzahl (mal 8, mal 13) und man koennte eine
+  // Frage nie ZUSCHALTEN, die der Standard fuer diesen Typ nicht vorsieht.
+  const questions = useMemo(() => allQuestions(), []);
+  const standard = useMemo(() => new Set(catalogForTag(tag).map(q => q.id)), [tag]);
   const changed = Object.keys(config[tag] ?? {}).length > 0;
   const activeCount = questions.filter(q => enabledForTag(tag, q.id, config)).length;
 
@@ -54,7 +58,7 @@ function TagRow({ tag, label, config, setConfig }: {
         <i className={`fa-solid fa-chevron-${open ? 'down' : 'right'} text-[10px] text-white/40 w-3`} />
         <span className="text-sm text-white/85 font-medium">{label}</span>
         {changed && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-[var(--color-amber)]/20 text-[var(--color-amber)]">angepasst</span>}
-        <span className="ml-auto text-[11px] text-white/35">{activeCount}/{questions.length} Fragen</span>
+        <span className="ml-auto text-[11px] text-white/35">{activeCount} von {questions.length} aktiv</span>
       </button>
       {open && (
         <div className="pl-5 pb-3 space-y-1.5">
@@ -64,7 +68,13 @@ function TagRow({ tag, label, config, setConfig }: {
               <div key={q.id} className="flex items-center gap-3 py-0.5">
                 <Toggle on={on} onClick={() => toggle(q.id)} busy={busy} />
                 <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-white/45 flex-shrink-0">{QTYPE[q.type] ?? q.type}</span>
-                <span className={`text-xs ${on ? 'text-white/80' : 'text-white/35 line-through'}`}>{q.label}</span>
+                <span className={`text-xs ${on ? 'text-white/80' : 'text-white/35'}`}>{q.label}</span>
+                {/* Zeigt, ob die Frage fuer diesen Typ ueberhaupt vorgesehen ist */}
+                {!standard.has(q.id) && (
+                  <span className="text-[9px] text-white/25 flex-shrink-0" title="Gehoert nicht zum Standard dieses Typs">
+                    nicht Standard
+                  </span>
+                )}
               </div>
             );
           })}
@@ -104,7 +114,9 @@ export function AdminQuestions() {
         <h1 className="text-lg font-bold mb-1">Fragen beim Einreichen</h1>
         <p className="text-xs text-white/50 mb-5 leading-relaxed">
           Steuere pro Typ-Tag, welche Zusatz-Fragen im Einreichen-Formular gestellt werden (und damit auch, was am Ort erscheint).
-          Ohne Anpassung gelten die Standard-Vorgaben. Grundfragen (Name, Standort, Beschreibung) sind immer dabei und hier nicht gelistet.
+          Aufgeklappt steht bei jedem Typ die <strong className="text-white/80">vollstaendige Frageliste</strong> — der Schalter ist
+          dort an, wo die Frage fuer diesen Typ vorgesehen ist. So laesst sich auch etwas zuschalten, das der Standard nicht vorsieht.
+          Grundfragen (Name, Standort, Beschreibung) sind immer dabei und hier nicht gelistet.
         </p>
         {!vocab || !loaded ? (
           <div className="text-white/40 py-10 text-center"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>
