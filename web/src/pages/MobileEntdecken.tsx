@@ -28,6 +28,8 @@ const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ 
 const BlogEmbed = lazy(() => import('./UserProfilePage.js').then(m => ({ default: m.UserProfilePage })));
 // Das eigene Profil liegt im selben Overlay — gleicher Kopf, nur mit Stiften
 const ProfileEmbed = lazy(() => import('./ProfilePage.js').then(m => ({ default: m.ProfilePage })));
+// Nachrichtenverlauf ebenfalls auf dem Overlay — herunterziehen zeigt die Karte
+const ChatEmbed = lazy(() => import('./ChatPage.js').then(m => ({ default: m.ChatPage })));
 import { useTaxVocab, tagInfoFrom } from '../data/taxVocab.js';
 import type { Place, Transport } from '../types/index.js';
 
@@ -273,10 +275,13 @@ export function MobileEntdecken() {
   const [blogUserId, setBlogUserId] = useState<number | null>(null);
   // Das eigene Profil liegt auf demselben Overlay wie ein fremdes Blog
   const [profileOpen, setProfileOpen] = useState(false);
+  // Nachrichtenverlauf — ebenfalls auf dem Overlay, damit die Karte einen Zug entfernt ist
+  const [chatUserId, setChatUserId] = useState<number | null>(null);
   const blogMode = blogUserId !== null && sheetSnap === 2;
-  const profileMode = profileOpen && sheetSnap === 2;
+  const profileMode = profileOpen && chatUserId === null && sheetSnap === 2;
+  const chatMode = chatUserId !== null && sheetSnap === 2;
   // Rast 2 IST der Swipe — es gibt kein eigenes Sheet und keine eigene Seite mehr.
-  const swipeMode = sheetSnap === 2 && blogUserId === null && !profileOpen;
+  const swipeMode = sheetSnap === 2 && blogUserId === null && !profileOpen && chatUserId === null;
   const [swipeArticle, setSwipeArticle] = useState(false);   // Artikel unter dem Bild (gleiche Seite)
   const [reviewsSignal, setReviewsSignal] = useState(0);     // Sterne am Hero → Rezensionen aufklappen
   // Stapel neu aufnehmen anfordern. Über einen Zähler statt direktem setSwipeFeed: Modus/Filter
@@ -315,7 +320,7 @@ export function MobileEntdecken() {
   // Einen Ort als Artikel zeigen — ohne den Zurück-Stapel anzufassen (nutzen alle Öffner intern).
   const showPlace = (p: Place) => {
     setPanel(null);         // sonst schwebt der offene Filter über dem Artikel
-    setBlogUserId(null); setProfileOpen(false);   // ein Ort löst Blog/Profil im selben Overlay ab
+    setBlogUserId(null); setProfileOpen(false); setChatUserId(null);   // ein Ort löst alles andere im Overlay ab
     setSwipeFeed([p]);      // Einzel-Feed: es geht um GENAU diesen Ort
     setSwipeFocus(p);       // direkt setzen — sonst rendert der Artikel einen Frame lang den alten Ort
     setArticleOnly(true);
@@ -331,6 +336,7 @@ export function MobileEntdecken() {
   const openBlog = (id: number, name = '') => {
     setPanel(null);
     setProfileOpen(false);
+    setChatUserId(null);
     setPersonFilter({ id, name });
     setBlogUserId(id);
     setSheetSnap(2);
@@ -339,7 +345,16 @@ export function MobileEntdecken() {
   const openProfile = () => {
     setPanel(null);
     setBlogUserId(null);
+    setChatUserId(null);
     setProfileOpen(true);
+    setSheetSnap(2);
+  };
+  /** Nachrichtenverlauf im Overlay öffnen — herunterziehen führt zur Karte. */
+  const openChat = (id: number) => {
+    setPanel(null);
+    setBlogUserId(null);
+    setProfileOpen(false);
+    setChatUserId(id);
     setSheetSnap(2);
   };
   // Ort→Ort-Link IM Artikel: den aktuellen Ort merken, damit „Zurück" wieder zu ihm führt.
@@ -395,7 +410,7 @@ export function MobileEntdecken() {
       selectedId, scrollTop: listRef.current?.scrollTop ?? entdeckenCache.scrollTop,
       // Rast 2 NICHT merken: der Swipe-Feed ist ein Snapshot dieser Sitzung — beim Neuaufbau
       // stünde man sonst im Swipe vor einem leeren Feed. „Zurück" landet in der Liste.
-      sheetSnap: swipeMode || blogMode || profileMode ? 1 : sheetSnap,
+      sheetSnap: swipeMode || blogMode || profileMode || chatMode ? 1 : sheetSnap,
     });
   });
   // Beim Öffnen zuletzt gemerkte Scroll-Position der Liste wiederherstellen
@@ -529,7 +544,7 @@ export function MobileEntdecken() {
   }
   // „Swipen" zieht nur das Overlay auf die oberste Rast — dort IST der Swipe. Nur HIER endet eine
   // gezielte Ort-Sitzung: wer bewusst swipen geht, will keinen Zurückpfeil nach „Meine Orte" mehr.
-  function goSwipe() { setPanel(null); setArticleOnly(false); setBackTo(null); setPlaceStack([]); setBlogUserId(null); setProfileOpen(false); setSheetSnap(2); }
+  function goSwipe() { setPanel(null); setArticleOnly(false); setBackTo(null); setPlaceStack([]); setBlogUserId(null); setProfileOpen(false); setChatUserId(null); setSheetSnap(2); }
   // Ankommen auf Rast 2 (egal ob per Button oder mit der Hand hochgezogen): Feed einfrieren.
   // Snapshot, sonst indiziert der Feed beim Weglegen neu → Index springt.
   useEffect(() => {
@@ -548,7 +563,7 @@ export function MobileEntdecken() {
    * der Router-State geleert, sonst risse ein Zurück/Reload den Ort erneut auf.
    */
   useEffect(() => {
-    const st = location.state as { openPlace?: string; place?: Place; mode?: Mode; from?: string; personId?: number; personName?: string; blogUserId?: number; blogName?: string; profileOverlay?: boolean } | null;
+    const st = location.state as { openPlace?: string; place?: Place; mode?: Mode; from?: string; personId?: number; personName?: string; blogUserId?: number; blogName?: string; profileOverlay?: boolean; chatUserId?: number } | null;
     // Blog einer Person (/u/:id leitet mobil hierher): als Overlay öffnen, Karte darunter gefiltert
     if (st?.blogUserId) {
       setMode('all');
@@ -559,6 +574,12 @@ export function MobileEntdecken() {
     // Eigenes Profil (/profil leitet mobil hierher)
     if (st?.profileOverlay) {
       openProfile();
+      navigate('.', { replace: true, state: null });
+      return;
+    }
+    // Nachrichtenverlauf (/postfach/:id leitet mobil hierher)
+    if (st?.chatUserId) {
+      openChat(st.chatUserId);
       navigate('.', { replace: true, state: null });
       return;
     }
@@ -906,7 +927,7 @@ export function MobileEntdecken() {
         }}>
         {/* Griff + Kopf (Zieh-Bereich) — nur in der Liste. Im Swipe liegen Griff und „Liste"-Button
             IM Bild (siehe SwipeDeck), damit sie mit dem Hero wegscrollen statt zu schweben. */}
-        {!swipeMode && !blogMode && !profileMode && (
+        {!swipeMode && !blogMode && !profileMode && !chatMode && (
           <div className="flex-shrink-0 relative z-30" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
             <div className="flex justify-center pt-2.5 pb-1.5">
               <div className="w-10 h-1.5 rounded-full" style={{ background: '#d9cfe2' }} />
@@ -963,7 +984,7 @@ export function MobileEntdecken() {
         {/* Profil auf dem Overlay — fremdes Blog ODER das eigene. Am Griff (oder irgendwo im
             Inhalt, solange er oben steht) herunterziehen zeigt die Karte, beim Blog schon über
             den Personenfilter auf ihre Orte eingestellt; noch weiter unten die Liste. */}
-        {(blogMode || profileMode) && (
+        {(blogMode || profileMode || chatMode) && (
           <div className="absolute inset-0 z-30 bg-white rounded-t-3xl overflow-hidden">
             {/* Das Titelbild beginnt ganz oben — Griff und Zurück liegen IM Bild (wie beim Ort),
                 sonst stünde eine weiße Leiste über dem Header. */}
@@ -971,7 +992,9 @@ export function MobileEntdecken() {
               style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)', overscrollBehavior: 'none' }}
               ref={overlayPull}>
               <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
-                {blogMode && blogUserId !== null
+                {chatMode && chatUserId !== null
+                  ? <ChatEmbed key={`c${chatUserId}`} userId={chatUserId} embedded />
+                  : blogMode && blogUserId !== null
                   ? <BlogEmbed key={blogUserId} userId={blogUserId} embedded
                       onUser={u => setPersonFilter(pf => (pf && pf.id === u.id ? { id: u.id, name: u.name } : pf))} />
                   : <ProfileEmbed embedded />}
@@ -984,7 +1007,7 @@ export function MobileEntdecken() {
             </div>
             {/* Schließen: Profil weg, beim Blog bleibt die Karte auf die Person gefiltert
                 (der Chip über den Modus-Knöpfen löst ihn wieder). */}
-            <button onClick={() => { setBlogUserId(null); setProfileOpen(false); setSheetSnap(1); }}
+            <button onClick={() => { setBlogUserId(null); setProfileOpen(false); setChatUserId(null); setSheetSnap(1); }}
               className="absolute left-4 top-4 z-20 w-9 h-9 rounded-full flex items-center justify-center text-white active:scale-90"
               style={{ background: 'rgba(0,0,0,0.38)', backdropFilter: 'blur(6px)' }} aria-label="Profil schließen">
               <i className="fa-solid fa-arrow-left" />

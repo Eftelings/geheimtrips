@@ -6,11 +6,18 @@ import { messagesApi, type ChatMessage, type ChatPartner } from '../services/api
 import { useMessageSocket } from '../store/useMessageSocket.js';
 import type { Place } from '../types/index.js';
 
+interface Props {
+  /** Eingebettet im Entdecken-Overlay: ID kommt als Prop, nicht aus der URL. */
+  userId?: number;
+  /** Ohne AppShell rendern — das Overlay bringt den Rahmen mit. */
+  embedded?: boolean;
+}
+
 /** Verlauf mit einer Person — Text und verschickte Orte in einem Strang. */
-export function ChatPage() {
-  const { id } = useParams<{ id: string }>();
+export function ChatPage({ userId, embedded }: Props = {}) {
+  const { id: paramId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const other = Number(id);
+  const other = userId ?? Number(paramId);
   const [partner, setPartner]   = useState<ChatPartner | null>(null);
   const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [places, setPlaces]     = useState<Record<string, Place>>({});
@@ -50,9 +57,8 @@ export function ChatPage() {
   const day = (iso: string) => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: 'short' });
   const time = (iso: string) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
-  return (
-    <AppShell showBack title={partner?.name ?? 'Nachrichten'}>
-      <div className="max-w-2xl mx-auto flex flex-col" style={{ minHeight: 'calc(100dvh - 180px)' }}>
+  const body = (
+    <div className="max-w-2xl mx-auto flex flex-col" style={{ minHeight: embedded ? '100%' : 'calc(100dvh - 180px)' }}>
         <div className="flex-1 px-4 py-4 flex flex-col gap-2">
           {messages === null ? (
             <div className="flex justify-center py-16 text-[var(--color-lavender-lt)]">
@@ -111,7 +117,9 @@ export function ChatPage() {
             <i className={`fa-solid ${busy ? 'fa-circle-notch fa-spin' : 'fa-paper-plane'}`} />
           </button>
         </div>
-      </div>
-    </AppShell>
+    </div>
   );
+
+  // Eingebettet bringt das Overlay Kopf und Rahmen mit — dann ohne AppShell.
+  return embedded ? body : <AppShell showBack title={partner?.name ?? 'Nachrichten'}>{body}</AppShell>;
 }

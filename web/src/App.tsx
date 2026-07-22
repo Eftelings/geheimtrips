@@ -98,6 +98,15 @@ function OwnProfileRoute() {
   return <ProfilePage />;
 }
 
+// /postfach/:id — der Verlauf mit einer Person. Mobil auf dem Entdecken-Overlay,
+// damit ein Zug nach unten die Karte zeigt (dort landen später geteilte Standorte).
+function ChatRoute() {
+  const { id } = useParams();
+  const isMobile = useIsMobile(1024);
+  if (isMobile) return <Navigate to="/" replace state={{ chatUserId: Number(id) }} />;
+  return <ChatPage />;
+}
+
 // Alte englische Route → deutsche Route, Query-String bleibt erhalten (z.B. ?edit=…)
 function RedirectTo({ to }: { to: string }) {
   const { search } = useLocation();
@@ -192,7 +201,7 @@ export function App() {
         <Route path="/profil"   element={<RequireAuth><OwnProfileRoute /></RequireAuth>} />
         <Route path="/profile"  element={<RedirectTo to="/profil" />} />
         <Route path="/postfach" element={<RequireAuth><NotificationInboxPage /></RequireAuth>} />
-        <Route path="/postfach/:id" element={<RequireAuth><ChatPage /></RequireAuth>} />
+        <Route path="/postfach/:id" element={<RequireAuth><ChatRoute /></RequireAuth>} />
         <Route path="/notifications" element={<RedirectTo to="/postfach" />} />
         <Route path="/leute"    element={<RequireAuth><MeetPeoplePage /></RequireAuth>} />
         <Route path="/people"   element={<RedirectTo to="/leute" />} />
