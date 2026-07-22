@@ -20,7 +20,8 @@ import { useUiStore } from '../store/useUiStore.js';
 import { MAP_LAYERS, TILE_URL, HYBRID_ROADS, HYBRID_LABELS, TILE_PERF, type MapLayer } from '../utils/mapTiles.js';
 import { imgUrl } from '../utils/img.js';
 import { Avatar } from '../components/ui/Avatar.js';
-import { usersApi, type FollowedUser } from '../services/api.js';
+import { usersApi, messagesApi, type FollowedUser } from '../services/api.js';
+import { useMessageSocket } from '../store/useMessageSocket.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
 const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
@@ -62,6 +63,38 @@ function catMarker(icon: string, active: boolean): L.DivIcon {
   });
   markerCache.set(key, made);
   return made;
+}
+
+/**
+ * Marker fuer geteilte Standorte. Der Live-Punkt pulsiert leicht, damit er sich vom
+ * ruhenden Pin unterscheidet; am Pin steht, wie alt er ist („vor 8 Std") — sonst haelt
+ * man einen Standort von gestern fuer den aktuellen.
+ */
+function personMarker(label: string, live: boolean, mine: boolean): L.DivIcon {
+  const color = mine ? '#8A6FB3' : '#F99039';
+  const dot = live
+    ? `<span style="position:absolute;inset:0;border-radius:50%;background:${color};opacity:.28;animation:gtPulse 1.8s ease-out infinite;"></span>`
+    : '';
+  return L.divIcon({
+    html: `<div style="position:relative;width:30px;height:30px;">
+             ${dot}
+             <div style="position:absolute;inset:3px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 3px 9px rgba(52,37,76,.45);display:flex;align-items:center;justify-content:center;">
+               <i class="fa-solid ${live ? 'fa-location-crosshairs' : 'fa-location-dot'}" style="font-size:11px;line-height:1;color:#fff"></i>
+             </div>
+             <div style="position:absolute;top:32px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#fff;color:#34254c;font-size:10px;font-weight:700;padding:2px 6px;border-radius:9px;box-shadow:0 2px 6px rgba(52,37,76,.25);">${label}</div>
+           </div>`,
+    iconSize: [30, 30], iconAnchor: [15, 15], className: '',
+  });
+}
+
+/** „vor 8 Std" — grobe Angabe reicht und liest sich besser als ein Zeitstempel. */
+function ageLabel(iso: string): string {
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso.replace(' ', 'T') + (iso.includes('Z') ? '' : 'Z')).getTime()) / 60000));
+  if (min < 1) return 'gerade eben';
+  if (min < 60) return `vor ${min} Min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `vor ${h} Std`;
+  return `vor ${Math.round(h / 24)} Tg`;
 }
 
 const T_ICON: Record<string, string> = {
@@ -277,6 +310,9 @@ export function MobileEntdecken() {
   const [profileOpen, setProfileOpen] = useState(false);
   // Nachrichtenverlauf — ebenfalls auf dem Overlay, damit die Karte einen Zug entfernt ist
   const [chatUserId, setChatUserId] = useState<number | null>(null);
+  // Geteilte Standorte des offenen Gespraechs: laufende Freigaben + gesetzte Pins
+  const [chatLive, setChatLive] = useState<{ lat: number; lng: number; mine: boolean; updatedAt: string; expiresAt: string }[]>([]);
+  const [chatPins, setChatPins] = useState<{ id: number; lat: number; lng: number; fromMe: boolean; createdAt: string }[]>([]);
   const blogMode = blogUserId !== null && sheetSnap === 2;
   const profileMode = profileOpen && chatUserId === null && sheetSnap === 2;
   const chatMode = chatUserId !== null && sheetSnap === 2;
@@ -349,6 +385,39 @@ export function MobileEntdecken() {
     setProfileOpen(true);
     setSheetSnap(2);
   };
+  /**
+   * Standorte des offenen Gespraechs holen. Laeuft nur, solange ein Verlauf offen ist —
+   * ohne Gespraech gibt es auf der Karte auch nichts zu zeigen.
+   */
+  useEffect(() => {
+    if (chatUserId === null) { setChatLive([]); setChatPins([]); return; }
+    let alive = true;
+    messagesApi.thread(chatUserId).then(d => {
+      if (!alive) return;
+      setChatPins(d.messages.filter(m => m.lat != null && m.lng != null)
+        .map(m => ({ id: m.id, lat: m.lat!, lng: m.lng!, fromMe: m.fromMe, createdAt: m.createdAt })));
+      setChatLive((d.live ?? []).filter(l => l.lat != null && l.lng != null)
+        .map(l => ({ lat: l.lat!, lng: l.lng!, mine: l.mine, updatedAt: l.updatedAt, expiresAt: l.expiresAt })));
+    }).catch(() => {});
+    // Der Punkt wandert ueber denselben Kanal wie die Nachrichten.
+    const off = useMessageSocket.getState().subscribe(ev => {
+      if (ev.type === 'live' && ev.from === chatUserId) {
+        setChatLive(l => [...l.filter(x => x.mine), {
+          lat: ev.lat, lng: ev.lng, mine: false, updatedAt: new Date().toISOString(), expiresAt: ev.expiresAt,
+        }]);
+      }
+      if (ev.type === 'live_stop' && ev.from === chatUserId) setChatLive(l => l.filter(x => x.mine));
+      if (ev.type === 'message' && (ev.from === chatUserId || ev.to === chatUserId)
+          && ev.message.lat != null && ev.message.lng != null) {
+        setChatPins(p => [...p, {
+          id: ev.message.id, lat: ev.message.lat!, lng: ev.message.lng!,
+          fromMe: ev.from !== chatUserId, createdAt: ev.message.createdAt,
+        }]);
+      }
+    });
+    return () => { alive = false; off(); };
+  }, [chatUserId]);
+
   /** Nachrichtenverlauf im Overlay öffnen — herunterziehen führt zur Karte. */
   const openChat = (id: number) => {
     setPanel(null);
@@ -741,6 +810,19 @@ export function MobileEntdecken() {
     );
   }), [markerPlaces, highlightId, vocab]); // eslint-disable-line
 
+  // Geteilte Standorte liegen ueber den Ortsmarkern — sie sind der Grund, warum die
+  // Karte beim offenen Gespraech ueberhaupt angeschaut wird.
+  const locationEls = useMemo(() => [
+    ...chatLive.map((l, i) => (
+      <Marker key={`live${i}`} position={[l.lat, l.lng]} zIndexOffset={2000}
+        icon={personMarker(l.mine ? 'du · live' : 'live', true, l.mine)} />
+    )),
+    ...chatPins.map(p => (
+      <Marker key={`pin${p.id}`} position={[p.lat, p.lng]} zIndexOffset={1500}
+        icon={personMarker(ageLabel(p.createdAt), false, p.fromMe)} />
+    )),
+  ], [chatLive, chatPins]);
+
   return (
     <AppShell>
       {/* Vollbildkarte */}
@@ -754,6 +836,7 @@ export function MobileEntdecken() {
           <LongPressPick onPick={pickMapPoint} />
           <ReachLayer center={reachCenter} travel={travel} radiusKm={radiusKm} />
           {markerEls}
+        {locationEls}
           <FitReach center={reachCenter} travel={travel} radiusKm={radiusKm} fallback={fallbackPts} />
           <FlyToPlace lat={mapFocus?.lat ?? null} lng={mapFocus?.lng ?? null} offsetY={mapFocusOffset} />
         </MapContainer>
