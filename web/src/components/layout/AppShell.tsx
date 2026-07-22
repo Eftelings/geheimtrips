@@ -62,8 +62,9 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
                 <button onClick={() => gate(() => navigate('/einreichen'), 'Melde dich an, um einen Geheimtrip einzureichen.')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Ort einreichen">
                   <i className="fa-solid fa-feather-pointed text-lg" />
                 </button>
-                <button onClick={() => gate(() => navigate('/awards'), 'Melde dich an, um deine Awards zu sehen.')} className="w-9 h-9 flex items-center justify-center text-[var(--color-amber)]" aria-label="Awards">
-                  <i className="fa-solid fa-trophy text-lg" />
+                {/* Fernglas steht jetzt links — der Awards-Knopf ist raus, solange niemand bewertet */}
+                <button onClick={() => gate(() => navigate('/funnel'), 'Melde dich an, um passende neue Orte zu finden.')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Neue Orte entdecken">
+                  <i className="fa-solid fa-binoculars text-lg" />
                 </button>
               </div>
             )}
@@ -75,19 +76,22 @@ export function AppShell({ children, showBack, title, headerRight, noHeader, bar
                 : <BrandLogo size="sm" />}
             </div>
 
-            {/* Rechts: Fernglas (Fragen-Funnel → neue Orte) + Profil (Postfach liegt jetzt im Profil) */}
+            {/* Rechts: Postfach (Nachrichten sind jetzt zentral) + Profil */}
             <div className="flex items-center gap-1 justify-end">
               {headerRight ?? (
                 <>
-                  <button onClick={() => gate(() => navigate('/funnel'), 'Melde dich an, um passende neue Orte zu finden.')} className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)]" aria-label="Neue Orte entdecken">
-                    <i className="fa-solid fa-binoculars text-lg" />
-                  </button>
+                  {user && (
+                    <button onClick={() => navigate('/postfach')} aria-label="Postfach"
+                      className="w-9 h-9 flex items-center justify-center text-[var(--color-aubergine)] relative">
+                      <i className="fa-regular fa-comment-dots text-lg" />
+                      {notif > 0 && (
+                        <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[var(--color-amber)] border-2 border-[var(--color-bg)]" />
+                      )}
+                    </button>
+                  )}
                   {user ? (
                     <button onClick={() => navigate('/profil')} aria-label="Profil" className="relative">
                       <Avatar name={user.name} src={user.avatarUrl} size={28} />
-                      {notif > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--color-amber)] border-2 border-[var(--color-bg)]" />
-                      )}
                     </button>
                   ) : (
                     <button onClick={() => openGate()} className="text-xs font-bold text-[var(--color-amber)] px-2.5 py-1.5 rounded-full" style={{ background: 'rgba(249,144,57,0.12)' }}>

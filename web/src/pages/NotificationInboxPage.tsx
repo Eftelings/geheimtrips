@@ -173,7 +173,7 @@ export function NotificationInboxPage() {
 
   return (
     <AppShell title="Postfach" showBack>
-      <div className="px-5 py-6 max-w-2xl mx-auto">
+      <div className="px-3.5 py-5 max-w-2xl mx-auto">
         <h1 className="font-display font-bold text-2xl text-[var(--color-aubergine)] mb-4" style={{ letterSpacing: '-0.02em' }}>
           Dein <em className="italic text-[var(--color-amber)]">Postfach</em>
         </h1>
@@ -213,7 +213,8 @@ export function NotificationInboxPage() {
             </div>
           ) : (
             <>
-              {chats.length > 4 && (
+              {/* Suche immer sichtbar — man sucht auch bei drei Gespraechen. */}
+              {(
                 <div className="relative mb-3">
                   <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-lavender-lt)] text-sm" />
                   <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Suchen…"

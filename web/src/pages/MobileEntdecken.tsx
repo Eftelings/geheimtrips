@@ -22,6 +22,7 @@ import { imgUrl } from '../utils/img.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { usersApi, messagesApi, type FollowedUser } from '../services/api.js';
 import { useMessageSocket } from '../store/useMessageSocket.js';
+import { useAuthStore } from '../store/useAuthStore.js';
 
 // Ortsdetails im Overlay (lazy → hält das Karten-Bundle klein)
 const PlaceDetailEmbed = lazy(() => import('./PlaceDetailPage.js').then(m => ({ default: m.PlaceDetailPage })));
@@ -70,20 +71,31 @@ function catMarker(icon: string, active: boolean): L.DivIcon {
  * ruhenden Pin unterscheidet; am Pin steht, wie alt er ist („vor 8 Std") — sonst haelt
  * man einen Standort von gestern fuer den aktuellen.
  */
-function personMarker(label: string, live: boolean, mine: boolean): L.DivIcon {
+function personMarker(
+  label: string, live: boolean, mine: boolean,
+  person?: { name: string; avatarUrl?: string | null; cropX?: number; cropY?: number },
+): L.DivIcon {
   const color = mine ? '#8A6FB3' : '#F99039';
-  const dot = live
+  const size = 38;
+  const ring = live
     ? `<span style="position:absolute;inset:0;border-radius:50%;background:${color};opacity:.28;animation:gtPulse 1.8s ease-out infinite;"></span>`
     : '';
+  // Profilbild statt Symbol — auf einer Karte voller Ortspins erkennt man Menschen
+  // so sofort. Ohne Bild bleiben die Initialen in der Personenfarbe.
+  const initials = (person?.name ?? '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const face = person?.avatarUrl
+    ? `<img src="${person.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:${(person.cropX ?? 0.5) * 100}% ${(person.cropY ?? 0.5) * 100}%;" />`
+    : `<span style="font:700 12px/1 system-ui,sans-serif;color:#fff;">${initials}</span>`;
   return L.divIcon({
-    html: `<div style="position:relative;width:30px;height:30px;">
-             ${dot}
-             <div style="position:absolute;inset:3px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 3px 9px rgba(52,37,76,.45);display:flex;align-items:center;justify-content:center;">
-               <i class="fa-solid ${live ? 'fa-location-crosshairs' : 'fa-location-dot'}" style="font-size:11px;line-height:1;color:#fff"></i>
+    html: `<div style="position:relative;width:${size}px;height:${size}px;">
+             ${ring}
+             <div style="position:absolute;inset:3px;border-radius:50%;overflow:hidden;background:${color};border:3px solid #fff;box-shadow:0 3px 10px rgba(52,37,76,.45);display:flex;align-items:center;justify-content:center;">
+               ${face}
              </div>
-             <div style="position:absolute;top:32px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#fff;color:#34254c;font-size:10px;font-weight:700;padding:2px 6px;border-radius:9px;box-shadow:0 2px 6px rgba(52,37,76,.25);">${label}</div>
+             ${live ? `<span style="position:absolute;right:1px;bottom:1px;width:11px;height:11px;border-radius:50%;background:${color};border:2px solid #fff;"></span>` : ''}
+             <div style="position:absolute;top:${size + 2}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#fff;color:#34254c;font-size:10px;font-weight:700;padding:2px 6px;border-radius:9px;box-shadow:0 2px 6px rgba(52,37,76,.25);">${label}</div>
            </div>`,
-    iconSize: [30, 30], iconAnchor: [15, 15], className: '',
+    iconSize: [size, size], iconAnchor: [size / 2, size / 2], className: '',
   });
 }
 
@@ -174,6 +186,7 @@ export function MobileEntdecken() {
   const { places, loadPlaces, savedIds, visitedIds, nopeIds, funnelAnswers } = useAppStore();
   const vocab = useTaxVocab();
   const { gate } = useRequireAuth();
+  const me = useAuthStore(st => st.user);   // eigenes Profilbild fuer den Standortmarker
 
   const [userCoords, setUserCoords] = useState<Coords | null>(() => entdeckenCache.userCoords ?? funnelAnswers?.coords ?? null);
   const [searchCenter, setSearchCenter] = useState<Coords | null>(entdeckenCache.searchCenter);
@@ -313,9 +326,16 @@ export function MobileEntdecken() {
   // Geteilte Standorte des offenen Gespraechs: laufende Freigaben + gesetzte Pins
   const [chatLive, setChatLive] = useState<{ lat: number; lng: number; mine: boolean; updatedAt: string; expiresAt: string }[]>([]);
   const [chatPins, setChatPins] = useState<{ id: number; lat: number; lng: number; fromMe: boolean; createdAt: string }[]>([]);
+  const [chatPartner, setChatPartner] = useState<{ name: string; avatarUrl: string | null; cropX: number; cropY: number } | null>(null);
   const blogMode = blogUserId !== null && sheetSnap === 2;
   const profileMode = profileOpen && chatUserId === null && sheetSnap === 2;
-  const chatMode = chatUserId !== null && sheetSnap === 2;
+  /**
+   * Anders als Blog und Profil bleibt der Verlauf in JEDER Rast stehen: Zieht man ihn
+   * herunter, wird er kleiner und gibt die Karte frei — das Eingabefeld bleibt unten,
+   * damit man beim Blick auf die Karte weiterschreiben kann. Die Ortsliste darunter
+   * blitzt dabei nicht mehr durch.
+   */
+  const chatMode = chatUserId !== null;
   // Rast 2 IST der Swipe — es gibt kein eigenes Sheet und keine eigene Seite mehr.
   const swipeMode = sheetSnap === 2 && blogUserId === null && !profileOpen && chatUserId === null;
   const [swipeArticle, setSwipeArticle] = useState(false);   // Artikel unter dem Bild (gleiche Seite)
@@ -390,10 +410,14 @@ export function MobileEntdecken() {
    * ohne Gespraech gibt es auf der Karte auch nichts zu zeigen.
    */
   useEffect(() => {
-    if (chatUserId === null) { setChatLive([]); setChatPins([]); return; }
+    if (chatUserId === null) { setChatLive([]); setChatPins([]); setChatPartner(null); return; }
     let alive = true;
     messagesApi.thread(chatUserId).then(d => {
       if (!alive) return;
+      if (d.partner) setChatPartner({
+        name: d.partner.name, avatarUrl: d.partner.avatarUrl,
+        cropX: d.partner.avatarCropX, cropY: d.partner.avatarCropY,
+      });
       setChatPins(d.messages.filter(m => m.lat != null && m.lng != null)
         .map(m => ({ id: m.id, lat: m.lat!, lng: m.lng!, fromMe: m.fromMe, createdAt: m.createdAt })));
       setChatLive((d.live ?? []).filter(l => l.lat != null && l.lng != null)
@@ -812,16 +836,22 @@ export function MobileEntdecken() {
 
   // Geteilte Standorte liegen ueber den Ortsmarkern — sie sind der Grund, warum die
   // Karte beim offenen Gespraech ueberhaupt angeschaut wird.
-  const locationEls = useMemo(() => [
-    ...chatLive.map((l, i) => (
-      <Marker key={`live${i}`} position={[l.lat, l.lng]} zIndexOffset={2000}
-        icon={personMarker(l.mine ? 'du · live' : 'live', true, l.mine)} />
-    )),
-    ...chatPins.map(p => (
-      <Marker key={`pin${p.id}`} position={[p.lat, p.lng]} zIndexOffset={1500}
-        icon={personMarker(ageLabel(p.createdAt), false, p.fromMe)} />
-    )),
-  ], [chatLive, chatPins]);
+  const locationEls = useMemo(() => {
+    // Wessen Bild gehoert auf den Marker? Eigenes aus dem Konto, fremdes aus dem Gespraech.
+    const face = (mine: boolean) => mine
+      ? (me ? { name: me.name, avatarUrl: me.avatarUrl, cropX: me.avatarCropX, cropY: me.avatarCropY } : undefined)
+      : (chatPartner ?? undefined);
+    return [
+      ...chatLive.map((l, i) => (
+        <Marker key={`live${i}`} position={[l.lat, l.lng]} zIndexOffset={2000}
+          icon={personMarker(l.mine ? 'du · live' : 'live', true, l.mine, face(l.mine))} />
+      )),
+      ...chatPins.map(p => (
+        <Marker key={`pin${p.id}`} position={[p.lat, p.lng]} zIndexOffset={1500}
+          icon={personMarker(ageLabel(p.createdAt), false, p.fromMe, face(p.fromMe))} />
+      )),
+    ];
+  }, [chatLive, chatPins, me, chatPartner]);
 
   return (
     <AppShell>
@@ -1071,8 +1101,13 @@ export function MobileEntdecken() {
           <div className="absolute inset-0 z-30 bg-white rounded-t-3xl overflow-hidden">
             {/* Das Titelbild beginnt ganz oben — Griff und Zurück liegen IM Bild (wie beim Ort),
                 sonst stünde eine weiße Leiste über dem Header. */}
-            <div className="h-full overflow-y-auto no-scrollbar"
-              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)', overscrollBehavior: 'none' }}
+            <div className={`h-full overflow-y-auto no-scrollbar ${chatMode ? 'flex flex-col' : ''}`}
+              style={{
+                // Im Chat klebt das Eingabefeld selbst unten — ein Fussabstand wuerde es
+                // vom Rand wegschieben und darunter Leere lassen.
+                paddingBottom: chatMode ? 0 : 'calc(env(safe-area-inset-bottom) + 88px)',
+                overscrollBehavior: 'none',
+              }}
               ref={overlayPull}>
               <Suspense fallback={<div className="py-20 flex items-center justify-center text-[var(--color-lavender)]"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /></div>}>
                 {chatMode && chatUserId !== null
@@ -1083,16 +1118,20 @@ export function MobileEntdecken() {
                   : <ProfileEmbed embedded />}
               </Suspense>
             </div>
-            {/* Zieh-Griff über dem Bild — nimmt die Geste an, ohne Fläche zu belegen */}
-            <div className="absolute top-0 left-0 right-0 h-9 z-10 flex justify-center pt-2.5"
-              onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
-              <div className="w-10 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,.6)' }} />
-            </div>
+            {/* Zieh-Griff über dem Bild — nimmt die Geste an, ohne Fläche zu belegen.
+                Im Chat sitzt dort der Kopf mit Namen; gezogen wird dann am Inhalt. */}
+            {!chatMode && (
+              <div className="absolute top-0 left-0 right-0 h-9 z-10 flex justify-center pt-2.5"
+                onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
+                <div className="w-10 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,.6)' }} />
+              </div>
+            )}
             {/* Schließen: Profil weg, beim Blog bleibt die Karte auf die Person gefiltert
                 (der Chip über den Modus-Knöpfen löst ihn wieder). */}
             <button onClick={() => { setBlogUserId(null); setProfileOpen(false); setChatUserId(null); setSheetSnap(1); }}
-              className="absolute left-4 top-4 z-20 w-9 h-9 rounded-full flex items-center justify-center text-white active:scale-90"
-              style={{ background: 'rgba(0,0,0,0.38)', backdropFilter: 'blur(6px)' }} aria-label="Profil schließen">
+              className={`absolute z-20 w-9 h-9 rounded-full flex items-center justify-center text-white active:scale-90 ${
+                chatMode ? 'left-3 top-3' : 'left-4 top-4'}`}
+              style={{ background: 'rgba(0,0,0,0.38)', backdropFilter: 'blur(6px)' }} aria-label="Schließen">
               <i className="fa-solid fa-arrow-left" />
             </button>
           </div>
