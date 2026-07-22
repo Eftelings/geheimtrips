@@ -21,6 +21,7 @@ const STAT_CARDS: StatCard[] = [
   { key: 'media',              label: 'Medien',             icon: 'fa-images',              color: '#71587A' },
   { key: 'openReports',        label: 'Offene Meldungen',  icon: 'fa-flag',                color: '#C96442', urgent: true, to: '/admin/takedown' },
   { key: 'pendingSubmissions', label: 'Neue Einreichungen', icon: 'fa-inbox',               color: '#F99039', urgent: true, to: '/admin/submissions' },
+  { key: 'pendingArticles',    label: 'Beiträge in Prüfung', icon: 'fa-feather-pointed',    color: '#8A6FB3', urgent: true, to: '/admin/articles' },
 ];
 
 // ─── SMTP-Diagnose (Passwort-Reset-Mails) ──────────────────────────────────────
@@ -182,6 +183,7 @@ export function AdminDashboard() {
                 { label: 'Einreichungen', icon: 'fa-inbox', to: '/admin/submissions', color: '#8A6FB3', badge: stats.stats.pendingSubmissions },
                 { label: 'Takedown-Meldungen', icon: 'fa-flag', to: '/admin/takedown', color: '#C96442', badge: stats.stats.openReports },
                 { label: 'Nutzer verwalten', icon: 'fa-users', to: '/admin/users', color: '#5B8F6E' },
+                { label: 'Beiträge prüfen', icon: 'fa-feather-pointed', to: '/admin/articles', color: '#8A6FB3', badge: stats.stats.pendingArticles },
               ].map(a => (
                 <button key={a.to} onClick={() => navigate(a.to)}
                   className="bg-white/5 border border-white/8 rounded-2xl p-4 text-left hover:bg-white/8 transition-colors relative">

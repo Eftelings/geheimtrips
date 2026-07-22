@@ -21,6 +21,7 @@ export interface AdminStats {
   stats: {
     users: number; places: number; visits: number;
     media: number; trips: number; openReports: number; pendingSubmissions: number;
+    pendingArticles: number;
   };
   recentVisits: { userId: number; placeId: string; visitedAt: string }[];
 }
@@ -113,8 +114,22 @@ export interface MerkmaleData {
   usage: { l3Slug: string; key: string; count: number }[];
 }
 
+/** Ein Beitrag in der Pruefung — mit Ort und schreibender Person. */
+export interface AdminArticle {
+  id: number; placeId: string; status: 'pending' | 'approved' | 'rejected';
+  short: string; long: string; triviaText: string; highlightsJson: string;
+  createdAt: string | null; reviewNote: string | null;
+  placeName: string; placeRegion: string;
+  authorId: number; authorName: string; authorHandle: string;
+}
+
 export const adminApi = {
   stats:       ()           => get<AdminStats>('/stats'),
+  // Zusaetzliche Beitraege zu Orten: Liste je Zustand + Freigabe/Ablehnung
+  articles:      (status: 'pending' | 'approved' | 'rejected' = 'pending') =>
+                   get<AdminArticle[]>(`/articles?status=${status}`),
+  reviewArticle: (id: number, status: 'approved' | 'rejected', note?: string) =>
+                   post<{ ok: boolean; status: string }>(`/articles/${id}/review`, { status, note }),
   // E-Mail-Versand (SMTP) Diagnose
   mailStatus:  ()           => get<MailStatus>('/mail/status'),
   mailTest:    (to: string) => post<{ ok: boolean; error?: string }>('/mail/test', { to }),

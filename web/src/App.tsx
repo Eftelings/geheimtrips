@@ -18,7 +18,7 @@ const AdminQuality       = lz(() => import('./pages/admin/AdminQuality.js'), 'Ad
 const AdminUsers         = lz(() => import('./pages/admin/AdminUsers.js'), 'AdminUsers');
 const AdminSubmissions   = lz(() => import('./pages/admin/AdminSubmissions.js'), 'AdminSubmissions');
 const AdminTakedown      = lz(() => import('./pages/admin/AdminTakedown.js'), 'AdminTakedown');
-const AdminAuthors       = lz(() => import('./pages/admin/AdminAuthors.js'), 'AdminAuthors');
+const AdminArticles      = lz(() => import('./pages/admin/AdminArticles.js'), 'AdminArticles');
 const AdminClaims        = lz(() => import('./pages/admin/AdminClaims.js'), 'AdminClaims');
 const AdminPerks         = lz(() => import('./pages/admin/AdminPerks.js'), 'AdminPerks');
 const AdminTaxonomy      = lz(() => import('./pages/admin/AdminTaxonomy.js'), 'AdminTaxonomy');
@@ -198,7 +198,7 @@ export function App() {
         <Route path="/admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
         <Route path="/admin/submissions" element={<RequireAdmin><AdminSubmissions /></RequireAdmin>} />
         <Route path="/admin/takedown" element={<RequireAdmin><AdminTakedown /></RequireAdmin>} />
-        <Route path="/admin/authors" element={<RequireAdmin><AdminAuthors /></RequireAdmin>} />
+        <Route path="/admin/articles" element={<RequireAdmin><AdminArticles /></RequireAdmin>} />
         <Route path="/admin/claims"  element={<RequireAdmin><AdminClaims /></RequireAdmin>} />
         <Route path="/admin/perks"   element={<RequireAdmin><AdminPerks /></RequireAdmin>} />
         <Route path="/admin/taxonomy" element={<RequireAdmin><AdminTaxonomy /></RequireAdmin>} />

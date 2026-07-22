@@ -395,6 +395,7 @@ router.get('/stats', async (c) => {
   const [tripCount]    = await db.select({ count: count() }).from(trips);
   const [reportCount]  = await db.select({ count: count() }).from(takedownReports).where(eq(takedownReports.status, 'open'));
   const [pendingSubmissions] = await db.select({ count: count() }).from(places).where(eq(places.isUserSubmitted, true));
+  const [pendingArticles] = await db.select({ count: count() }).from(placeArticles).where(eq(placeArticles.status, 'pending'));
 
   // Recent activity
   const recentVisits = await db.select({
@@ -412,6 +413,7 @@ router.get('/stats', async (c) => {
       trips: tripCount.count,
       openReports: reportCount.count,
       pendingSubmissions: pendingSubmissions.count,
+      pendingArticles: pendingArticles.count,
     },
     recentVisits,
   });

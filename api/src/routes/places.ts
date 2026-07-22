@@ -1034,6 +1034,14 @@ router.post('/:id/change-request', requireAuth,
     const place = await db.select().from(places).where(eq(places.id, id)).get();
     if (!place) return c.json({ error: 'Ort nicht gefunden.' }, 404);
 
+    // Vorschlagen darf nur, wer vor Ort war — sonst ist es eine Vermutung, keine Korrektur.
+    // Die Ersteller:in darf immer (sie bearbeitet ihren Ort ohnehin direkt).
+    if (place.submittedBy !== user.id) {
+      const visited = await db.select({ id: visitedPlaces.id }).from(visitedPlaces)
+        .where(and(eq(visitedPlaces.userId, user.id), eq(visitedPlaces.placeId, id))).get();
+      if (!visited) return c.json({ error: 'Änderungen vorschlagen kann, wer schon dort war.' }, 403);
+    }
+
     const clean = cleanPlainText(text);
     await db.run(sql`
       INSERT INTO change_requests (place_id, user_id, user_name, category, text)
