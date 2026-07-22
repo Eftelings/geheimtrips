@@ -200,139 +200,27 @@ async function hideMerkmal(l3Slug: string, key: string, label: string) {
 }
 
 // GET /admin/merkmale — DB-Overrides + Nutzungs-Zähler je (Unterkategorie, Merkmal)
-router.get('/merkmale', async (c) => {
-  const dbRows = await db.all(sql`SELECT l3_slug as l3Slug, key, label, hidden FROM merkmale`) as
-    { l3Slug: string; key: string; label: string; hidden: number }[];
-  const all = await db.select({ attributesJson: places.attributesJson }).from(places).all();
-  const counter = new Map<string, number>();
-  for (const p of all) {
-    let a: Record<string, unknown>;
-    try { a = JSON.parse(p.attributesJson ?? '{}'); } catch { continue; }
-    const l3 = a.l3Slug; const feats = a.l4Features;
-    if (typeof l3 !== 'string' || !Array.isArray(feats)) continue;
-    for (const k of feats) counter.set(`${l3}|${k}`, (counter.get(`${l3}|${k}`) ?? 0) + 1);
-  }
-  const usage = [...counter.entries()].map(([k, count]) => {
-    const [l3Slug, key] = k.split('|');
-    return { l3Slug, key, count };
-  });
-  return c.json({ db: dbRows, usage });
-});
 
 // POST /admin/merkmale — neues Merkmal zu einer Unterkategorie hinzufügen
-router.post('/merkmale', zValidator('json', z.object({
-  l3Slug: z.string().min(1), label: z.string().min(1).max(60),
-})), async (c) => {
-  const { l3Slug, label } = c.req.valid('json');
-  const key = slugifyKey(label);
-  await db.run(sql`
-    INSERT INTO merkmale (l3_slug, key, label, hidden) VALUES (${l3Slug}, ${key}, ${label.trim()}, 0)
-    ON CONFLICT(l3_slug, key) DO UPDATE SET label = excluded.label, hidden = 0`);
-  return c.json({ ok: true, key });
-});
 
 // POST /admin/merkmale/merge — alle Orte von fromKey → toKey, fromKey ausblenden
-router.post('/merkmale/merge', zValidator('json', z.object({
-  l3Slug: z.string().min(1), fromKey: z.string().min(1), toKey: z.string().min(1),
-})), async (c) => {
-  const { l3Slug, fromKey, toKey } = c.req.valid('json');
-  if (fromKey === toKey) return c.json({ error: 'Quelle und Ziel sind identisch.' }, 400);
-  const changed = await rewriteFeatures(l3Slug, feats => feats.map(k => k === fromKey ? toKey : k));
-  await hideMerkmal(l3Slug, fromKey, fromKey);
-  return c.json({ ok: true, changed });
-});
 
 // POST /admin/merkmale/delete — entfernen (mode=remove) oder umziehen (mode=reassign)
-router.post('/merkmale/delete', zValidator('json', z.object({
-  l3Slug: z.string().min(1), key: z.string().min(1),
-  mode: z.enum(['remove', 'reassign']), toKey: z.string().optional(),
-})), async (c) => {
-  const { l3Slug, key, mode, toKey } = c.req.valid('json');
-  let changed = 0;
-  if (mode === 'reassign') {
-    if (!toKey) return c.json({ error: 'Zielmerkmal fehlt.' }, 400);
-    changed = await rewriteFeatures(l3Slug, feats => feats.map(k => k === key ? toKey : k));
-  } else {
-    changed = await rewriteFeatures(l3Slug, feats => feats.filter(k => k !== key));
-  }
-  await hideMerkmal(l3Slug, key, key);
-  return c.json({ ok: true, changed });
-});
 
 // POST /admin/merkmale/restore — Override entfernen: Code-Merkmal wird wieder sichtbar
 // (bei zusammengeführten/gelöschten bleiben die Orte unverändert — nur das Merkmal kehrt zurück).
-router.post('/merkmale/restore', zValidator('json', z.object({
-  l3Slug: z.string().min(1), key: z.string().min(1),
-})), async (c) => {
-  const { l3Slug, key } = c.req.valid('json');
-  await db.run(sql`DELETE FROM merkmale WHERE l3_slug = ${l3Slug} AND key = ${key}`);
-  return c.json({ ok: true });
-});
 
 // ─── Haupt-/Unterkategorien verwalten (Taxonomie-Overrides) ─────────────────────
 // Basis im Code (taxonomy.ts); diese Tabelle ergänzt (neue), überschreibt (Label/Icon/Eltern)
 // und blendet aus. level 2 = Hauptkategorie, level 3 = Unterkategorie.
 const nodeLevel = z.union([z.literal(2), z.literal(3)]);
 
-router.get('/taxonomy-nodes', async (c) => {
-  const rows = await db.all(sql`
-    SELECT level, slug, label, icon, parent_slug AS parentSlug, hidden, is_custom AS isCustom, sort
-    FROM taxonomy_nodes`);
-  return c.json(rows);
-});
 
 // Neue Haupt-/Unterkategorie anlegen
-router.post('/taxonomy-nodes', zValidator('json', z.object({
-  level: nodeLevel, label: z.string().min(1).max(80),
-  icon: z.string().max(40).optional().default(''), parentSlug: z.string().min(1),
-})), async (c) => {
-  const { level, label, icon, parentSlug } = c.req.valid('json');
-  const slug = slugifyKey(label);
-  await db.run(sql`
-    INSERT INTO taxonomy_nodes (level, slug, label, icon, parent_slug, is_custom, hidden)
-    VALUES (${level}, ${slug}, ${label.trim()}, ${icon || null}, ${parentSlug}, 1, 0)
-    ON CONFLICT(level, slug) DO UPDATE SET label=excluded.label, icon=excluded.icon, parent_slug=excluded.parent_slug, hidden=0`);
-  return c.json({ ok: true, slug });
-});
 
 // Bestehende bearbeiten (Label/Icon/Eltern) — NULL-Felder bleiben unverändert
-router.patch('/taxonomy-nodes', zValidator('json', z.object({
-  level: nodeLevel, slug: z.string().min(1),
-  label: z.string().max(80).optional(), icon: z.string().max(40).optional(), parentSlug: z.string().optional(),
-})), async (c) => {
-  const { level, slug, label, icon, parentSlug } = c.req.valid('json');
-  const exists = (await db.all(sql`SELECT 1 FROM taxonomy_nodes WHERE level=${level} AND slug=${slug}`)).length > 0;
-  if (exists) {
-    await db.run(sql`UPDATE taxonomy_nodes SET
-      label = COALESCE(${label ?? null}, label),
-      icon = COALESCE(${icon ?? null}, icon),
-      parent_slug = COALESCE(${parentSlug ?? null}, parent_slug)
-      WHERE level=${level} AND slug=${slug}`);
-  } else {
-    await db.run(sql`INSERT INTO taxonomy_nodes (level, slug, label, icon, parent_slug, is_custom, hidden)
-      VALUES (${level}, ${slug}, ${label ?? null}, ${icon ?? null}, ${parentSlug ?? null}, 0, 0)`);
-  }
-  return c.json({ ok: true });
-});
 
-router.post('/taxonomy-nodes/hide', zValidator('json', z.object({
-  level: nodeLevel, slug: z.string().min(1),
-})), async (c) => {
-  const { level, slug } = c.req.valid('json');
-  await db.run(sql`INSERT INTO taxonomy_nodes (level, slug, hidden, is_custom) VALUES (${level}, ${slug}, 1, 0)
-    ON CONFLICT(level, slug) DO UPDATE SET hidden=1`);
-  return c.json({ ok: true });
-});
 
-router.post('/taxonomy-nodes/restore', zValidator('json', z.object({
-  level: nodeLevel, slug: z.string().min(1),
-})), async (c) => {
-  const { level, slug } = c.req.valid('json');
-  const row = (await db.all(sql`SELECT is_custom AS isCustom FROM taxonomy_nodes WHERE level=${level} AND slug=${slug}`))[0] as { isCustom: number } | undefined;
-  if (row?.isCustom) await db.run(sql`DELETE FROM taxonomy_nodes WHERE level=${level} AND slug=${slug}`);
-  else await db.run(sql`UPDATE taxonomy_nodes SET hidden=0 WHERE level=${level} AND slug=${slug}`);
-  return c.json({ ok: true });
-});
 
 // ─── Fragen-CMS: pro Typ-Tag steuern, welche Einreichungs-Fragen gestellt werden ──
 // Tabelle wird in taxonomy.ts angelegt; hier nur Lesen/Schreiben der Overrides.
@@ -980,6 +868,38 @@ async function renameTermOnPlaces(kind: 'merkmal' | 'vibe', oldLabel: string, ne
 }
 
 // Komplettes Live-Vokabular inkl. Nutzungszahlen
+/**
+ * POST /admin/tax/cleanup — alle unbenutzten Merkmale bzw. Vibes auf einen Schlag.
+ * „Unbenutzt" heißt: an keinem Ort hinterlegt. Orte speichern Merkmale/Vibes als LABEL,
+ * deshalb wird hier über die Labels gezählt und nicht über die Slugs.
+ */
+router.post('/tax/cleanup', zValidator('json', z.object({ kind: z.enum(['merkmal', 'vibe']) })), async (c) => {
+  const { kind } = c.req.valid('json');
+  const key = kind === 'merkmal' ? 'merkmale' : 'vibes';
+  const rows = await db.all<{ attributes_json: string | null }>(sql`SELECT attributes_json FROM places`).catch(() => []);
+  const used = new Set<string>();
+  for (const p of rows) {
+    try {
+      const list = (JSON.parse(p.attributes_json ?? '{}') as Record<string, unknown>)[key];
+      if (Array.isArray(list)) for (const l of list) used.add(String(l));
+    } catch { /* kaputtes JSON überspringen */ }
+  }
+  const all = kind === 'merkmal'
+    ? await db.all<{ slug: string; label: string }>(sql`SELECT slug, label FROM tax_merkmale`)
+    : await db.all<{ slug: string; label: string }>(sql`SELECT slug, label FROM tax_vibes`);
+  const doomed = all.filter(r => !used.has(r.label));
+  for (const r of doomed) {
+    if (kind === 'merkmal') {
+      await db.run(sql`DELETE FROM tax_merkmale WHERE slug = ${r.slug}`);
+      await db.run(sql`DELETE FROM tax_tag_merkmal WHERE merkmal_slug = ${r.slug}`).catch(() => {});
+    } else {
+      await db.run(sql`DELETE FROM tax_vibes WHERE slug = ${r.slug}`);
+      await db.run(sql`DELETE FROM tax_tag_vibe WHERE vibe_slug = ${r.slug}`).catch(() => {});
+    }
+  }
+  return c.json({ ok: true, deleted: doomed.length, kept: all.length - doomed.length });
+});
+
 router.get('/tax/all', async (c) => {
   const groups = await db.all(sql`SELECT slug, label, icon, color, sort FROM tax_groups ORDER BY sort, label`).catch(() => []);
   const tags = await db.all(sql`

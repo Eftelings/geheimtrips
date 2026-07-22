@@ -1,4 +1,3 @@
-import type { TaxonomyNode as TaxNode } from '../data/effectiveTaxonomy.js';
 
 const BASE = (import.meta.env.VITE_API_BASE ?? '/api') + '/admin';
 
@@ -114,12 +113,6 @@ export interface AdminChangeRequest {
   category: string; text: string; status: 'open' | 'done' | 'dismissed'; createdAt: string;
 }
 
-export interface MerkmalRow { l3Slug: string; key: string; label: string; hidden: number }
-export interface MerkmaleData {
-  db: MerkmalRow[];
-  usage: { l3Slug: string; key: string; count: number }[];
-}
-
 /** Ein Beitrag in der Pruefung — mit Ort und schreibender Person. */
 export interface AdminArticle {
   id: number; placeId: string; status: 'pending' | 'approved' | 'rejected';
@@ -140,21 +133,7 @@ export const adminApi = {
   mailStatus:  ()           => get<MailStatus>('/mail/status'),
   mailTest:    (to: string) => post<{ ok: boolean; error?: string }>('/mail/test', { to }),
   // Merkmale (Features) verwalten
-  merkmale:       ()                                  => get<MerkmaleData>('/merkmale'),
-  addMerkmal:     (l3Slug: string, label: string)     => post<{ ok: boolean; key: string }>('/merkmale', { l3Slug, label }),
-  mergeMerkmal:   (l3Slug: string, fromKey: string, toKey: string) =>
-                    post<{ ok: boolean; changed: number }>('/merkmale/merge', { l3Slug, fromKey, toKey }),
-  deleteMerkmal:  (l3Slug: string, key: string, mode: 'remove' | 'reassign', toKey?: string) =>
-                    post<{ ok: boolean; changed: number }>('/merkmale/delete', { l3Slug, key, mode, toKey }),
-  restoreMerkmal: (l3Slug: string, key: string)       => post<{ ok: boolean }>('/merkmale/restore', { l3Slug, key }),
   // Haupt-/Unterkategorien (Taxonomie-Overrides)
-  taxonomyNodes:  ()  => get<TaxNode[]>('/taxonomy-nodes'),
-  addTaxNode:     (level: 2 | 3, label: string, parentSlug: string, icon?: string) =>
-                    post<{ ok: boolean; slug: string }>('/taxonomy-nodes', { level, label, parentSlug, icon }),
-  editTaxNode:    (level: 2 | 3, slug: string, d: { label?: string; icon?: string; parentSlug?: string }) =>
-                    patch<{ ok: boolean }>('/taxonomy-nodes', { level, slug, ...d }),
-  hideTaxNode:    (level: 2 | 3, slug: string) => post<{ ok: boolean }>('/taxonomy-nodes/hide', { level, slug }),
-  restoreTaxNode: (level: 2 | 3, slug: string) => post<{ ok: boolean }>('/taxonomy-nodes/restore', { level, slug }),
   // Fragen-CMS: pro Typ-Tag steuern, welche Einreichungs-Fragen gestellt werden
   questionsConfig: () => get<Record<string, Record<string, boolean>>>('/questions-config'),
   toggleQuestion:  (tagSlug: string, questionId: string, enabled: boolean) =>
@@ -212,6 +191,9 @@ export const adminApi = {
   taxMerge:          (aliasSlug: string, canonicalSlug: string, kind: 'merkmal' | 'vibe') => post<{ ok: boolean }>('/tax/merge', { aliasSlug, canonicalSlug, kind }),
   // Live-Taxonomie verwalten (das, was die App wirklich nutzt)
   taxAll:        ()  => get<TaxAll>('/tax/all'),
+  // Alle unbenutzten Merkmale bzw. Vibes auf einen Schlag entfernen
+  taxCleanup:    (kind: 'merkmal' | 'vibe') =>
+                   post<{ ok: boolean; deleted: number; kept: number }>('/tax/cleanup', { kind }),
   taxAddGroup:   (label: string, icon?: string, color?: string) => post<{ ok: boolean; slug: string }>('/tax/group', { label, icon, color }),
   taxEditGroup:  (slug: string, d: { label?: string; icon?: string; color?: string }) => patch<{ ok: boolean }>('/tax/group', { slug, ...d }),
   taxAddTag:     (label: string, group: string) => post<{ ok: boolean; slug: string }>('/tax/tag', { label, group }),
