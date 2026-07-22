@@ -558,6 +558,10 @@ export function MobileEntdecken() {
    * und riss oben einen weißen Rand auf.
    */
   const pullState = useRef({ startY: 0, active: false, atTop: false });
+  // Im Chat blaettert man haeufig nach oben zu aelteren Nachrichten. Dort darf der Zug
+  // erst spaet uebernehmen, sonst rutscht bei jedem Blaettern das ganze Overlay mit.
+  const pullThreshold = useRef(3);
+  pullThreshold.current = chatMode ? 90 : 3;
   const overlayPull = useCallback((el: HTMLDivElement | null) => {
     const prev = pullCleanup.current;
     if (prev) { prev(); pullCleanup.current = null; }
@@ -574,7 +578,7 @@ export function MobileEntdecken() {
         if (y <= p.startY) { p.startY = y; return; }   // nach oben gewischt: gehört dem Inhalt
         // Ab dem ersten Pixel abwehren: entscheidet der Browser erst, federt der Inhalt mit.
         e.preventDefault();
-        if (y - p.startY < 3) return;
+        if (y - p.startY < pullThreshold.current) return;
         p.active = true;
         setPanel(null);
         sheetDrag.current = { startY: y, startOffset: sheetDragYRef.current, moved: 0 };
@@ -1098,7 +1102,13 @@ export function MobileEntdecken() {
             Inhalt, solange er oben steht) herunterziehen zeigt die Karte, beim Blog schon über
             den Personenfilter auf ihre Orte eingestellt; noch weiter unten die Liste. */}
         {(blogMode || profileMode || chatMode) && (
-          <div className="absolute inset-0 z-30 bg-white rounded-t-3xl overflow-hidden">
+          /* Im Chat endet die Ebene ueber der Fussleiste — sonst haengt das Eingabefeld
+             unterhalb des Bildschirmrands und ist nicht erreichbar. Der Abstand waechst
+             mit dem Zug, damit es beim Herunterziehen sichtbar bleibt. */
+          <div className="absolute inset-x-0 top-0 z-30 bg-white rounded-t-3xl overflow-hidden"
+            style={chatMode
+              ? { bottom: `calc(env(safe-area-inset-bottom) + ${76 + Math.max(0, Math.min(sheetDragY, snap.offs[0]))}px)` }
+              : { bottom: 0 }}>
             {/* Das Titelbild beginnt ganz oben — Griff und Zurück liegen IM Bild (wie beim Ort),
                 sonst stünde eine weiße Leiste über dem Header. */}
             <div className={`h-full overflow-y-auto no-scrollbar ${chatMode ? 'flex flex-col' : ''}`}
@@ -1118,14 +1128,12 @@ export function MobileEntdecken() {
                   : <ProfileEmbed embedded />}
               </Suspense>
             </div>
-            {/* Zieh-Griff über dem Bild — nimmt die Geste an, ohne Fläche zu belegen.
-                Im Chat sitzt dort der Kopf mit Namen; gezogen wird dann am Inhalt. */}
-            {!chatMode && (
-              <div className="absolute top-0 left-0 right-0 h-9 z-10 flex justify-center pt-2.5"
-                onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
-                <div className="w-10 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,.6)' }} />
-              </div>
-            )}
+            {/* Zieh-Griff über dem Bild — nimmt die Geste an, ohne Fläche zu belegen. */}
+            <div className="absolute top-0 left-0 right-0 h-9 z-30 flex justify-center pt-2"
+              onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd} style={{ touchAction: 'none' }}>
+              <div className="w-10 h-1.5 rounded-full"
+                style={{ background: chatMode ? 'rgba(52,37,76,.22)' : 'rgba(255,255,255,.6)' }} />
+            </div>
             {/* Schließen: Profil weg, beim Blog bleibt die Karte auf die Person gefiltert
                 (der Chip über den Modus-Knöpfen löst ihn wieder). */}
             <button onClick={() => { setBlogUserId(null); setProfileOpen(false); setChatUserId(null); setSheetSnap(1); }}

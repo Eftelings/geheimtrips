@@ -48,44 +48,6 @@ function openingNote(place: Place): { text: string; tone: 'open' | 'soon' | 'clo
   return null;
 }
 
-/**
- * Ist das Titelbild oben hell oder dunkel? Danach richtet sich die Schriftfarbe im
- * Chat-Kopf — auf einem hellen Bild Aubergine, auf einem dunklen Weiss. Gemessen wird
- * nur der obere Streifen, denn genau davor steht die Schrift.
- *
- * Das Bild wird dafuer winzig in ein Canvas gezeichnet (16x8 Pixel reichen); ohne
- * `crossOrigin` waere das Canvas „verunreinigt" und getImageData wuerfe. Unsere Bilder
- * liegen auf derselben Domain, fuer alles andere greift der Rueckfall auf Hell.
- */
-function useCoverBrightness(url: string | null | undefined): 'light' | 'dark' {
-  const [tone, setTone] = useState<'light' | 'dark'>('light');
-  useEffect(() => {
-    if (!url) { setTone('light'); return; }
-    let alive = true;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const c = document.createElement('canvas');
-        c.width = 16; c.height = 8;
-        const ctx = c.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, img.naturalWidth, Math.max(1, Math.round(img.naturalHeight * 0.25)), 0, 0, 16, 8);
-        const { data } = ctx.getImageData(0, 0, 16, 8);
-        let sum = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          // wahrgenommene Helligkeit (Gruen zaehlt am staerksten)
-          sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        }
-        if (alive) setTone(sum / (data.length / 4) < 140 ? 'dark' : 'light');
-      } catch { /* fremde Quelle → bei Hell bleiben */ }
-    };
-    img.src = url;
-    return () => { alive = false; };
-  }, [url]);
-  return tone;
-}
-
 interface Props {
   /** Eingebettet im Entdecken-Overlay: ID kommt als Prop, nicht aus der URL. */
   userId?: number;
@@ -111,7 +73,6 @@ export function ChatPage({ userId, embedded }: Props = {}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [imgBusy, setImgBusy] = useState(false);
 
-  const onDark = useCoverBrightness(partner?.coverUrl) === 'dark';
   const myShare    = live.find(l => l.mine && new Date(l.expiresAt) > new Date());
   const theirShare = live.find(l => !l.mine && new Date(l.expiresAt) > new Date());
 
@@ -254,11 +215,9 @@ export function ChatPage({ userId, embedded }: Props = {}) {
           <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
             <img src={partner.coverUrl} alt="" className="w-full h-full object-cover"
               style={{ objectPosition: `${(partner.coverCropX ?? 0.5) * 100}% ${(partner.coverCropY ?? 0.5) * 100}%` }} />
-            {/* Oben durchsichtig, darunter der Schleier — so steht der Kopf auf dem Bild,
-                der Verlauf bleibt trotzdem gut lesbar. */}
-            <div className="absolute inset-0" style={{
-              background: 'linear-gradient(to bottom, rgba(251,249,252,0) 0px, rgba(251,249,252,0) 64px, rgba(251,249,252,0.82) 130px, rgba(251,249,252,0.82) 100%)',
-            }} />
+            {/* Gleichmaessiger Schleier ueber das ganze Overlay: das Titelbild bleibt als
+                Anmutung erkennbar, Text und Blasen liegen aber auf ruhigem Grund. */}
+            <div className="absolute inset-0" style={{ background: 'rgba(251,249,252,0.94)' }} />
           </div>
         )}
 
@@ -266,22 +225,16 @@ export function ChatPage({ userId, embedded }: Props = {}) {
         {partner && (
           /* Kein Schleier hier — der Kopf steht direkt auf dem Titelbild. Links bleibt
              Platz fuer den Zurueck-Knopf des Overlays, sonst laege er auf dem Bild. */
-          <div className="sticky top-0 z-20 flex items-center gap-3 py-2.5 pr-4"
-            style={{ paddingLeft: embedded ? 60 : 16 }}>
+          <div className="sticky top-0 z-20 flex items-center gap-3 pb-2.5 pr-4"
+            style={{ paddingLeft: embedded ? 60 : 16, paddingTop: embedded ? 20 : 10 }}>
             <button onClick={() => navigate(`/u/${partner.id}`)} className="flex items-center gap-3 min-w-0 active:scale-[0.99] transition-transform">
-              <span className="rounded-full" style={{ boxShadow: `0 0 0 2px ${onDark ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.9)'}` }}>
+              <span className="rounded-full" style={{ boxShadow: '0 0 0 2px rgba(255,255,255,.9)' }}>
                 <Avatar name={partner.name} src={partner.avatarUrl} size={36}
                   cropX={partner.avatarCropX} cropY={partner.avatarCropY} zoom={partner.avatarZoom} />
               </span>
               <span className="min-w-0 text-left">
-                <span className="block text-sm font-bold truncate"
-                  style={{ color: onDark ? '#fff' : 'var(--color-aubergine)', textShadow: onDark ? '0 1px 6px rgba(0,0,0,.45)' : 'none' }}>
-                  {partner.name}
-                </span>
-                <span className="block text-[11px] truncate"
-                  style={{ color: onDark ? 'rgba(255,255,255,.8)' : 'var(--color-lavender)', textShadow: onDark ? '0 1px 6px rgba(0,0,0,.45)' : 'none' }}>
-                  @{partner.handle}
-                </span>
+                <span className="block text-sm font-bold truncate text-[var(--color-aubergine)]">{partner.name}</span>
+                <span className="block text-[11px] truncate text-[var(--color-lavender)]">@{partner.handle}</span>
               </span>
             </button>
           </div>
