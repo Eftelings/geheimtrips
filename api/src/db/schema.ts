@@ -83,7 +83,10 @@ export const places = sqliteTable('places', {
   // Must-see-Highlights (nur bei Erlebnis-Orten): [{ title, description, photos: string[] }]
   highlightsJson: text('highlights_json').notNull().default('[]'),
   attributesJson: text('attributes_json').notNull().default('{}'),
-  authorId: integer('author_id').references(() => authors.id),
+  // Alt: redaktionelles Autorenprofil. Wird nicht mehr gefüllt oder gelesen — Orte gehören
+  // ihren Einreicher:innen (submittedBy). Die Spalte bleibt nur, damit bestehende
+  // Datenbanken unverändert weiterlaufen.
+  authorId: integer('author_id'),
   lat: real('lat'),
   lng: real('lng'),
   hasVideo: integer('has_video', { mode: 'boolean' }).default(false),

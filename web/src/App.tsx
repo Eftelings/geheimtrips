@@ -35,7 +35,6 @@ const TripWizardPage     = lz(() => import('./pages/TripWizardPage.js'), 'TripWi
 const TripCreatePage     = lz(() => import('./pages/TripCreatePage.js'), 'TripCreatePage');
 const ResultsPage        = lz(() => import('./pages/ResultsPage.js'), 'ResultsPage');
 const PlaceDetailPage    = lz(() => import('./pages/PlaceDetailPage.js'), 'PlaceDetailPage');
-const AuthorPage         = lz(() => import('./pages/AuthorPage.js'), 'AuthorPage');
 const UserProfilePage    = lz(() => import('./pages/UserProfilePage.js'), 'UserProfilePage');
 const SavedPage          = lz(() => import('./pages/SavedPage.js'), 'SavedPage');
 const TripDetailPage     = lz(() => import('./pages/TripDetailPage.js'), 'TripDetailPage');
@@ -163,7 +162,6 @@ export function App() {
         <Route path="/finder"     element={<RequireAuth><FinderPage /></RequireAuth>} />
         <Route path="/trip-wizard" element={<RequireAuth><TripWizardPage /></RequireAuth>} />
         <Route path="/results"  element={<RequireAuth><ResultsPage /></RequireAuth>} />
-        <Route path="/author/:id" element={<RequireAuth><AuthorPage /></RequireAuth>} />
         <Route path="/u/:id"      element={<RequireAuth><UserBlogRoute /></RequireAuth>} />
 
         <Route path="/meine-orte"  element={<RequireAuth><SavedPage /></RequireAuth>} />

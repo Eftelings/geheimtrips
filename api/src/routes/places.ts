@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { places, savedPlaces, visitedPlaces, ratings, placeMedia, authors, businessClaims, placeContributions, users, photoLikes, favoritePlaces, placeArticles, follows } from '../db/schema.js';
+import { places, savedPlaces, visitedPlaces, ratings, placeMedia, businessClaims, placeContributions, users, photoLikes, favoritePlaces, placeArticles, follows } from '../db/schema.js';
 import { isUserLocalHero, W_REVIEW } from '../lib/ranking.js';
 import { eq, and, inArray, sql, count, asc } from 'drizzle-orm';
 import { requireAuth, requireVerified, JWT_SECRET } from '../middleware/auth.js';
@@ -610,13 +610,11 @@ router.get('/:id', async (c) => {
     }
   })();
 
-  let author = null;
-  if (place.authorId) {
-    author = await db.select().from(authors).where(eq(authors.id, place.authorId)).get();
-  }
+  // Redaktionelle Autorenprofile gibt es nicht mehr — Orte gehören ihren Einreicher:innen.
+  const author = null;
   // Fetch submitter info for user-submitted places that have no curated author
   let submitter: { id: number; name: string; handle: string; avatarUrl: string | null; isLocalHero: boolean } | null = null;
-  if (place.submittedBy && !place.authorId) {
+  if (place.submittedBy) {
     const u = await db.select({
       id: users.id, name: users.name, handle: users.handle, avatarUrl: users.avatarUrl,
     }).from(users).where(eq(users.id, place.submittedBy)).get();
@@ -699,9 +697,7 @@ router.get('/:id', async (c) => {
     id: 0, userId: place.submittedBy ?? null, isMain: true,
     short: place.short, long: place.long,
     triviaText: '', highlightsJson: place.highlightsJson,
-    author: submitter ? { id: submitter.id, name: submitter.name, handle: submitter.handle, avatarUrl: submitter.avatarUrl }
-          : author   ? { id: author.id, name: author.name, handle: author.handle, avatarUrl: author.avatarUrl }
-          : null,
+    author: submitter ? { id: submitter.id, name: submitter.name, handle: submitter.handle, avatarUrl: submitter.avatarUrl } : null,
     photos: media.map(m => m.url),
   };
   const extras = articleRows.map(r => ({

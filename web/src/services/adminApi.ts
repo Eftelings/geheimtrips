@@ -58,11 +58,6 @@ export interface AdminReport {
   adminNote: string | null; resolvedAt: string | null; createdAt: string;
 }
 
-export interface AdminAuthor {
-  id: number; name: string; handle: string; bio: string | null;
-  avatarColor: string; instagram: string | null; tiktok: string | null; website: string | null;
-  placeCount: number; savedCount: number; avgStars: number;
-}
 
 export interface AdminClaim {
   id: number; placeId: string; userId: number;
@@ -197,9 +192,6 @@ export const adminApi = {
   updateReport:(id: number, d: object) => patch<{ ok: boolean }>(`/takedown/${id}`, d),
   deleteMedia: (id: number) => del<{ ok: boolean }>(`/media/${id}`),
   // Authors
-  authors:     ()           => get<AdminAuthor[]>('/authors'),
-  createAuthor:(d: object)  => post<AdminAuthor>('/authors', d),
-  // Business claims
   claims:        ()           => get<AdminClaim[]>('/claims'),
   approveClaim:  (id: number) => patch<{ ok: boolean }>(`/claims/${id}/approve`),
   rejectClaim:   (id: number, d?: { adminNote?: string }) => patch<{ ok: boolean }>(`/claims/${id}/reject`, d ?? {}),

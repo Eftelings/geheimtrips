@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
 import {
-  users, places, authors, visitedPlaces, savedPlaces,
+  users, places, visitedPlaces, savedPlaces,
   ratings, placeMedia, takedownReports, trips, tripPlaces,
   businessClaims, businessProfiles, perks, categories,
   placeContributions, photoLikes, favoritePlaces, placeArticles,
@@ -434,12 +434,6 @@ router.get('/places', async (c) => {
     ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, submitterIds)).all()
     : [];
   const nameById = new Map(submitters.map(u => [u.id, u.name]));
-  // Kuratierte Orte gehören keiner Nutzer:in, sondern einem redaktionellen Autorenprofil.
-  const curatedIds = [...new Set(all.map(p => p.authorId).filter((x): x is number => x != null))];
-  const curated = curatedIds.length
-    ? await db.select({ id: authors.id, name: authors.name }).from(authors).where(inArray(authors.id, curatedIds)).all()
-    : [];
-  const curatedById = new Map(curated.map(a => [a.id, a.name]));
 
   return c.json(all.map(p => ({
     ...p,
@@ -450,9 +444,7 @@ router.get('/places', async (c) => {
     articles: [
       { id: 0, isMain: true, status: 'approved',
         authorId: p.submittedBy ?? null,
-        authorName: (p.submittedBy != null ? nameById.get(p.submittedBy) : null)
-          ?? (p.authorId != null ? curatedById.get(p.authorId) : null)
-          ?? 'Redaktion' },
+        authorName: (p.submittedBy != null ? nameById.get(p.submittedBy) : null) ?? 'Ohne Autor:in' },
       ...extraRows.filter(r => r.placeId === p.id).map(r => ({
         id: r.id, isMain: false, status: r.status, authorId: r.userId, authorName: r.name,
       })),
@@ -1097,25 +1089,6 @@ router.patch('/tax/term', zValidator('json', z.object({
   await db.run(sql`UPDATE ${sql.raw(table)} SET label = ${newLabel} WHERE slug = ${slug}`);
   await renameTermOnPlaces(kind, oldLabel, newLabel);   // Orte halten Labels → mitziehen
   return c.json({ ok: true });
-});
-
-// ─── Authors ──────────────────────────────────────────────────────────────────
-
-router.get('/authors', async (c) => {
-  return c.json(await db.select().from(authors).all());
-});
-
-router.post('/authors', zValidator('json', z.object({
-  name: z.string().min(1),
-  handle: z.string().min(1),
-  bio: z.string().optional(),
-  avatarColor: z.string().optional(),
-  instagram: z.string().nullable().optional(),
-  tiktok: z.string().nullable().optional(),
-  website: z.string().nullable().optional(),
-})), async (c) => {
-  const [author] = await db.insert(authors).values(c.req.valid('json')).returning();
-  return c.json(author, 201);
 });
 
 // ─── Perks / Partner-Vorteile ─────────────────────────────────────────────────

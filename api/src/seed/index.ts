@@ -3,26 +3,13 @@
  * Run: npm run db:seed (from api/ directory)
  */
 import { db } from '../db/index.js';
-import { authors, places, users } from '../db/schema.js';
+import { places, users } from '../db/schema.js';
 import bcrypt from 'bcryptjs';
 const { hash } = bcrypt;
 import { eq } from 'drizzle-orm';
 
 async function seed() {
   console.log('Seeding database...');
-
-  // Demo authors
-  const authorData = [
-    { id: 1, name: 'Tobias M.', handle: 'tobias_wandert', bio: 'Unterwegs in NRW & Rheinland.', avatarUrl: '', avatarColor: '#8A6FB3', placeCount: 3, savedCount: 120, avgStars: 4.6 },
-    { id: 2, name: 'Sophie K.', handle: 'sophie_entdeckt', bio: 'Wochenend-Abenteurerin aus Berlin.', avatarUrl: '', avatarColor: '#5B8F6E', placeCount: 5, savedCount: 200, avgStars: 4.8 },
-    { id: 3, name: 'Lena W.',   handle: 'lenawandert',    bio: 'Ich liebe Sächsische Schweiz.',   avatarUrl: '', avatarColor: '#D97757', placeCount: 2, savedCount: 88,  avgStars: 4.9 },
-    { id: 4, name: 'Max R.',    handle: 'max_geheim',     bio: 'Mystische Orte & alte Wege.',     avatarUrl: '', avatarColor: '#C9A227', placeCount: 4, savedCount: 310, avgStars: 4.4 },
-  ];
-
-  for (const a of authorData) {
-    const existing = await db.select().from(authors).where(eq(authors.id, a.id)).get();
-    if (!existing) await db.insert(authors).values(a);
-  }
 
   // Demo places (from design handoff data.js)
   const placesData = [
@@ -56,8 +43,7 @@ async function seed() {
           { label: 'Kinder (6–17)', amount: '9 €' },
           { label: 'Familie (2+2)', amount: '39 €' },
         ],
-      }),
-      authorId: 1, lat: 50.2061, lng: 7.3367,
+      }), lat: 50.2061, lng: 7.3367,
     },
     {
       id: 'externsteine', name: 'Externsteine', region: 'Teutoburger Wald, NRW',
@@ -70,7 +56,7 @@ async function seed() {
       hero: 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?w=900&auto=format&fit=crop&q=75',
       galleryJson: JSON.stringify(['https://images.unsplash.com/photo-1542856391-010fb87dcfed?w=600&auto=format&fit=crop&q=70']),
       tipsJson: JSON.stringify(['Parkplatz kostet 4€, dann nur 5 Min Fußweg.', 'Wendeltreppe auf den Hauptfelsen — nicht für Höhenangst.']),
-      attributesJson: '{}', authorId: 4, lat: 51.8686, lng: 8.9176,
+      attributesJson: '{}', lat: 51.8686, lng: 8.9176,
     },
     {
       id: 'bastei', hasVideo: true, name: 'Basteibrücke', region: 'Sächsische Schweiz',
@@ -83,7 +69,7 @@ async function seed() {
       hero: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=900&auto=format&fit=crop&q=75',
       galleryJson: JSON.stringify(['https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&auto=format&fit=crop&q=70']),
       tipsJson: JSON.stringify(['Wanderparkplatz Bastei, dann 15 Min zur Brücke.', 'Felsenburg Neurathen lohnt sich (2€ extra).']),
-      attributesJson: '{}', authorId: 3, lat: 50.9654, lng: 14.0682,
+      attributesJson: '{}', lat: 50.9654, lng: 14.0682,
     },
     {
       id: 'beelitz', name: 'Baumkronenpfad Beelitz-Heilstätten', region: 'Brandenburg',
@@ -112,8 +98,7 @@ async function seed() {
         ],
         pricesUrl: 'https://baumundzeit.de/preise-tickets/',
         specialInfo: ['Hunde nicht erlaubt'],
-      }),
-      authorId: 2, lat: 52.2382, lng: 12.9094,
+      }), lat: 52.2382, lng: 12.9094,
     },
     {
       id: 'frauenkirche-ruine', name: 'Ruine Frauenkirche', region: 'Nürnberg, Bayern',
@@ -126,7 +111,7 @@ async function seed() {
       hero: 'https://images.unsplash.com/photo-1518709594023-6eab9bab7b23?w=900&auto=format&fit=crop&q=75',
       galleryJson: JSON.stringify(['https://images.unsplash.com/photo-1518709594023-6eab9bab7b23?w=600&auto=format&fit=crop&q=70']),
       tipsJson: JSON.stringify(['Nur mit GPS navigieren.', 'Sturmsaison meiden — Astbruchgefahr.']),
-      attributesJson: '{}', authorId: 4, lat: 49.4521, lng: 11.0767,
+      attributesJson: '{}', lat: 49.4521, lng: 11.0767,
     },
     {
       id: 'blaue-lagune', name: 'Blaue Lagune Papitzer See', region: 'Leipzig, Sachsen',
@@ -139,7 +124,7 @@ async function seed() {
       hero: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=900&auto=format&fit=crop&q=75',
       galleryJson: JSON.stringify(['https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=600&auto=format&fit=crop&q=70']),
       tipsJson: JSON.stringify(['Früh morgens besonders schön.', 'Keine offiziellen Toiletten — einplanen.']),
-      attributesJson: '{}', authorId: 2, lat: 51.4067, lng: 12.3013,
+      attributesJson: '{}', lat: 51.4067, lng: 12.3013,
     },
     {
       id: 'monbijoupark', name: 'Monbijoupark bei Nacht', region: 'Berlin-Mitte',
@@ -152,7 +137,7 @@ async function seed() {
       hero: 'https://images.unsplash.com/photo-1528728329032-2972f65dfb3f?w=900&auto=format&fit=crop&q=75',
       galleryJson: JSON.stringify(['https://images.unsplash.com/photo-1528728329032-2972f65dfb3f?w=600&auto=format&fit=crop&q=70']),
       tipsJson: JSON.stringify(['Ab 19 Uhr werden die Grillplätze frei.', 'Strandbar Mitte ist direkt nebenan.']),
-      attributesJson: '{}', authorId: 1, lat: 52.5228, lng: 13.3956,
+      attributesJson: '{}', lat: 52.5228, lng: 13.3956,
     },
     {
       id: 'zittauer-gebirge', hasVideo: true, name: 'Oybin Tafelberg', region: 'Zittauer Gebirge, Sachsen',
@@ -165,7 +150,7 @@ async function seed() {
       hero: 'https://images.unsplash.com/photo-1502786129293-79981df4e689?w=900&auto=format&fit=crop&q=75',
       galleryJson: JSON.stringify(['https://images.unsplash.com/photo-1502786129293-79981df4e689?w=600&auto=format&fit=crop&q=70']),
       tipsJson: JSON.stringify(['Schmalspurbahn ab Zittau (Kurszettel prüfen).', 'Nachmittags sind die Lichtverhältnisse für Fotos ideal.']),
-      attributesJson: '{}', authorId: 3, lat: 50.8500, lng: 14.7167,
+      attributesJson: '{}', lat: 50.8500, lng: 14.7167,
     },
   ];
 

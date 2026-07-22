@@ -74,7 +74,6 @@ export interface Place {
   } | null;
   attributes: Record<string, unknown>;
   authorId: number | null;
-  author?: Author | null;
   submittedBy?: number | null;
   submitter?: { id: number; name: string; handle: string; avatarUrl: string | null; isLocalHero?: boolean } | null;
   lat: number | null;
@@ -146,20 +145,6 @@ export interface PlaceArticle {
   createdAt?: string;
 }
 
-export interface Author {
-  id: number;
-  name: string;
-  handle: string;
-  bio: string;
-  avatarUrl: string | null;
-  avatarColor: string;
-  instagram: string | null;
-  tiktok: string | null;
-  website: string | null;
-  placeCount: number;
-  savedCount: number;
-  avgStars: number;
-}
 
 // ─── Mobility / Transport ─────────────────────────────────────────────────────
 

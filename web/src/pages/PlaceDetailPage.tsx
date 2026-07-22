@@ -1404,8 +1404,6 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, o
   // Wer den Beitrag geschrieben hat: der gewählte Beitrag, sonst der Ort selbst.
   const byline = art?.author
     ? { name: art.author.name, avatarUrl: art.author.avatarUrl, color: '#71587A', to: `/u/${art.author.id}` }
-    : place.author
-    ? { name: place.author.name, avatarUrl: place.author.avatarUrl, color: place.author.avatarColor, to: `/author/${place.author.id}` }
     : place.submitter
     ? { name: place.submitter.name, avatarUrl: place.submitter.avatarUrl, color: '#71587A', to: `/u/${place.submitter.id}` }
     : null;
@@ -2481,27 +2479,7 @@ async function handleVerifyToggle() {
                 {/* Entdecker card */}
                 <div className="rounded-3xl p-4 bg-white flex items-center gap-4 flex-wrap flex-1"
                   style={{ border: '1px solid #F1ECF4', boxShadow: '0 2px 10px rgba(52,37,76,0.05)' }}>
-                  {place.author ? (
-                    <button onClick={() => gate(() => navigate(`/author/${place.author!.id}`), 'Melde dich an, um das Profil der Entdecker:in zu sehen.')}
-                      className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity">
-                      <div className="w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden flex items-center justify-center text-base font-bold text-white"
-                        style={{ background: place.author.avatarColor }}>
-                        {place.author.avatarUrl
-                          ? <img src={place.author.avatarUrl} alt={place.author.name} className="w-full h-full object-cover" />
-                          : place.author.name[0]}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: '#b9a8c4' }}>Entdecker</p>
-                        <p className="text-sm font-bold leading-tight truncate" style={{ color: '#34254c' }}>{place.author.name}</p>
-                        {place.author.bio && (
-                          <p className="text-xs leading-snug truncate mt-0.5" style={{ color: '#71587a' }}>{place.author.bio}</p>
-                        )}
-                        <p className="text-[10px] mt-0.5" style={{ color: '#b9a8c4' }}>
-                          <i className="fa-solid fa-map-pin mr-1" />{place.author.placeCount} Orte entdeckt
-                        </p>
-                      </div>
-                    </button>
-                  ) : place.submitter ? (
+                  {place.submitter ? (
                     /* User-submitted place — auf Profil tippen */
                     <button onClick={() => gate(() => navigate(`/u/${place.submitter!.id}`), 'Melde dich an, um das Profil der Ersteller:in zu sehen.')} className="flex items-center gap-3 flex-1 min-w-0 text-left active:scale-[0.99] transition-transform">
                       <div className="w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden flex items-center justify-center text-base font-bold text-white"
