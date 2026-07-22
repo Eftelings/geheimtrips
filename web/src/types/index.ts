@@ -68,7 +68,10 @@ export interface Place {
   /** Beiträge zu diesem Ort, bereits passend zur abrufenden Person sortiert. */
   articles?: PlaceArticle[];
   /** Mein eigener Beitrag zu diesem Ort — auch, solange er noch in Prüfung ist. */
-  myArticle?: { id: number; status: 'pending' | 'approved' | 'rejected' } | null;
+  myArticle?: {
+    id: number; status: 'pending' | 'approved' | 'rejected'; reviewNote?: string | null;
+    short: string; long: string; triviaText: string; highlightsJson: string;
+  } | null;
   attributes: Record<string, unknown>;
   authorId: number | null;
   author?: Author | null;

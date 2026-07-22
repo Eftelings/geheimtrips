@@ -105,6 +105,13 @@ export interface SubmitPlacePayload {
   heroCropY?:    number;
 }
 
+export interface ArticlePayload {
+  short: string;
+  long: string;
+  trivia?: string;
+  highlights?: { title: string; description: string; photos: string[] }[];
+}
+
 export interface ShowcasePlace { id: string; name: string; region: string; hero: string; tagSlug?: string | null }
 
 export const placesApi = {
@@ -129,6 +136,12 @@ export const placesApi = {
   share:          (id: string)       => post<{ shares: number }>(`/places/${id}/share`, {}),
   addMedia:       (id: string, data: { url: string; type?: 'photo' | 'video'; cropX?: number; cropY?: number; caption?: string; lat?: number | null; lng?: number | null }) =>
                     post<{ ok: boolean; visited: boolean; place: Place }>(`/places/${id}/media`, data),
+  // Eigener Beitrag zu einem bestehenden Ort (Titel, Text, Trivia, Highlights)
+  createArticle:  (placeId: string, payload: ArticlePayload) =>
+                    post<{ ok: boolean }>(`/places/${placeId}/articles`, payload),
+  updateArticle:  (id: number, payload: ArticlePayload) =>
+                    patch<{ ok: boolean; status: string }>(`/places/articles/${id}`, payload),
+  deleteArticle:  (id: number) => del<{ ok: boolean }>(`/places/articles/${id}`),
   submit:         (payload: SubmitPlacePayload) =>
                     post<{ ok: boolean; id: string }>('/places/submit', payload),
   update:         (id: string, payload: SubmitPlacePayload) =>

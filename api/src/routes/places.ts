@@ -718,8 +718,14 @@ router.get('/:id', async (c) => {
   const articles = [...followed, mainArticle, ...rest];
 
   // Habe ich hier schon einen Beitrag (auch einen ungeprüften)?
+  // Mit Feldern, damit sich ein Beitrag auch bearbeiten lässt, solange er in Prüfung ist
+  // (ungeprüfte Beiträge stehen bewusst nicht in der öffentlichen Liste oben).
   const myArticle = viewerId
-    ? await db.select({ id: placeArticles.id, status: placeArticles.status }).from(placeArticles)
+    ? await db.select({
+        id: placeArticles.id, status: placeArticles.status, reviewNote: placeArticles.reviewNote,
+        short: placeArticles.short, long: placeArticles.long,
+        triviaText: placeArticles.triviaText, highlightsJson: placeArticles.highlightsJson,
+      }).from(placeArticles)
         .where(and(eq(placeArticles.placeId, place.id), eq(placeArticles.userId, viewerId))).get()
     : undefined;
 

@@ -21,6 +21,7 @@ import { ReviewFlow } from '../components/ui/ReviewFlow.js';
 import type { ReviewSection } from '../components/ui/ReviewFlow.js';
 import type { Place, Transport, PlaceHighlight, PlaceArticle } from '../types/index.js';
 import { SwipeTabs } from '../components/ui/SwipeTabs.js';
+import { ArticleSheet } from '../components/ui/ArticleSheet.js';
 import { isOpenNow, HOUR_DAYS } from '../data/detailQuestions.js';
 import type { WeekHours } from '../data/detailQuestions.js';
 import { distanceKm, geocodeSuggestions } from '../services/geoService.js';
@@ -1002,6 +1003,7 @@ export function PlaceDetailPage({ id: idProp, embedded, inline, reviewsSignal, o
   const [storyExpanded, setStoryExpanded] = useState(false);
   // Welcher Beitrag gerade gelesen wird (0 = der vom Server zuerst gereihte)
   const [articleIdx, setArticleIdx] = useState(0);
+  const [articleSheet, setArticleSheet] = useState(false);   // eigenen Beitrag schreiben/bearbeiten
   const [qaSearch, setQaSearch]        = useState('');
   const [qaShowAll, setQaShowAll]      = useState(false);
   const [openQaId, setOpenQaId]        = useState<number | null>(null);
@@ -2613,6 +2615,47 @@ async function handleVerifyToggle() {
               </SwipeTabs>
             ) : renderArticle(art)}
 
+            {/* Eigenen Beitrag schreiben — nur wer Folgen erlaubt UND schon dort war.
+                Die Grunddaten des Orts bleiben unangetastet, es geht nur um den Text. */}
+            {user && place.submittedBy !== user.id && (
+              place.myArticle ? (
+                <div className="rounded-2xl border border-[var(--color-bg-soft)] bg-white p-3.5 flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: '#F1ECF4', color: '#71587A' }}>
+                    <i className={`fa-solid ${place.myArticle.status === 'approved' ? 'fa-check' : place.myArticle.status === 'rejected' ? 'fa-xmark' : 'fa-clock'} text-sm`} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[var(--color-aubergine)]">Dein Beitrag</p>
+                    <p className="text-xs text-[var(--color-lavender)]">
+                      {place.myArticle.status === 'approved' ? 'Ist veröffentlicht.'
+                       : place.myArticle.status === 'rejected' ? (place.myArticle.reviewNote || 'Wurde abgelehnt.')
+                       : 'Liegt in der Prüfung.'}
+                    </p>
+                  </div>
+                  <button onClick={() => setArticleSheet(true)}
+                    className="text-xs font-bold text-[var(--color-amber)] flex-shrink-0">Bearbeiten</button>
+                </div>
+              ) : isVisited && user.allowFollowers ? (
+                <button onClick={() => setArticleSheet(true)}
+                  className="w-full flex items-center gap-3 rounded-2xl border border-[var(--color-bg-soft)] bg-white p-3.5 text-left active:scale-[0.99] transition-transform">
+                  <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'var(--color-amber)', color: 'white' }}>
+                    <i className="fa-solid fa-feather-pointed text-sm" />
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-[var(--color-aubergine)]">Eigenen Beitrag schreiben</span>
+                    <span className="block text-xs text-[var(--color-lavender)]">Deine Sicht auf diesen Ort — erscheint neben dem bestehenden Text.</span>
+                  </span>
+                  <i className="fa-solid fa-chevron-right text-[var(--color-lavender-lt)]" />
+                </button>
+              ) : isVisited ? (
+                <p className="text-xs text-[var(--color-lavender)] leading-relaxed">
+                  Du kannst einen eigenen Beitrag zu diesem Ort schreiben, sobald du in deinem Profil
+                  <strong className="text-[var(--color-aubergine)]"> Folgen erlaubst</strong>.
+                </p>
+              ) : null
+            )}
+
 
             {/* Tips */}
             {place.tips.length > 0 && (
@@ -3284,6 +3327,18 @@ async function handleVerifyToggle() {
       )}
 
       {/* ── Add to trip ───────────────────────────────────────────────────────── */}
+      {/* Eigenen Beitrag schreiben oder bearbeiten */}
+      {articleSheet && (
+        <ArticleSheet placeId={place.id} placeName={place.name} existing={place.myArticle ?? null}
+          onClose={() => setArticleSheet(false)}
+          onSaved={async () => {
+            setArticleSheet(false);
+            const fresh = await placesApi.get(place.id).catch(() => null);
+            if (fresh) setPlace(fresh);
+            showToast('Danke! Dein Beitrag liegt jetzt in der Prüfung.');
+          }} />
+      )}
+
       <BottomSheet open={addTripOpen} onClose={() => setAddTripOpen(false)} title="Zu einem Trip hinzufügen">
         {trips.length === 0 ? (
           <div className="text-center py-4">
