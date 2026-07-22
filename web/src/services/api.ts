@@ -428,7 +428,16 @@ export interface ChatPartner {
   avatarUrl: string | null; avatarCropX: number; avatarCropY: number;
 }
 export interface ChatMessage {
-  id: number; text: string | null; placeId: string | null; createdAt: string; fromMe: boolean;
+  id: number; text: string | null; placeId: string | null;
+  /** Einzelner Standort („Ich bin hier") — bleibt als Pin im Verlauf. */
+  lat?: number | null; lng?: number | null;
+  createdAt: string; fromMe: boolean;
+}
+
+/** Laufende Live-Freigabe in einem Gespräch. */
+export interface LiveShare {
+  userId: number; lat: number | null; lng: number | null;
+  updatedAt: string; expiresAt: string; mine: boolean;
 }
 export interface Conversation {
   user: ChatPartner;
@@ -440,9 +449,13 @@ export const messagesApi = {
   conversations: ()             => get<Conversation[]>('/messages'),
   unread:        ()             => get<{ count: number }>('/messages/unread'),
   thread:        (userId: number) =>
-                   get<{ partner: ChatPartner | null; messages: ChatMessage[]; places: Record<string, Place> }>(`/messages/${userId}`),
-  send:          (userId: number, body: { text?: string; placeId?: string }) =>
+                   get<{ partner: ChatPartner | null; messages: ChatMessage[]; places: Record<string, Place>; live: LiveShare[] }>(`/messages/${userId}`),
+  send:          (userId: number, body: { text?: string; placeId?: string; lat?: number; lng?: number }) =>
                    post<{ ok: boolean }>(`/messages/${userId}`, body),
+  // Live-Standort: mit `minutes` starten, ohne nur die Position nachschieben
+  live:          (userId: number, body: { lat: number; lng: number; minutes?: number }) =>
+                   post<{ ok: boolean; expiresAt: string }>(`/messages/${userId}/live`, body),
+  liveStop:      (userId: number) => del<{ ok: boolean }>(`/messages/${userId}/live`),
 };
 
 // ─── Öffentliche Profile (reale Nutzer:innen) ──────────────────────────────────

@@ -10,12 +10,15 @@ import { create } from 'zustand';
  * damit ein kaputter Server nicht im Sekundentakt angerufen wird.
  */
 export interface IncomingMessage {
-  id: number; text: string | null; placeId: string | null; createdAt: string;
+  id: number; text: string | null; placeId: string | null;
+  lat?: number | null; lng?: number | null; createdAt: string;
 }
 export type SocketEvent =
   | { type: 'ready' }
   | { type: 'message'; from: number; to: number; message: IncomingMessage }
-  | { type: 'read'; by: number };
+  | { type: 'read'; by: number }
+  | { type: 'live'; from: number; lat: number; lng: number; expiresAt: string }
+  | { type: 'live_stop'; from: number };
 
 type Listener = (e: SocketEvent) => void;
 
