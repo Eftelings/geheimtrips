@@ -16,7 +16,7 @@ import { JWT_SECRET } from '../middleware/auth.js';
 
 /** Was der Server schickt. `message` = neue Nachricht, `read` = Gegenüber hat gelesen. */
 export type SocketEvent =
-  | { type: 'message'; from: number; to: number; message: { id: number; text: string | null; placeId: string | null; lat?: number | null; lng?: number | null; createdAt: string } }
+  | { type: 'message'; from: number; to: number; message: { id: number; text: string | null; placeId: string | null; lat?: number | null; lng?: number | null; imageUrl?: string | null; createdAt: string } }
   | { type: 'read'; by: number }
   // Live-Standort: jede neue Position kommt hier an, bis die Freigabe endet.
   | { type: 'live'; from: number; lat: number; lng: number; expiresAt: string }

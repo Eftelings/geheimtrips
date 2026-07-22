@@ -110,7 +110,8 @@ function ChatRow({ c, onOpen }: { c: Conversation; onOpen: () => void }) {
     ? when.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
     : when.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
   // Ein verschickter Ort hat oft keinen Text — dann sagen wir, was drin steckt.
-  const preview = c.last.text || (c.last.placeId ? 'Ort geteilt' : '');
+  const preview = c.last.text
+    || (c.last.placeId ? 'Ort geteilt' : c.last.imageUrl ? 'Bild' : c.last.lat != null ? 'Standort' : '');
   return (
     <button onClick={onOpen}
       className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl bg-white shadow-[var(--shadow-card)] text-left active:scale-[0.99] transition-transform">
@@ -125,6 +126,8 @@ function ChatRow({ c, onOpen }: { c: Conversation; onOpen: () => void }) {
           <p className={`text-sm truncate flex-1 ${c.unread ? 'text-[var(--color-aubergine)] font-medium' : 'text-[var(--color-lavender)]'}`}>
             {c.last.fromMe && <span className="text-[var(--color-lavender-lt)]">Du: </span>}
             {c.last.placeId && <i className="fa-solid fa-map-pin text-[10px] mr-1 text-[var(--color-amber)]" />}
+            {c.last.imageUrl && <i className="fa-solid fa-image text-[10px] mr-1 text-[var(--color-amber)]" />}
+            {c.last.lat != null && <i className="fa-solid fa-location-dot text-[10px] mr-1 text-[var(--color-amber)]" />}
             {preview}
           </p>
           {c.unread > 0 && (

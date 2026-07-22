@@ -4,8 +4,49 @@ import { AppShell } from '../components/layout/AppShell.js';
 import { Avatar } from '../components/ui/Avatar.js';
 import { messagesApi, type ChatMessage, type ChatPartner, type LiveShare } from '../services/api.js';
 import { BottomSheet } from '../components/ui/BottomSheet.js';
+import { mediaApi } from '../services/api.js';
+import { isOpenNow, HOUR_DAYS } from '../data/detailQuestions.js';
+import type { WeekHours } from '../data/detailQuestions.js';
 import { useMessageSocket } from '../store/useMessageSocket.js';
 import type { Place } from '../types/index.js';
+
+/**
+ * Oeffnungsstatus fuer einen geteilten Ort — der eigentliche Gewinn daran, dass es
+ * unsere Plattform ist: Wer einen Tipp bekommt, sieht sofort, ob sich der Weg gerade
+ * lohnt. Ohne hinterlegte Zeiten geben wir nichts aus, statt etwas zu behaupten.
+ */
+function openingNote(place: Place): { text: string; tone: 'open' | 'soon' | 'closed' } | null {
+  const answers = ((place.attributes as Record<string, unknown> | undefined)?.answers ?? {}) as Record<string, unknown>;
+  const raw = answers.opening_hours;
+  const hours = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as (WeekHours & { alwaysOpen?: boolean }) : null;
+  if (!hours) return null;
+  if (hours.alwaysOpen) return { text: 'Rund um die Uhr geöffnet', tone: 'open' };
+
+  const open = isOpenNow(hours);
+  if (open === null) return null;
+
+  const now = new Date();
+  const key = ['so', 'mo', 'di', 'mi', 'do', 'fr', 'sa'][now.getDay()];
+  const today = hours[key];
+  const label = HOUR_DAYS.find(([k]) => k === key)?.[1] ?? '';
+  const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return (h ?? 0) * 60 + (m ?? 0); };
+  const cur = now.getHours() * 60 + now.getMinutes();
+
+  if (open && today?.close) {
+    const left = toMin(today.close) - cur;
+    // „Schließt bald" ist die Information, die wirklich zaehlt — eine Stunde vorher.
+    if (left > 0 && left <= 60) return { text: `Schließt in ${left} Min (${today.close} Uhr)`, tone: 'soon' };
+    return { text: `Jetzt geöffnet bis ${today.close} Uhr`, tone: 'open' };
+  }
+  if (!open) {
+    if (today?.open && !today.closed && toMin(today.open) > cur) {
+      return { text: `Geschlossen — öffnet ${label} um ${today.open} Uhr`, tone: 'closed' };
+    }
+    return { text: 'Gerade geschlossen', tone: 'closed' };
+  }
+  return null;
+}
 
 interface Props {
   /** Eingebettet im Entdecken-Overlay: ID kommt als Prop, nicht aus der URL. */
@@ -29,6 +70,8 @@ export function ChatPage({ userId, embedded }: Props = {}) {
   const [locBusy, setLocBusy]   = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const watchRef = useRef<number | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [imgBusy, setImgBusy] = useState(false);
 
   const myShare    = live.find(l => l.mine && new Date(l.expiresAt) > new Date());
   const theirShare = live.find(l => !l.mine && new Date(l.expiresAt) > new Date());
@@ -134,6 +177,17 @@ export function ChatPage({ userId, embedded }: Props = {}) {
     if (ev.type === 'live_stop' && ev.from === other) setLive(l => l.filter(x => x.mine));
   }), [other]); // eslint-disable-line
 
+  /** Bild verschicken — erst hochladen, dann als Nachricht anhaengen. */
+  async function sendImage(file: File) {
+    setImgBusy(true);
+    try {
+      const { url } = await mediaApi.upload(file);
+      await messagesApi.send(other, { imageUrl: url });
+      await load();
+    } catch (e) { alert((e as Error).message ?? 'Bild konnte nicht gesendet werden.'); }
+    setImgBusy(false);
+  }
+
   async function send() {
     const text = draft.trim();
     if (!text || busy) return;
@@ -153,8 +207,33 @@ export function ChatPage({ userId, embedded }: Props = {}) {
   const time = (iso: string) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
   const body = (
-    <div className="max-w-2xl mx-auto flex flex-col" style={{ minHeight: embedded ? '100%' : 'calc(100dvh - 180px)' }}>
-        <div className="flex-1 px-4 py-4 flex flex-col gap-2">
+    <div className="relative max-w-2xl mx-auto flex flex-col" style={{ minHeight: embedded ? '100%' : 'calc(100dvh - 180px)' }}>
+        {/* Titelbild der Person als Hintergrund — stark aufgehellt, damit der Text
+            lesbar bleibt und das Bild nur als Anmutung wirkt. */}
+        {partner?.coverUrl && (
+          <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+            <img src={partner.coverUrl} alt="" className="w-full h-full object-cover"
+              style={{ objectPosition: `${(partner.coverCropX ?? 0.5) * 100}% ${(partner.coverCropY ?? 0.5) * 100}%` }} />
+            <div className="absolute inset-0" style={{ background: 'rgba(251,249,252,0.93)' }} />
+          </div>
+        )}
+
+        {/* Wer schreibt hier mit — Bild und Name bleiben beim Scrollen oben stehen */}
+        {partner && (
+          <div className="sticky top-0 z-20 flex items-center gap-3 px-4 py-2.5"
+            style={{ background: 'rgba(251,249,252,0.92)', backdropFilter: 'blur(8px)' }}>
+            <button onClick={() => navigate(`/u/${partner.id}`)} className="flex items-center gap-3 min-w-0 active:scale-[0.99] transition-transform">
+              <Avatar name={partner.name} src={partner.avatarUrl} size={36}
+                cropX={partner.avatarCropX} cropY={partner.avatarCropY} zoom={partner.avatarZoom} />
+              <span className="min-w-0 text-left">
+                <span className="block text-sm font-bold text-[var(--color-aubergine)] truncate">{partner.name}</span>
+                <span className="block text-[11px] text-[var(--color-lavender)] truncate">@{partner.handle}</span>
+              </span>
+            </button>
+          </div>
+        )}
+
+        <div className="relative z-10 flex-1 px-4 py-4 flex flex-col gap-2">
           {messages === null ? (
             <div className="flex justify-center py-16 text-[var(--color-lavender-lt)]">
               <i className="fa-solid fa-circle-notch fa-spin text-2xl" />
@@ -176,15 +255,32 @@ export function ChatPage({ userId, embedded }: Props = {}) {
                 <div className={`flex ${m.fromMe ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[78%] rounded-2xl px-3 py-2 ${m.fromMe ? 'text-white' : 'bg-white text-[var(--color-body)] shadow-[var(--shadow-card)]'}`}
                     style={m.fromMe ? { background: 'var(--color-aubergine)' } : undefined}>
-                    {place && (
-                      <button onClick={() => navigate(`/ort/${place.id}`)}
-                        className="block w-full text-left mb-1.5 rounded-xl overflow-hidden bg-black/10 active:scale-[0.99] transition-transform">
-                        <img src={place.hero} alt="" className="w-full h-28 object-cover" />
-                        <span className="block px-2.5 py-2">
-                          <span className={`block text-sm font-semibold ${m.fromMe ? 'text-white' : 'text-[var(--color-aubergine)]'}`}>{place.name}</span>
-                          <span className={`block text-[11px] ${m.fromMe ? 'text-white/70' : 'text-[var(--color-lavender)]'}`}>{place.region}</span>
-                        </span>
-                      </button>
+                    {place && (() => {
+                      const note = openingNote(place);
+                      const tone = note?.tone === 'open' ? 'var(--color-success)'
+                                 : note?.tone === 'soon' ? 'var(--color-amber)' : '#e05858';
+                      return (
+                        <button onClick={() => navigate(`/ort/${place.id}`)}
+                          className="block w-full text-left mb-1.5 rounded-xl overflow-hidden bg-black/10 active:scale-[0.99] transition-transform">
+                          <img src={place.hero} alt="" className="w-full h-28 object-cover" />
+                          <span className="block px-2.5 py-2">
+                            <span className={`block text-sm font-semibold ${m.fromMe ? 'text-white' : 'text-[var(--color-aubergine)]'}`}>{place.name}</span>
+                            <span className={`block text-[11px] ${m.fromMe ? 'text-white/70' : 'text-[var(--color-lavender)]'}`}>{place.region}</span>
+                            {/* Live-Angabe: der Vorteil der eigenen Plattform */}
+                            {note && (
+                              <span className="flex items-center gap-1.5 mt-1">
+                                <span style={{ width: 7, height: 7, borderRadius: 99, background: tone, flexShrink: 0 }} />
+                                <span className={`text-[11px] font-semibold ${m.fromMe ? 'text-white/90' : 'text-[var(--color-aubergine)]'}`}>{note.text}</span>
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })()}
+                    {m.imageUrl && (
+                      <img src={m.imageUrl} alt="" loading="lazy"
+                        onClick={() => window.open(m.imageUrl!, '_blank', 'noopener')}
+                        className="w-full max-h-72 object-cover rounded-xl mb-1 cursor-pointer" />
                     )}
                     {m.placeId && !place && (
                       <p className={`text-xs italic ${m.fromMe ? 'text-white/70' : 'text-[var(--color-lavender)]'}`}>Dieser Ort ist nicht mehr verfügbar.</p>
@@ -230,20 +326,27 @@ export function ChatPage({ userId, embedded }: Props = {}) {
         )}
 
         {/* Eingabe — klebt unten über der Navigationsleiste */}
-        <div className="sticky bottom-0 px-4 py-3 flex items-end gap-2"
-          style={{ background: 'var(--color-bg)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
-          <button onClick={() => setLocSheet(true)} aria-label="Standort teilen"
-            className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
-            style={{ background: 'var(--color-bg-soft)', color: 'var(--color-aubergine)' }}>
-            <i className="fa-solid fa-location-dot" />
+        <div className="sticky bottom-0 z-20 px-3 py-2.5 flex items-end gap-1.5"
+          style={{ background: 'rgba(251,249,252,0.95)', backdropFilter: 'blur(8px)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}>
+          <button onClick={() => setLocSheet(true)} aria-label="Standort teilen" title="Standort teilen"
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
+            style={{ background: 'var(--color-amber)', color: 'white' }}>
+            <i className="fa-solid fa-location-dot text-sm" />
           </button>
+          <button onClick={() => fileRef.current?.click()} disabled={imgBusy} aria-label="Bild senden" title="Bild senden"
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform disabled:opacity-50"
+            style={{ background: 'var(--color-bg-soft)', color: 'var(--color-aubergine)' }}>
+            <i className={`fa-solid ${imgBusy ? 'fa-circle-notch fa-spin' : 'fa-plus'} text-sm`} />
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" hidden
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendImage(f); }} />
           <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={1}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder="Nachricht schreiben…"
             className="flex-1 resize-none bg-white border border-[var(--color-bg-soft)] rounded-2xl px-3.5 py-2.5 text-sm text-[var(--color-aubergine)] outline-none focus:border-[var(--color-amber)] max-h-32" />
           <button onClick={send} disabled={busy || !draft.trim()} aria-label="Senden"
-            className="w-11 h-11 rounded-full flex items-center justify-center text-white flex-shrink-0 disabled:opacity-40 active:scale-95 transition-transform"
-            style={{ background: 'var(--color-amber)' }}>
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 disabled:opacity-40 active:scale-95 transition-transform"
+            style={{ background: 'var(--color-aubergine)' }}>
             <i className={`fa-solid ${busy ? 'fa-circle-notch fa-spin' : 'fa-paper-plane'}`} />
           </button>
         </div>

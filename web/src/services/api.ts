@@ -425,10 +425,12 @@ export const taxonomyApi = {
 // ─── Direktnachrichten zwischen Freund:innen ───────────────────────────────────
 export interface ChatPartner {
   id: number; name: string; handle: string;
-  avatarUrl: string | null; avatarCropX: number; avatarCropY: number;
+  avatarUrl: string | null; avatarCropX: number; avatarCropY: number; avatarZoom?: number;
+  /** Titelbild — dient im Verlauf als aufgehellter Hintergrund. */
+  coverUrl?: string | null; coverCropX?: number; coverCropY?: number;
 }
 export interface ChatMessage {
-  id: number; text: string | null; placeId: string | null;
+  id: number; text: string | null; placeId: string | null; imageUrl?: string | null;
   /** Einzelner Standort („Ich bin hier") — bleibt als Pin im Verlauf. */
   lat?: number | null; lng?: number | null;
   createdAt: string; fromMe: boolean;
@@ -442,7 +444,7 @@ export interface LiveShare {
 export interface Conversation {
   user: ChatPartner;
   unread: number;
-  last: { id: number; text: string | null; placeId: string | null; createdAt: string; fromMe: boolean };
+  last: { id: number; text: string | null; placeId: string | null; lat?: number | null; imageUrl?: string | null; createdAt: string; fromMe: boolean };
 }
 
 export const messagesApi = {
@@ -450,7 +452,7 @@ export const messagesApi = {
   unread:        ()             => get<{ count: number }>('/messages/unread'),
   thread:        (userId: number) =>
                    get<{ partner: ChatPartner | null; messages: ChatMessage[]; places: Record<string, Place>; live: LiveShare[] }>(`/messages/${userId}`),
-  send:          (userId: number, body: { text?: string; placeId?: string; lat?: number; lng?: number }) =>
+  send:          (userId: number, body: { text?: string; placeId?: string; lat?: number; lng?: number; imageUrl?: string }) =>
                    post<{ ok: boolean }>(`/messages/${userId}`, body),
   // Live-Standort: mit `minutes` starten, ohne nur die Position nachschieben
   live:          (userId: number, body: { lat: number; lng: number; minutes?: number }) =>

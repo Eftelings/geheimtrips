@@ -28,6 +28,8 @@ await db.run(sql`CREATE INDEX IF NOT EXISTS messages_pair ON messages (from_user
 // Einzelner Standort („Ich bin hier") hängt an der Nachricht selbst.
 await db.run(sql`ALTER TABLE messages ADD COLUMN lat REAL`).catch(() => {});
 await db.run(sql`ALTER TABLE messages ADD COLUMN lng REAL`).catch(() => {});
+// Verschickte Bilder liegen wie alle Uploads unter /uploads; hier steht nur der Pfad.
+await db.run(sql`ALTER TABLE messages ADD COLUMN image_url TEXT`).catch(() => {});
 
 /**
  * Live-Standort: gilt immer nur für EIN Gespräch und läuft von selbst ab. Je Paar
@@ -62,7 +64,8 @@ router.get('/', requireAuth, async (c) => {
   const me = c.get('user');
   const rows = await db.all<{
     id: number; from_user_id: number; to_user_id: number;
-    text: string | null; place_id: string | null; read_at: string | null; created_at: string;
+    text: string | null; place_id: string | null; lat: number | null; image_url: string | null;
+    read_at: string | null; created_at: string;
   }>(sql`SELECT * FROM messages WHERE from_user_id = ${me.id} OR to_user_id = ${me.id} ORDER BY id DESC`)
     .catch(() => []);
 
@@ -88,6 +91,7 @@ router.get('/', requireAuth, async (c) => {
       unread: e.unread,
       last: {
         id: e.last.id, text: e.last.text, placeId: e.last.place_id,
+        lat: e.last.lat, imageUrl: e.last.image_url,
         createdAt: e.last.created_at, fromMe: e.last.from_user_id === me.id,
       },
     };
@@ -109,8 +113,8 @@ router.get('/:userId', requireAuth, async (c) => {
   const other = Number(c.req.param('userId'));
   const rows = await db.all<{
     id: number; from_user_id: number; text: string | null; place_id: string | null;
-    lat: number | null; lng: number | null; created_at: string;
-  }>(sql`SELECT id, from_user_id, text, place_id, lat, lng, created_at FROM messages
+    lat: number | null; lng: number | null; image_url: string | null; created_at: string;
+  }>(sql`SELECT id, from_user_id, text, place_id, lat, lng, image_url, created_at FROM messages
          WHERE (from_user_id = ${me.id} AND to_user_id = ${other})
             OR (from_user_id = ${other} AND to_user_id = ${me.id})
          ORDER BY id`).catch(() => []);
@@ -131,12 +135,15 @@ router.get('/:userId', requireAuth, async (c) => {
   const partner = await db.select({
     id: users.id, name: users.name, handle: users.handle,
     avatarUrl: users.avatarUrl, avatarCropX: users.avatarCropX, avatarCropY: users.avatarCropY,
+    avatarZoom: users.avatarZoom,
+    // Titelbild dient im Verlauf als (stark aufgehellter) Hintergrund
+    coverUrl: users.coverUrl, coverCropX: users.coverCropX, coverCropY: users.coverCropY,
   }).from(users).where(eq(users.id, other)).get();
 
   return c.json({
     partner: partner ?? null,
     messages: rows.map(r => ({
-      id: r.id, text: r.text, placeId: r.place_id, lat: r.lat, lng: r.lng,
+      id: r.id, text: r.text, placeId: r.place_id, lat: r.lat, lng: r.lng, imageUrl: r.image_url,
       createdAt: r.created_at, fromMe: r.from_user_id === me.id,
     })),
     places: placeById,
@@ -153,14 +160,19 @@ router.post('/:userId', requireAuth,
     // Einzelner Standort — bleibt als Pin im Verlauf stehen
     lat: z.number().min(-90).max(90).optional(),
     lng: z.number().min(-180).max(180).optional(),
+    // Bild: nur eigene Uploads, kein beliebiges Ziel im Netz
+    imageUrl: z.string().max(300).optional(),
   })),
   async (c) => {
     const me = c.get('user');
     const other = Number(c.req.param('userId'));
-    const { text, placeId, lat, lng } = c.req.valid('json');
+    const { text, placeId, lat, lng, imageUrl } = c.req.valid('json');
     const hasPin = lat != null && lng != null;
+    // Nur Pfade aus dem eigenen Upload-Ordner zulassen — sonst waere das ein offenes
+    // Einfallstor, um beliebige fremde URLs im Verlauf einzublenden.
+    const img = imageUrl && /^\/(?:api\/)?uploads\//.test(imageUrl) ? imageUrl : null;
     if (other === me.id) return c.json({ error: 'An dich selbst geht nicht.' }, 400);
-    if (!text?.trim() && !placeId && !hasPin) return c.json({ error: 'Leere Nachricht.' }, 400);
+    if (!text?.trim() && !placeId && !hasPin && !img) return c.json({ error: 'Leere Nachricht.' }, 400);
     if (!(await areFriends(me.id, other))) {
       return c.json({ error: 'Schreiben geht nur unter Freund:innen.' }, 403);
     }
@@ -168,21 +180,21 @@ router.post('/:userId', requireAuth,
       const exists = await db.select({ id: places.id }).from(places).where(eq(places.id, placeId)).get();
       if (!exists) return c.json({ error: 'Ort nicht gefunden.' }, 404);
     }
-    await db.run(sql`INSERT INTO messages (from_user_id, to_user_id, text, place_id, lat, lng)
+    await db.run(sql`INSERT INTO messages (from_user_id, to_user_id, text, place_id, lat, lng, image_url)
       VALUES (${me.id}, ${other}, ${text?.trim() || null}, ${placeId ?? null},
-              ${hasPin ? lat : null}, ${hasPin ? lng : null})`);
+              ${hasPin ? lat : null}, ${hasPin ? lng : null}, ${img})`);
 
     // Frisch geschriebene Zeile holen und beiden Seiten zustellen: der Empfaengerin,
     // damit sie es sofort sieht — und den eigenen weiteren Geraeten, damit dort
     // derselbe Stand steht.
-    const row = await db.all<{ id: number; text: string | null; place_id: string | null; lat: number | null; lng: number | null; created_at: string }>(
-      sql`SELECT id, text, place_id, lat, lng, created_at FROM messages
+    const row = await db.all<{ id: number; text: string | null; place_id: string | null; lat: number | null; lng: number | null; image_url: string | null; created_at: string }>(
+      sql`SELECT id, text, place_id, lat, lng, image_url, created_at FROM messages
           WHERE from_user_id = ${me.id} AND to_user_id = ${other} ORDER BY id DESC LIMIT 1`).catch(() => []);
     const fresh = row[0];
     if (fresh) {
       const event = {
         type: 'message' as const, from: me.id, to: other,
-        message: { id: fresh.id, text: fresh.text, placeId: fresh.place_id, lat: fresh.lat, lng: fresh.lng, createdAt: fresh.created_at },
+        message: { id: fresh.id, text: fresh.text, placeId: fresh.place_id, lat: fresh.lat, lng: fresh.lng, imageUrl: fresh.image_url, createdAt: fresh.created_at },
       };
       pushToUser(other, event);
       pushToUser(me.id, event);
